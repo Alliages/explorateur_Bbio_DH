@@ -1,0 +1,15 @@
+cle;valeur;unite;source;commentaire
+iteration_debut_ete;1896;h;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), tableau de correspondance des heures;Première heure de l'année (comptée de 0, en UTC) à l'heure d'été
+iteration_fin_ete;7032;h;Annexe III, fiche 4.1, tableau de correspondance des heures;Première heure de l'année (comptée de 0, en UTC) revenue à l'heure d'hiver
+decalage_legal_hiver;1;h;Annexe III, fiche 3.1 (C_Clim), « Calcul de l'heure légale » : Hleg = IHJ + EHLO;Heure légale = UTC + 1 en hiver
+decalage_legal_ete;2;h;Annexe III, fiche 3.1 (C_Clim), « Calcul de l'heure légale »;Heure légale = UTC + 2 en été
+gradient_te;0,005;°C/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : Te = Te0 − 0,005 × altcorr;Baisse de la température extérieure avec l'altitude
+gradient_we;0,0025;g/kg/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : we = (we0 − 0,0025 × altcorr) / 1000;Baisse de l'humidité spécifique avec l'altitude ; le résultat est en kg/kg
+gradient_teau;0,005;°C/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : Teau = Teau0 − 0,005 × altcorr;Baisse de la température d'eau froide avec l'altitude
+altitude_seuil_bas;400;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;Jusqu'à 400 m inclus, le site est considéré à 100 m
+altitude_seuil_haut;800;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;De 400 m à 800 m inclus, le site est considéré à 500 m ; au-delà, à 900 m
+altitude_corrigee_basse;100;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;altcorr si altitude ≤ 400 m
+altitude_corrigee_moyenne;500;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;altcorr si 400 m < altitude ≤ 800 m
+altitude_corrigee_haute;900;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;altcorr si altitude > 800 m
+jour_365_mois;12;-;HYPOTHÈSE DE L'OUTIL (cas non décrit par l'annexe III : 52 semaines = 364 jours);Le jour 365 reprend les valeurs hebdomadaires de ce mois
+jour_365_semaine;1;-;HYPOTHÈSE DE L'OUTIL (cas non décrit par l'annexe III);Le jour 365 reprend les valeurs de cette semaine du mois ci-dessus ; c'est un lundi (suite du cycle)

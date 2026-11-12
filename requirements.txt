@@ -1,0 +1,9 @@
+# Moteur
+numpy>=1.26
+pandas>=2.1
+
+# Tests
+pytest>=8.0
+
+# Outil d'extraction des classeurs officiels (outils/extraire_donnees.py), pas le moteur
+openpyxl>=3.1

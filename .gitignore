@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+# Environnements locaux (README : python -m venv .venv)
+.venv/
+venv/
+env/
+# Secrets et réglages locaux : ne jamais publier
+.env
+.streamlit/secrets.toml
+# Données locales, jamais dans le dépôt :
+#   _rsee/        études RE2020 de projets réels (calage et validation)
+#   _references/  classeurs et textes officiels, sources de outils/extraire_donnees.py
+/_rsee/
+/_references/
+*.rsee
+*RSEE*.xml
+# Fichiers système
+.DS_Store
+Thumbs.db
