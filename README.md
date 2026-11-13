@@ -9,10 +9,14 @@ ses résultats ne peuvent pas servir à une attestation. Cible : un Bbio à ± 1
 
 Version en cours : voir `VERSION` et `CHANGELOG.md`. Suite prévue : `ROADMAP.md`.
 
-## État (0.8.0)
+## État (0.8.6)
 
-Socle seulement : structures de projet, calendrier conventionnel, fichiers météo et scénarios du logement collectif.
-Le calcul thermique et l'interface arrivent dans les versions suivantes.
+Socle (structures de projet, calendrier conventionnel, fichiers météo, scénarios du logement collectif), module
+solaire (rayonnement et éclairement reçus par une paroi orientée, masques, flux transmis par les baies et les parois
+opaques), modèle thermique horaire du groupe (réseau RC de la fiche 5.21) et besoins de chauffage, de
+refroidissement et d'éclairage d'un groupe (apports internes, émetteur conventionnel, saisons, lumière naturelle).
+Sans protections mobiles ni ouverture des baies (0.9.4), le besoin de froid est encore surestimé. Le Bbio, les DH et
+l'interface arrivent dans les versions suivantes.
 
 ## Installation (Windows, PowerShell)
 
@@ -36,7 +40,8 @@ python -m pytest
 | `tests/` | Tests automatiques |
 | `docs/` | Journal d'audit et note de passation |
 
-Dossiers locaux, **jamais dans le dépôt** : `_rsee/` (études RE2020 de projets réels) et `_references/` (classeurs
+Données locales, **jamais dans le dépôt** : les études RE2020 de projets réels (RSEE), rangées à côté du dépôt dans
+`../RSEE`, et tout dossier dont le nom commence par `_`, dont `_references/` (classeurs
 officiels). Un test échoue si l'un de ces fichiers est suivi par git.
 
 ## Sources

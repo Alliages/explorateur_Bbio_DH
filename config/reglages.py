@@ -56,6 +56,9 @@ SEMAINES_PAR_MOIS = (4, 4, 5, 4, 5, 4, 4, 5, 4, 4, 5, 4)
 # ============================================================
 # usage → onglet du classeur des scénarios conventionnels
 USAGES = {"logement_collectif": "LC"}
+# Usages « habitation / hébergement » : seuil d'inconfort de nuit sans confort adaptatif (fiche 13.5, éq. 2544),
+# brasseurs d'air bridés la nuit (fiche 8.32, § 8.32.3.3.3.2)
+USAGES_HABITATION = ("logement_collectif",)
 # Scénarios dont la semaine porte un état de consigne (1 normal, −1 réduit de plus de 48 h)
 SCENARIOS_CONSIGNE = ("chauffage", "refroidissement")
 

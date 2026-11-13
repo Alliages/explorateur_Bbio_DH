@@ -10,7 +10,7 @@ from moteur.hypotheses import hyp, lire_hypotheses
 
 # Fichiers qui ne doivent jamais être suivis par git
 MOTIFS_INTERDITS = (re.compile(r"rsee", re.IGNORECASE),          # études RE2020 : données de projets réels
-                    re.compile(r"^_rsee/|^_references/"),         # dossiers locaux
+                    re.compile(r"(^|/)_[^/]*/"),                  # dossiers locaux commençant par « _ »
                     re.compile(r"\.xlsx?$", re.IGNORECASE))       # classeurs officiels (voir README)
 
 
@@ -42,3 +42,12 @@ def test_hypotheses_sourcees():
         assert ligne["unite"].strip(), f"hypothèse sans unité : {cle}"
     with pytest.raises(KeyError):
         hyp("inconnue")
+
+
+def test_hypotheses_cinq_champs_par_ligne():
+    """Un « ; » dans une source ou un commentaire décale les colonnes : la source serait tronquée à la lecture."""
+    from config.reglages import CHEMIN_HYPOTHESES, ENCODAGE_CSV, SEPARATEUR_CSV
+    with open(CHEMIN_HYPOTHESES, encoding=ENCODAGE_CSV) as f:
+        fautives = [ligne.split(SEPARATEUR_CSV)[0] for ligne in f if ligne.strip()
+                    and ligne.count(SEPARATEUR_CSV) != 4]
+    assert fautives == [], f"lignes à corriger dans hypotheses.csv : {fautives}"

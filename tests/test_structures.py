@@ -9,7 +9,7 @@ def projet_deux_groupes():
     """Immeuble collectif à deux groupes : logements traversants et non traversants."""
     traversant = Groupe("Traversants", surface_m2=600.0, traversant=True,
                         parois=[Paroi("Façade sud", "mur", 180.0, u=0.25, orientation_deg=0)],
-                        baies=[Baie("Baies sud", 60.0, orientation_deg=0, uw=1.3, sw=0.45)])
+                        baies=[Baie("Baies sud", 60.0, orientation_deg=0, uw=1.3, sw_e=0.45)])
     non_traversant = Groupe("Non traversants", surface_m2=400.0,
                             parois=[Paroi("Façade ouest", "mur", 120.0, u=0.25, orientation_deg=90),
                                     Paroi("Toiture", "toiture", 200.0, u=0.15, inclinaison_deg=0)],
@@ -50,5 +50,61 @@ def test_listes_independantes():
     lambda: Paroi("X", "mur", 10.0, contact="voisin"),
 ])
 def test_saisies_refusees(fabrique):
+    with pytest.raises(ValueError):
+        fabrique()
+
+
+# ------------------------------------------------------------------
+# 0.8.4 : données du modèle thermique du groupe
+# ------------------------------------------------------------------
+def test_inclinaison_par_defaut_selon_le_type():
+    assert Paroi("Mur", "mur", 10.0, orientation_deg=0).inclinaison_deg == 90
+    assert Paroi("Toit", "toiture", 10.0).inclinaison_deg == 0
+    assert Paroi("Plancher", "plancher_bas", 10.0).inclinaison_deg == 180
+    assert Paroi("Rampant", "toiture", 10.0, orientation_deg=0, inclinaison_deg=35).inclinaison_deg == 35
+
+
+def test_donnees_thermiques_du_groupe():
+    from moteur.structures import PontThermique
+    groupe = Groupe("G", 50.0, ponts_thermiques=[PontThermique("Plancher", 30.0, 0.3)],
+                    debit_ventilation_m3h=75.0, inertie_quotidienne="lourde")
+    assert groupe.ponts_thermiques[0].psi == 0.3
+    assert (groupe.inertie_sequentielle, groupe.inertie_annuelle, groupe.climatise) == ("defaut", "defaut", False)
+
+
+def _brasseur():
+    from moteur.structures import Brasseur
+    return Brasseur("B", nombre=1, surface_desservie_m2=15.0, debit_max_m3h=5000.0, puissance_max_w=40.0)
+
+
+@pytest.mark.parametrize("fabrique", [
+    lambda: __import__("moteur.structures", fromlist=["PontThermique"]).PontThermique("X", 0.0, 0.3),
+    lambda: __import__("moteur.structures", fromlist=["PontThermique"]).PontThermique("X", 10.0, -0.1),
+    lambda: Groupe("X", 50.0, debit_ventilation_m3h=-1.0),
+    lambda: Groupe("X", 50.0, inertie_quotidienne="massive"),
+    lambda: Groupe("X", 50.0, inertie_sequentielle="annuelle"),
+    lambda: Groupe("X", 50.0, inertie_quotidienne="personnalisee", amq_surf=2.5),
+    lambda: Groupe("X", 50.0, inertie_annuelle="personnalisee", cma_surf=6000.0),
+    lambda: Groupe("X", 50.0, cmq_surf=-10.0),
+    lambda: Groupe("X", 50.0, volume_m3=125.0, climatise=True, brasseurs=[_brasseur()]),
+    lambda: Paroi("X", "mur", 10.0, b_therm=1.5),
+    lambda: Baie("X", 2.0, orientation_deg=0, sw2_e=1.2),
+    lambda: Baie("X", 2.0, orientation_deg=0, uw_horizontal=0.0),
+])
+def test_saisies_thermiques_refusees(fabrique):
+    with pytest.raises(ValueError):
+        fabrique()
+
+
+# ------------------------------------------------------------------
+# 0.8.6 : logements, débit de pointe, transmission lumineuse
+# ------------------------------------------------------------------
+@pytest.mark.parametrize("fabrique", [
+    lambda: Groupe("X", 50.0, nb_logements=0),
+    lambda: Groupe("X", 50.0, nb_logements=2.5),
+    lambda: Groupe("X", 50.0, debit_ventilation_m3h=90.0, debit_ventilation_pointe_m3h=60.0),
+    lambda: Baie("X", 2.0, orientation_deg=0, tl=1.3),
+])
+def test_saisies_des_besoins_refusees(fabrique):
     with pytest.raises(ValueError):
         fabrique()

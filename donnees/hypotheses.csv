@@ -4,12 +4,135 @@ iteration_fin_ete;7032;h;Annexe III, fiche 4.1, tableau de correspondance des he
 decalage_legal_hiver;1;h;Annexe III, fiche 3.1 (C_Clim), « Calcul de l'heure légale » : Hleg = IHJ + EHLO;Heure légale = UTC + 1 en hiver
 decalage_legal_ete;2;h;Annexe III, fiche 3.1 (C_Clim), « Calcul de l'heure légale »;Heure légale = UTC + 2 en été
 gradient_te;0,005;°C/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : Te = Te0 − 0,005 × altcorr;Baisse de la température extérieure avec l'altitude
-gradient_we;0,0025;g/kg/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : we = (we0 − 0,0025 × altcorr) / 1000;Baisse de l'humidité spécifique avec l'altitude ; le résultat est en kg/kg
+gradient_we;0,0025;g/kg/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : we = (we0 − 0,0025 × altcorr) / 1000;Baisse de l'humidité spécifique avec l'altitude, le résultat est en kg/kg
 gradient_teau;0,005;°C/m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude » : Teau = Teau0 − 0,005 × altcorr;Baisse de la température d'eau froide avec l'altitude
 altitude_seuil_bas;400;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;Jusqu'à 400 m inclus, le site est considéré à 100 m
-altitude_seuil_haut;800;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;De 400 m à 800 m inclus, le site est considéré à 500 m ; au-delà, à 900 m
+altitude_seuil_haut;800;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;De 400 m à 800 m inclus, le site est considéré à 500 m, au-delà, à 900 m
 altitude_corrigee_basse;100;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;altcorr si altitude ≤ 400 m
 altitude_corrigee_moyenne;500;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;altcorr si 400 m < altitude ≤ 800 m
 altitude_corrigee_haute;900;m;Annexe III, fiche 3.1 (C_Clim), « Correction d'altitude »;altcorr si altitude > 800 m
 jour_365_mois;12;-;HYPOTHÈSE DE L'OUTIL (cas non décrit par l'annexe III : 52 semaines = 364 jours);Le jour 365 reprend les valeurs hebdomadaires de ce mois
-jour_365_semaine;1;-;HYPOTHÈSE DE L'OUTIL (cas non décrit par l'annexe III);Le jour 365 reprend les valeurs de cette semaine du mois ci-dessus ; c'est un lundi (suite du cycle)
+jour_365_semaine;1;-;HYPOTHÈSE DE L'OUTIL (cas non décrit par l'annexe III);Le jour 365 reprend les valeurs de cette semaine du mois ci-dessus, c'est un lundi (suite du cycle)
+albedo_sol;0,2;-;Annexe III, fiche 3.2 (C_EEX_environnement_proche), nomenclature, valeur conventionnelle de alb, éq. 10;Part du rayonnement global horizontal réfléchie par le sol
+albedo_eclairement;0,2;-;Annexe III, fiche 3.2, nomenclature, valeur conventionnelle de albecl, éq. 15;Part de l'éclairement global horizontal réfléchie par le sol
+hre;5,5;W/m²/K;Annexe III, fiche 3.2, constantes (Hre), éq. 17;Coefficient d'échange radiatif extérieur, pour le rayonnement froid vers la voûte céleste
+he;25;W/m²/K;Annexe III, fiches 5.10 (éq. 222) et 5.17 (éq. 297), nomenclature;Coefficient d'échange global extérieur (convectif + radiatif)
+seuil_entree_soleil;0,00001;-;Annexe III, fiche 3.2, éq. 19, 20 et 22 : cos(phi) ≥ 10^-5;En dessous, le soleil n'entre pas dans le plan de la paroi : masque sans effet
+seuil_jour_astro;0,0001;rad;Annexe III, fiche 3.2, éq. 18;Le soleil est levé si sa hauteur atteint ce seuil
+masque_tranches_nombre;36;-;Annexe III, fiche 3.2, masques lointains par tranches azimutales;Nombre de tranches azimutales (amplitude 360/36 = 10°)
+edn_a6;-1,03753210E-08;lm/W;Annexe III, fiche 3.1 (C_EEX_Climat extérieur), « Calcul des données EDn et Edi »;Efficacité lumineuse du direct : coefficient de x^6 (x = hauteur du soleil en degrés, voir docs/audit.md)
+edn_a5;2,90312257E-06;lm/W;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Coefficient de x^5
+edn_a4;-3,31804423E-04;lm/W;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Coefficient de x^4
+edn_a3;1,99283162E-02;lm/W;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Coefficient de x^3
+edn_a2;-6,72171072E-01;lm/W;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Coefficient de x^2
+edn_a1;1,24650445E+01;lm/W;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Coefficient de x
+edn_a0;2,38954889E+00;lm/W;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Terme constant
+edi_seuil_bas;1;W/m²;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Direct normal sous ce seuil : ciel couvert
+edi_seuil_haut;120;W/m²;Annexe III, fiche 3.1, « Calcul des données EDn et Edi »;Direct normal au-dessus de ce seuil : ciel clair
+edi_efficacite_couvert;124;lm/W;Annexe III, fiche 3.1 : Edi = 124 Idi si IDn < 1 W/m²;Efficacité lumineuse du diffus, ciel couvert
+edi_efficacite_clair;128;lm/W;Annexe III, fiche 3.1 : Edi = 128 Idi si IDn > 120 W/m²;Efficacité lumineuse du diffus, ciel clair
+edi_efficacite_moyen;116;lm/W;Annexe III, fiche 3.1 : Edi = 116 Idi sinon;Efficacité lumineuse du diffus, ciel intermédiaire
+ecart_sw_c_e;0,1;-;Annexe III, fiche 5.10 (C_BAT_Baie vitrée), éq. 215 : Swsp-c = Swsp-e − 0,1;Valeur par défaut du Sw Th-BC d'une baie à partir de son Sw Th-D
+rse_c;0,04;m².K/W;Règles Th-Bât, fascicule Parois opaques, facteur solaire S, tableau 67;Résistance superficielle extérieure en conditions C (Th-BC)
+rse_e;0,07;m².K/W;Règles Th-Bât, fascicule Parois opaques, facteur solaire S, tableau 67;Résistance superficielle extérieure en conditions E (Th-D)
+ecart_resistances_c_e;0,03;m².K/W;Règles Th-Bât, fascicule Parois opaques, formule 260 : 1/Up-E = 1/Up-C + 0,03;(Rse-E + Rsi-E) − (Rse-C + Rsi-C), pour passer de Up-C à Up-E
+heure_debut_jour;6;h;Annexe III, fiche 8.32, éq. 1652, 1653 et 1661, fiche 13.5, éq. 2544 : jour si 6 < hlég ≤ 22;Heure légale de fin de pas (case des scénarios) au-delà de laquelle commence le jour
+heure_fin_jour;22;h;Annexe III, fiche 8.32, éq. 1652, 1653 et 1661, fiche 13.5, éq. 2544;Dernière heure légale de fin de pas (case) comptée dans le jour
+brasseur_heure_blocage;23;h;Annexe III, fiche 8.32, § 8.32.3.3.3.2 : gestion manuelle, débit bloqué si hlég > 23h ou hlég ≤ 6h;La nuit, en gestion manuelle, le brasseur garde la position qu'il avait à 23h
+brasseur_surface_max;15;m²;Annexe III, fiche 8.32, introduction et § Ratio de surface brassée : Ratbr_p = min(15 × Nbr_p / Agr, Ratbr_p);Surface maximale desservie par un brasseur d'air
+brasseur_coef_puissance_justifiee;1,1;-;Annexe III, fiche 8.32, § Paramètres d'intégration et intrinsèques;Majoration de la puissance maximale justifiée
+brasseur_coef_puissance_declaree;1,2;-;Annexe III, fiche 8.32, § Paramètres d'intégration et intrinsèques;Majoration de la puissance maximale déclarée
+brasseur_coef_debit_justifie;0,9;-;Annexe III, fiche 8.32, § Paramètres d'intégration et intrinsèques;Minoration du débit maximal justifié
+brasseur_coef_debit_declare;0,8;-;Annexe III, fiche 8.32, § Paramètres d'intégration et intrinsèques;Minoration du débit maximal déclaré
+brasseur_ratio_intermediaire;0,6;-;Annexe III, fiche 8.32, § Paramètres d'intégration et intrinsèques : Pelec_br_p_int = 0,6 × Pmax_corr, Qvair_br_p_int = 0,6 × Qmax_corr;Vitesse intermédiaire : part du débit et de la puissance maximaux corrigés
+brasseur_coef_vitesse;0,0032;m/s/(vol/h);Annexe III, fiche 8.32, éq. 1658 : vbr_p = 0,0032 × τbr_p;Vitesse moyenne de l'air dans la zone brassée par unité de taux de brassage
+brasseur_vitesse_seuil;0,2;m/s;Annexe III, fiche 8.32, éq. 1659 : Δθop = 0 si vbr_p ≤ 0,2;En dessous, le brasseur est sans effet sur le ressenti
+brasseur_a;1,8322;°C;Annexe III, fiche 8.32, éq. 1659;Coefficient de ln(vbr_p)
+brasseur_ka;0,0361;1/°C;Annexe III, fiche 8.32, éq. 1659 : exposant 0,0361 × (θrm − θi);Sensibilité du coefficient de ln(vbr_p) à l'écart radiant
+brasseur_b;3,0498;°C;Annexe III, fiche 8.32, éq. 1659;Terme constant
+brasseur_kb;0,0368;1/°C;Annexe III, fiche 8.32, éq. 1659 : exposant 0,0368 × (θrm − θi);Sensibilité du terme constant à l'écart radiant
+brasseur_man_arret;2;°C;Annexe III, fiche 8.32, tableau 258 (Δθop_1_br_man, jour et nuit);Gestion manuelle : arrêt sous V1 − 2 °C
+brasseur_man_max;4;°C;Annexe III, fiche 8.32, tableau 258 (Δθop_2_br_man, jour et nuit);Gestion manuelle : vitesse maximale à partir de V1 + 4 °C
+brasseur_man_declenchement;1;°C;Annexe III, fiche 8.32, tableau 258 (Δθop_3_br_man) et éq. 1646, valeur de nuit : HYPOTHÈSE DE L'OUTIL (cellule lue comme fusionnée, voir docs/audit.md);Gestion manuelle : déclenchement 1 °C au-dessus de θiifr+ + Δθconf_adapt
+brasseur_auto_declenchement;0;°C;Annexe III, fiche 8.32, § 8.32.3.2.4.3 : Δθop_3_br_p_aut, 0 par défaut;Gestion automatique : décalage du déclenchement par défaut
+brasseur_ratus_logement_collectif_jour;0,54;-;Annexe III, fiche 8.32, tableau 257 (usage 2, Us = jour);Part de la surface occupée le jour, logement collectif
+brasseur_ratus_logement_collectif_nuit;0,36;-;Annexe III, fiche 8.32, tableau 257 (usage 2, Us = nuit);Part de la surface occupée la nuit, logement collectif
+brasseur_ratus_jour_et_nuit;1;-;Annexe III, fiche 8.32, remarque sous le tableau 257 : RatUs_BA_p = 1 si Usp = 2;Locaux sans distinction jour / nuit (studio, petit logement)
+hci;2,5;W/m²/K;Annexe III, fiche 5.21 (C_BAT_comportement thermique d'un groupe), éq. 311;Coefficient d'échange convectif intérieur moyen
+hri;5,5;W/m²/K;Annexe III, fiche 5.21, éq. 312;Coefficient d'échange radiatif intérieur moyen
+coef_hrs;1,2;-;Annexe III, fiche 5.21, éq. 325 : hrs = 1,2 × hri;Coefficient d'échange radiatif intérieur corrigé, rapporté à hri
+ratio_atparois;4,5;m²/m²;Annexe III, fiche 5.21, éq. 313 : Atparois = 4,5 × Agr;Surface interne totale des parois, plafond et plancher, par m² de surface du groupe
+ptop;0,5;-;Annexe III, fiche 5.21, éq. 314 et 371;Part de la température radiante moyenne dans la température opérative
+nbj_seq;14;j;Annexe III, fiche 5.21, éq. 315;Nombre de jours d'une séquence (moyenne glissante de l'inertie annuelle)
+fsa;0,1;-;Annexe III, fiche 5.21, nomenclature et éq. 346;Part du flux solaire de courte longueur d'onde transmise directement à l'air
+puissance_matrice;10;W/m²;Annexe III, fiche 5.21, § 5.21.3.14;Puissance émise des deux cas de la matrice du groupe (tout convectif, tout radiatif)
+theta_mq24_initiale;18;°C;Annexe III, fiche 5.21, note sous l'éq. 353;Moyenne sur 24 h de θmq pendant les 24 premières heures
+theta_mqseq_initiale;19;°C;Annexe III, fiche 5.21, note sous l'éq. 357;Moyenne sur 14 jours de θmq pendant les 14 premiers jours
+theta_ms_initiale;18;°C;Annexe III, fiche 5.21, notes sous les éq. 354 et 358;Températures de masse séquentielle θms et annuelle θma au premier pas de temps
+theta_groupe_initiale;18;°C;HYPOTHÈSE DE L'OUTIL (la fiche 5.21 ne fixe pas θmq au premier pas, valeur alignée sur θms et θma, voir docs/audit.md);Températures du groupe (masse et air) avant la première heure
+inertie_quo_tres_legere_amq;2,5;m²/m²;Annexe III, fiche 5.21, tableau 53;Amq_surf, classe d'inertie quotidienne très légère
+inertie_quo_tres_legere_cmq;80;kJ/K/m²;Annexe III, fiche 5.21, tableau 53;Cmq_surf, classe d'inertie quotidienne très légère
+inertie_quo_legere_amq;2,5;m²/m²;Annexe III, fiche 5.21, tableau 53;Amq_surf, classe d'inertie quotidienne légère
+inertie_quo_legere_cmq;110;kJ/K/m²;Annexe III, fiche 5.21, tableau 53;Cmq_surf, classe d'inertie quotidienne légère
+inertie_quo_moyenne_amq;2,5;m²/m²;Annexe III, fiche 5.21, tableau 53;Amq_surf, classe d'inertie quotidienne moyenne
+inertie_quo_moyenne_cmq;165;kJ/K/m²;Annexe III, fiche 5.21, tableau 53;Cmq_surf, classe d'inertie quotidienne moyenne
+inertie_quo_lourde_amq;3;m²/m²;Annexe III, fiche 5.21, tableau 53;Amq_surf, classe d'inertie quotidienne lourde
+inertie_quo_lourde_cmq;260;kJ/K/m²;Annexe III, fiche 5.21, tableau 53;Cmq_surf, classe d'inertie quotidienne lourde
+inertie_quo_tres_lourde_amq;3,5;m²/m²;Annexe III, fiche 5.21, tableau 53;Amq_surf, classe d'inertie quotidienne très lourde
+inertie_quo_tres_lourde_cmq;370;kJ/K/m²;Annexe III, fiche 5.21, tableau 53;Cmq_surf, classe d'inertie quotidienne très lourde
+inertie_seq_legere_cms;250;kJ/K/m²;Annexe III, fiche 5.21, tableau 54 (les règles Th-Bât, tableau 89, donnent 260 : l'annexe est retenue);Cms_surf, classe d'inertie séquentielle légère
+inertie_seq_moyenne_cms;500;kJ/K/m²;Annexe III, fiche 5.21, tableau 54;Cms_surf, classe d'inertie séquentielle moyenne
+inertie_seq_lourde_cms;850;kJ/K/m²;Annexe III, fiche 5.21, tableau 54;Cms_surf, classe d'inertie séquentielle lourde
+inertie_seq_legere_ams;2;m²/m²;Règles Th-Bât, fascicule Inertie, tableau 89;Ams_surf, classe d'inertie séquentielle légère
+inertie_seq_moyenne_ams;2,5;m²/m²;Règles Th-Bât, fascicule Inertie, tableau 89;Ams_surf, classe d'inertie séquentielle moyenne
+inertie_seq_lourde_ams;3;m²/m²;Règles Th-Bât, fascicule Inertie, tableau 89;Ams_surf, classe d'inertie séquentielle lourde
+chaleur_volumique_air;0,34;Wh/m³/K;Annexe III, fiche 6.1 (C_VEN_BBIO), éq. 377, 379 et 382;Chaleur volumique de l'air : déperdition par m³/h de débit
+ventilation_bbio_efficacite;0,5;-;Annexe III, fiche 6.1, § 6.1.3 et nomenclature (efficacité de l'échangeur fixée à 0,5 pour le Bbio);Efficacité de l'échangeur de la ventilation conventionnelle du Bbio
+inclinaison_beta1;30;°;Annexe III, fiches 5.10 (éq. 207, figure 59) et 5.17 (éq. 294, figure 64);En dessous, la baie ou la paroi est horizontale (flux ascendant)
+inclinaison_beta2;60;°;Annexe III, fiches 5.10 (éq. 207) et 5.17 (éq. 294);À partir de cette inclinaison, la baie ou la paroi est verticale
+inclinaison_beta3;120;°;Annexe III, fiche 5.17, nomenclature et éq. 294;Jusqu'à cette inclinaison, la paroi est verticale
+inclinaison_beta4;150;°;Annexe III, fiche 5.17, nomenclature et éq. 294;À partir de cette inclinaison, la paroi est horizontale (flux descendant)
+resistances_superficielles_verticale;0,17;m².K/W;Annexe III, fiche 5.17, § 5.17.3.4 : Uvert = 1 / (Rth + 0,17);Rsi + Rse d'une paroi verticale
+resistances_superficielles_ascendant;0,14;m².K/W;Annexe III, fiche 5.17, § 5.17.3.4 : Uhoriz,asc = 1 / (Rth + 0,14);Rsi + Rse d'une paroi horizontale, flux ascendant
+resistances_superficielles_descendant;0,21;m².K/W;Annexe III, fiche 5.17, § 5.17.3.4 : Uhoriz,des = 1 / (Rth + 0,21);Rsi + Rse d'une paroi horizontale, flux descendant
+sw2_part_defaut;0;-;HYPOTHÈSE DE L'OUTIL (les textes ne donnent pas de répartition, Sw1 et Sw2 viennent de la norme XP P50-777, voir docs/audit.md);Part de Sw réémise vers l'intérieur (Sw2 / Sw) quand Sw2 n'est pas saisi
+part_convective_apports;0,5;-;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), nomenclature (conv, valeur conventionnelle) et éq. 39 et 41;Part des apports internes (occupants et usages) émise sous forme convective
+nadeq_surface_min;10;m²;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), éq. 35 (logement collectif);En dessous de cette surface moyenne par logement, Nmax = 1
+nadeq_surface_max;50;m²;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), éq. 35 (logement collectif);À partir de cette surface moyenne par logement, Nmax = 0,035 × surface
+nadeq_base;1,75;-;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), éq. 35 et 36;Nmax à 50 m², seuil au-delà duquel Nadeq croît moins vite
+nadeq_pente;0,01875;1/m²;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), éq. 35 : Nmax = 1,75 − 0,01875 × (50 − Algt);Pente de Nmax entre 10 et 50 m² par logement
+nadeq_par_m2;0,035;1/m²;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), éq. 35 : Nmax = 0,035 × Algt;Nmax par m² au-delà de 50 m² par logement
+nadeq_reduction;0,3;-;Annexe III, fiche 4.1 (C_EIN_Scénarios conventionnels), éq. 36 : Nadeq = 1,75 + 0,3 × (Nmax − 1,75);Part de Nmax comptée au-delà de 1,75 adulte équivalent
+emetteur_bbio_part_convective;0,5;-;Annexe III, fiche 8.1 (C-Emi-Systèmes Emissions du groupe), § 8.1.3.1 (Pemconv_ch = Pemconv_fr = 0,5);Émetteur conventionnel du Bbio : part convective de la puissance émise
+emetteur_bbio_psd;0,5;-;Annexe III, fiche 8.1 (C-Emi-Systèmes Emissions du groupe), § 8.1.3.1 (Psd_chem = Psd_frem = 0,5);Émetteur conventionnel du Bbio : poids de la température d'air dans la température de la sonde
+confort_pente;0,33;-;Annexe III, fiche 4.5 (C_Ein_Indicateurs de confort), éq. 58;Seuil d'inconfort chaud : pente selon la température extérieure glissante
+confort_origine;18,8;°C;Annexe III, fiche 4.5 (C_Ein_Indicateurs de confort), éq. 58;Seuil d'inconfort chaud : ordonnée à l'origine
+confort_ecart_c1;2;°C;Annexe III, fiche 4.5 (C_Ein_Indicateurs de confort), nomenclature (Δθop_inc_C1), fiche 4.6, tableau 10 (Cat_amb = 1);Seuil d'inconfort chaud : marge de la catégorie d'ambiance 1
+confort_poids_veille;0,8;-;Annexe III, fiche 4.5 (C_Ein_Indicateurs de confort), éq. 57 : θrm(j) = 0,8 × θrm(j−1) + 0,2 × θei,moy(j);Poids de la veille dans la moyenne glissante de la température extérieure
+saison_heure_test;9;h;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons) : tests menés chaque jour à hlég = 9 h;Case (heure légale de fin de pas) au début de laquelle les saisons sont réévaluées
+saison_seuil_debut;40;°C.h;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), nomenclature (Seuil_debut_ch, Seuil_debut_fr);Degrés-heures d'inconfort cumulés qui déclenchent une saison
+saison_seuil_fin;2;Wh/m²;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), nomenclature (Seuil_fin_ch, Seuil_fin_fr) et éq. 71;Besoin horaire moyen sur 4 semaines sous lequel une saison s'arrête
+saison_part_occupation_min;0,5;-;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 78, 81 et 88 : MAX(0,5, Nbh_occ_somme / (4 × Nbh_occ_ref));Plancher de la correction du seuil de début par l'occupation
+saison_jours_glissants;28;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 70 et 72 (4 semaines, 672 pas de temps);Durée maximale des sommes et moyennes glissantes
+saison_redemarrages_max;1;-;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 67;Nombre de redémarrages du chauffage admis au printemps
+saison_chauffage_fin_possible;57;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), § 4.6.3.1 (57e jour, 1er mars des scénarios);Premier jour où le chauffage peut s'arrêter
+saison_ete_debut;183;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 79 et 89 (183e jour, 1er juillet des scénarios);Premier jour où le chauffage est interdit et le refroidissement autorisé d'office
+saison_chauffage_debut_possible;253;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 81 (253e jour);Premier jour où le chauffage peut redémarrer à l'automne
+saison_froid_debut_possible;8;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 87 et 88 (8e jour);Premier jour où le refroidissement peut démarrer
+saison_froid_fin_possible;246;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 90 (246e jour);Premier jour où le refroidissement peut s'arrêter
+saison_delai_arret;7;j;Annexe III, fiche 4.6 (C_Ein_Détermination des saisons), éq. 78 : chauffage en fonction depuis au moins une semaine;Durée minimale de fonctionnement du chauffage avant un arrêt
+dugd_bbio;14;h/semaine;Annexe III, fiche 6.2 (C_VEN_Bouche_conduit), tableau 57 et note sous l'éq. 405;Durée d'utilisation du grand débit de ventilation pour le calcul du Bbio
+ecl_puissance_habitation;1;W/m²;Annexe III, fiche 7.1 (C_ECL_éclairage), éq. 781 et § éclairage résidentiel (10 W/m² installés et non-simultanéité);Puissance d'éclairage conventionnelle en habitation
+ecl_c1_habitation;0,9;-;Annexe III, fiche 7.1 (C_ECL_éclairage), § éclairage résidentiel (interrupteur seul);Taux d'utilisation de l'éclairage en occupation, sans lumière naturelle
+ecl_c2_einat_plein;100;lux;Annexe III, fiche 7.1 (C_ECL_éclairage), figure 86, point B;Éclairement naturel jusqu'auquel l'éclairage reste entièrement allumé (C2 = 1)
+ecl_c2_einat_coude;200;lux;Annexe III, fiche 7.1 (C_ECL_éclairage), figure 86, point G;Éclairement naturel du point G de la courbe C2 résidentielle
+ecl_c2_valeur_coude;0,05;-;Annexe III, fiche 7.1 (C_ECL_éclairage), figure 86, point G;C2 au point G
+ecl_c2_einat_nul;2800;lux;Annexe III, fiche 7.1 (C_ECL_éclairage), figure 86, point J;Éclairement naturel au-delà duquel l'éclairage est éteint (C2 = 0)
+ecl_part_convective;0,5;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (Crec_ecl_conv);Part de la consommation d'éclairage récupérée sous forme convective
+ecl_part_radiative;0,5;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (Crec_ecl_rad);Part de la consommation d'éclairage récupérée sous forme radiative
+ecl_reflexion_plafond;0,7;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (Roplafond_pv);Réflexion lumineuse du plafond, locaux de volume normal
+ecl_reflexion_murs;0,5;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (Romurs_pv);Réflexion lumineuse des murs, locaux de volume normal
+ecl_reflexion_sol;0,2;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (Rosol_pv);Réflexion lumineuse du sol, locaux de volume normal
+ecl_ratio_murs_sol;2,5;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (Rmursol_pv);Surface des murs rapportée à celle du sol
+ecl_forme_baie;0,4;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (FFbpu_h);Facteur de forme entre une baie et le plan utile
+ecl_forme_plafond;0,8;-;Annexe III, fiche 7.1 (C_ECL_éclairage), constantes (FFplpu_h);Facteur de forme entre le plafond et le plan utile
