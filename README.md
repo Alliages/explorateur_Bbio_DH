@@ -9,15 +9,17 @@ ses résultats ne peuvent pas servir à une attestation. Cible : un Bbio à ± 1
 
 Version en cours : voir `VERSION` et `CHANGELOG.md`. Suite prévue : `ROADMAP.md`.
 
-## État (0.8.10)
+## État (0.8.12)
 
 Socle (structures de projet, calendrier conventionnel, fichiers météo, scénarios du logement collectif), module
 solaire (rayonnement et éclairement reçus par une paroi orientée, masques, flux transmis par les baies et les parois
 opaques), modèle thermique horaire du groupe (réseau RC de la fiche 5.21) et besoins de chauffage, de
 refroidissement et d'éclairage d'un groupe (apports internes, émetteur conventionnel, saisons, lumière naturelle),
-Bbio d'un projet par groupe, zone et bâtiment, comparé au Bbio max des logements collectifs.
-Sans protections mobiles ni ouverture des baies (0.8.12), le besoin de froid est encore très surestimé : le Bbio
-calculé n'est pas comparable à celui d'une étude. Les DH et l'interface arrivent dans les versions suivantes.
+Bbio d'un projet par groupe, zone et bâtiment, comparé au Bbio max des logements collectifs, protections mobiles
+des baies (volets, stores enroulables) et ouverture des baies pour la surventilation naturelle.
+Sur cinq études réglementaires, le besoin de froid reste 1,7 à 4 fois trop fort et le chauffage 12 à 55 % trop
+faible (pas encore d'infiltrations) : le Bbio calculé n'est pas encore comparable à celui d'une étude. Les
+infiltrations, les DH et l'interface arrivent dans les versions suivantes.
 
 L'outil sait lire le fichier XML d'une étude réglementaire (RSET) et refaire son Bbio pour le comparer :
 

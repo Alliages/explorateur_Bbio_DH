@@ -302,7 +302,7 @@ def _inerties_longues(modele, etat):
 
 
 def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0, phi_sl=0.0, phi_sh=0.0,
-               phi_conv=0.0, phi_rad=0.0, phi_sys_conv=0.0, phi_sys_rad=0.0):
+               phi_conv=0.0, phi_rad=0.0, phi_sys_conv=0.0, phi_sys_rad=0.0, hg_es=None):
     """Calcul d'une heure du groupe. L'état n'est pas modifié : appeler avancer_etat() ensuite.
 
     Entrées de l'heure :
@@ -316,6 +316,8 @@ def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0
         phi_rad         apports internes radiatifs (W)
         phi_sys_conv    puissance convective émise par le système (W)
         phi_sys_rad     puissance radiative émise par le système (W)
+        hg_es           transmission des baies de l'heure (W/K), quand des protections mobiles la font varier
+                        (fiche 5.10, éq. 210-211) ; par défaut celle du modèle, sans protection
     Sortie : dictionnaire
         theta_i, theta_s, theta_mq, theta_rm, theta_op     en fin d'heure (°C)
         les mêmes suivis de « _moy »                       en moyenne sur l'heure (°C)
@@ -328,6 +330,10 @@ def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0
     if theta_eieq is None:
         theta_eieq = te
     m = modele
+    if hg_es is None:
+        hg_es, perte_baies = m.hg_es, m.perte_baies
+    else:
+        perte_baies = hg_es / (m.a_baies * m.h_is) if m.a_baies > 0 else 0.0            # éq. 361
 
     # --- Étape 3 : flux injectés aux nœuds (éq. 346 à 352, 361, 372) ---
     radiatif = phi_rad + phi_sys_rad
@@ -335,18 +341,18 @@ def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0
     phi_i = m.fsa * fs1 + fs3 + phi_conv + phi_sys_conv                             # éq. 346 (+ système)
     phi_l = m.fr_l_baies * radiatif                                                 # éq. 347
     phi_m = m.fr_md * soleil_restant + m.fr_m * radiatif                            # éq. 348
-    phi_s = (1.0 - m.perte_baies) * phi_l + m.fr_sd * soleil_restant + m.fr_s * radiatif   # éq. 361 complétée
+    phi_s = (1.0 - perte_baies) * phi_l + m.fr_sd * soleil_restant + m.fr_s * radiatif     # éq. 361 complétée
 
     # --- Étape 5 : coefficients de résolution (éq. 362 à 364), écrits pour rester définis sans ventilation
     #     (Hg_ei = 0) et sans baie ni ventilation (U2 = 0) ---
     part_air = m.hg_is / (m.hg_is + hg_ei)          # = U1 / Hg_ei : part d'un flux injecté à l'air qui atteint θs
     u1 = hg_ei * part_air                           # éq. 362
-    u2 = u1 + m.hg_es                               # éq. 363
+    u2 = u1 + hg_es                                 # éq. 363
     part_masse = m.hg_ms / (u2 + m.hg_ms)           # = U3 / U2 : part d'un flux injecté en θs qui atteint la masse
     u3 = u2 * part_masse                            # éq. 364
 
     # Tout ce qui arrive au nœud θs, températures extérieures comprises : Hg_es.θes = Hg_es.te + φsl (éq. 342)
-    arrive_s = phi_s + m.hg_es * te + phi_sl + u1 * theta_eieq + part_air * phi_i
+    arrive_s = phi_s + hg_es * te + phi_sl + u1 * theta_eieq + part_air * phi_i
     # Hg_em.θem = Hg_em.te + φsh.Hg_em / H_TH (éq. 344, avec 1/Hg_em + 1/Hg_ms = 1/H_TH)
     gain_parois = phi_sh * m.hg_em / m.h_th if m.h_th > 0 else 0.0
     phi_seq, phi_ann, theta_ms, theta_ma = _inerties_longues(m, etat)               # étape 4
@@ -375,7 +381,7 @@ def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0
         "theta_ms": theta_ms, "theta_ma": theta_ma, "phi_mq_seq": phi_seq, "phi_mq_ann": phi_ann,
         # Bilan de l'heure, avec les températures moyennes
         "flux_ventilation": hg_ei * (theta_eieq - theta_i_moy),
-        "flux_baies": m.hg_es * (te - theta_s_moy) + phi_sl,
+        "flux_baies": hg_es * (te - theta_s_moy) + phi_sl,
         "flux_parois": m.hg_em * (te - theta_mq_moy) + gain_parois,
         "flux_apports": phi_i + phi_s + phi_m,
         "flux_inerties_longues": phi_seq + phi_ann,
@@ -401,17 +407,19 @@ def matrice_groupe(modele, etat, **sollicitations):
 # ============================================================
 # 4. SOLLICITATIONS DE L'ENVELOPPE, heure par heure
 # ============================================================
-def sollicitations_groupe(groupe, meteo, jeu, confort_adaptatif=None):
+def sollicitations_groupe(groupe, meteo, jeu, confort_adaptatif=None, avec_baies=True):
     """Flux solaires et de rayonnement froid reçus par le groupe, sommés sur ses baies et ses parois (W).
 
     Colonnes : te, fs1, fs2, fs3, ftvc, phi_sl (= fs2 + ftvc, éq. 343), phi_sh_s, phi_sh_vc et
     phi_sh (= phi_sh_s + phi_sh_vc, éq. 345, sans les ponts thermiques).
     En Th-D, la période de confort adaptatif est exigée dès que le groupe a une paroi opaque sur l'extérieur
     (voir moteur.solaire.flux_solaires_paroi).
+    avec_baies=False : parois opaques seules ; les flux des baies sont alors nuls (ils viennent d'ailleurs quand
+    des protections mobiles les font dépendre de l'heure, voir moteur/protections.py).
     """
     n = len(meteo)
     sommes = {nom: np.zeros(n) for nom in ("fs1", "fs2", "fs3", "ftvc", "phi_sh_s", "phi_sh_vc")}
-    for baie in groupe.baies:
+    for baie in (groupe.baies if avec_baies else ()):
         flux = flux_solaires_baie(baie, meteo, jeu)
         for nom in ("fs1", "fs2", "fs3", "ftvc"):
             sommes[nom] += flux[nom].to_numpy()

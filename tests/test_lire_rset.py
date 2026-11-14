@@ -231,18 +231,27 @@ def test_comparaison_complete(chemin_rset):
 def test_variantes_des_besoins(lecture):
     projet, reference = lecture
     v = variantes_besoins(projet, reference).set_index("variante")
-    assert list(v.index) == ["outil", "infiltrations de l'étude", "protections fermées", "sans échangeur",
-                             "surventilation", "protections et surventilation"]
+    assert list(v.index) == ["outil", "infiltrations de l'étude", "sans ouverture des baies",
+                             "sans protections mobiles", "baies nues et fermées"]
     assert (v["b_fr_etude"] == 6.0).all() and (v["b_ch_etude"] == 12.0).all()
     # Infiltrations de l'étude (60 W/K, plus que la ventilation : 56 W/K) : nettement plus de chauffage
     assert v.loc["infiltrations de l'étude", "b_ch"] > 1.3 * v.loc["outil", "b_ch"]
-    # Moins de soleil ou plus d'air : moins de froid ; les deux ensemble : encore moins
-    assert v.loc["protections fermées", "b_fr"] < v.loc["outil", "b_fr"]
-    assert v.loc["surventilation", "b_fr"] < v.loc["sans échangeur", "b_fr"] < v.loc["outil", "b_fr"]
-    assert v.loc["protections et surventilation", "b_fr"] < min(v.loc["protections fermées", "b_fr"],
-                                                                v.loc["surventilation", "b_fr"])
+    # Chaque module retiré augmente le besoin de froid ; les deux retirés, encore plus
+    assert v.loc["outil", "b_fr"] < v.loc["sans ouverture des baies", "b_fr"] < v.loc["baies nues et fermées", "b_fr"]
+    assert v.loc["outil", "b_fr"] < v.loc["sans protections mobiles", "b_fr"] < v.loc["baies nues et fermées", "b_fr"]
     # Le projet lu n'est pas modifié par les variantes
-    assert projet.batiments[0].zones[0].groupes[0].baies[0].sw_c == pytest.approx(0.40)
+    baie = projet.batiments[0].zones[0].groupes[0].baies[0]
+    assert baie.protection == "volet" and baie.ouvrable
+
+
+def test_protections_et_ouvertures_lues(lecture):
+    groupe = lecture[0].batiments[0].zones[0].groupes[0]
+    baie = groupe.baies[0]
+    # Choix_PM_GPM = 1 : volet en gestion automatique ; valeurs « ap » de la baie
+    assert (baie.protection, baie.gestion_protection, baie.protection_exterieure) == ("volet", "automatique", True)
+    assert (baie.uw_protege, baie.sw_protege, baie.sw2_protege, baie.tl_protege) == (1.1, pytest.approx(0.08), 0.03, 0.1)
+    assert (baie.ouvrable, baie.ratio_ouverture_max, baie.exposition_bruit) == (True, 0.64, None)
+    assert groupe.traversant and groupe.hauteur_tirage_m is None
 
 
 # ------------------------------------------------------------------

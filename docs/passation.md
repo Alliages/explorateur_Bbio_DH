@@ -4,31 +4,25 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 14/11/2026
 
-- Version **0.8.10** (cas de référence), préparée et testée dans le dossier local, publiée sur `travail` le 14/11/2026, après
-  la 0.8.8 (deux commits).
-- `outils/lire_rset.py` : `lire_rset(chemin)` rend le `Projet` de l'outil et la `Reference` de l'étude (résultats,
-  indicateurs, baies avec protections et ouvertures, confort d'été).
-- `outils/comparer_reference.py` : `comparer(chemin)` et `variantes_besoins(projet, reference)` ; en ligne de
-  commande : `python -m outils.comparer_reference "_sources\mon_etude.xml" --variantes`.
-- `moteur/bbio.py` (0.8.8) : `calculer_bbio(projet)` ; la hauteur sous plafond du Bbio max est maintenant la moyenne
-  du bâtiment.
-- Tests : `python -m pytest` → 253 réussis, 2 sautés (classeurs de `_references/` absents). Le test des études
-  locales tourne ici, il est sauté sans RSET dans `_sources/`.
-- `docs/audit.md`, section 0.8.10 : tableau des écarts sur cinq études, hypothèses 46 (revue) et 48 à 54.
-- **Résultat à garder en tête** : la lecture est juste (parois, surfaces, Bbio max retrouvés), l'éclairage aussi.
-  Le chauffage est 6 à 46 % trop faible (pas d'infiltrations), le froid 4 à 46 fois trop fort. Les protections
-  mobiles sont le premier levier du froid, l'ouverture des baies le second.
+- Version **0.8.12** (protections et ouvertures), préparée et testée dans le dossier local, **sans commit** : rien
+  n'est publié tant que « Push » n'est pas donné. Dernier commit de `travail` : 0.8.10.
+- `moteur/protections.py` : ratio de fermeture conventionnel des volets et stores enroulables, flux et
+  déperdition des baies heure par heure. Matrices dans `donnees/protections_mobiles_*.csv`.
+- `moteur/ouvertures.py` : ouverture des baies du mode Th-B et débit de surventilation.
+- `moteur/besoins.py` les applique dès qu'une baie porte une protection ou est ouvrable ; sinon rien ne change.
+- `outils/lire_rset.py` lit protections et ouvertures ; `outils/comparer_reference.py --variantes` retire un module
+  à la fois.
+- Tests : `python -m pytest` → 275 réussis, 2 sautés (classeurs de `_references/` absents).
+- `docs/audit.md`, section 0.8.12 : tableau du froid sur cinq études, hypothèses 55 à 65.
+- **Résultat à garder en tête** : le froid est passé de 4 à 46 fois celui des études à 1,7 à 4 fois (Paris : 1,6 et
+  0,6 kWh/m² contre 0,4 et 0,3). Le chauffage reste 12 à 55 % trop faible, faute d'infiltrations.
 - **Les brasseurs d'air lisent encore la case** pour « 6 < hlég ≤ 22 » : une heure trop tôt (hypothèse 42).
 
 ## Prochaine étape
 
-0.8.12 « Protections et ouvertures » : protections mobiles d'abord (fiche 5.9), puis ouverture des baies du mode
-Th-B (fiche 5.13). Cible chiffrée : le Bfr des dix groupes de `docs/audit.md`. Les données d'entrée existent déjà
-dans `Reference.baies` (Sw, Tl et U avec protection, gestion, réglages d'ouverture par saison) ; il reste à les
-porter dans `Baie`. Avant de coder : relire les fiches 5.9 et 5.13, proposer la démarche.
-
-0.8.14 « Infiltrations » : version à part, après les protections (décidé le 14/11/2026). Sans elles le chauffage reste
-sous-estimé ; elles demandent le vrai modèle de la méthode (voir `ROADMAP.md`).
+0.8.14 « Infiltrations » : débits d'air par les défauts d'étanchéité (perméabilité à l'air, `Q4PaSurf` des études),
+pour le besoin de chauffage. Cible chiffrée : le Bch des dix groupes de `docs/audit.md`. Avant de coder : trouver
+et relire la fiche de la méthode (débits par les défauts d'étanchéité, vent et tirage), proposer la démarche.
 
 0.8.16 « DH » : les classeurs horaires de Paris, Sète et Nice et le module `..\meteo_et_chaleur\calcul\dh_re2020.py`
 donnent la référence ; voir les points 0.8.16 de `ROADMAP.md`.
@@ -55,5 +49,6 @@ python -m pytest
 
 ## En attente de Guillaume
 
-Lien Streamlit (0.9.0), extraction OPEE (0.9.8), accord DHUP (avant 1.0.0),
+Seuils de la gestion automatique des volets, à lire dans Climawin ou Pleiades (hypothèse 57) ; lien Streamlit
+(0.9.0), extraction OPEE (0.9.8), accord DHUP (avant 1.0.0),
 seuils du plan de contrôle.

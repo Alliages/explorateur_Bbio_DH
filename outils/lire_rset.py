@@ -28,7 +28,14 @@ r"""
                  Sf_ck, Sf_ek ; Id_Et → espace tampon → b_therm
    Baie          Ab, Alpha, Beta ; Usp_Vert et Usp_Horiz (U sans
                  protection mobile) ; Sw1 + Sw2 + Sw3 sans protection
-                 (conditions C et E) ; Tli_sp
+                 (conditions C et E) ; Tli_sp ;
+                 Choix_PM_GPM → protection mobile et sa gestion
+                 (1 à 3 volet, 4 à 6 store enroulable : automatique,
+                 manuelle non motorisée, manuelle motorisée), avec
+                 Uap, Sw1_ap + Sw2_ap + Sw3_ap et Tli_ap ;
+                 Baie_ouvrable, Rouv_Max, Exp_BR → ouverture
+   Groupe (suite) Delta_trav_surv → traversant ; Httf si
+                 Def_Httf = 0 → hauteur de tirage
    Lineaire      Ll, Psil (multiplié par b sur un espace tampon,
                  fiche 5.19, éq. 304 ; l'indicateur H_Th_PT des
                  sorties, lui, est la somme des Ll × Psil sans b)
@@ -39,9 +46,9 @@ r"""
                  tranches azimutales (Gamma)
 
  Ce que l'outil ne sait pas encore reprendre est compté dans
- Reference.infos["non_repris"] : protections mobiles et ouverture
- des baies (0.8.12), baies sur un espace tampon, perméabilité à
- l'air, flux solaires des ponts thermiques, usages autres que le
+ Reference.infos["non_repris"] : gestion automatique de
+ l'ouverture, stores vénitiens et secondes protections, baies sur un espace tampon,
+ perméabilité à l'air, flux solaires des ponts thermiques, usages autres que le
  logement collectif.
 
  Les RSET sont des études de projets réels : ils restent hors
@@ -72,6 +79,13 @@ TYPES_PAROI = {"1": "mur", "2": "toiture", "3": "plancher_bas"}        # Type_Pa
 INERTIES_QUOTIDIENNES = {"1": "tres_legere", "2": "legere", "3": "moyenne", "4": "lourde", "5": "tres_lourde"}
 INERTIE_SAISIE = "0"
 SANS_ESPACE_TAMPON = "0"                            # Id_Et : le composant donne sur l'extérieur
+# Choix_PM_GPM (fiche 5.9) : 0 pas de protection ; 1 à 3 volet ; 4 à 6 store enroulable ; 7 à 9 store vénitien.
+# Dans chaque trio : gestion automatique avec dérogation, manuelle non motorisée, manuelle motorisée
+PROTECTIONS = {"1": ("volet", "automatique"), "2": ("volet", "manuelle_non_motorisee"),
+               "3": ("volet", "manuelle_motorisee"), "4": ("store_enroulable", "automatique"),
+               "5": ("store_enroulable", "manuelle_non_motorisee"), "6": ("store_enroulable", "manuelle_motorisee")}
+SANS_PROTECTION = "0"
+HORLOGE_CREPUSCULAIRE = "1"                         # Type_Horl
 MOIS = range(1, 13)
 BESOINS = {"b_ch": "O_B_Ch", "b_fr": "O_B_Fr", "b_ecl": "O_B_Ecl", "bbio": "O_Bbio_pts"}
 MODULATIONS = {"mb_geo": "O_Mbgeo", "mb_combles": "O_Mbcombles", "mb_surf_moy": "O_Mbsurf_moy",
@@ -211,12 +225,39 @@ def _lire_baie(element, nom, non_repris):
         non_repris["baies avec Sw3 sans protection (ajouté à Sw1)"] = \
             non_repris.get("baies avec Sw3 sans protection (ajouté à Sw1)", 0) + 1
     masques, largeur, hauteur = _masques(element, non_repris)
+    # Protection mobile et sa gestion ; les stores vénitiens (7 à 9) ne sont pas modélisés : baie lue nue
+    choix = _texte(element, "Choix_PM_GPM", SANS_PROTECTION)
+    protection = {}
+    if choix in PROTECTIONS:
+        protection = dict(protection=PROTECTIONS[choix][0], gestion_protection=PROTECTIONS[choix][1],
+                          protection_exterieure=_texte(element, "Prot_Ext", "1") == "1",
+                          detecteur_presence=_texte(element, "Detec_Pres", "0") == "1",
+                          horloge_crepusculaire=_texte(element, "Type_Horl", "0") == HORLOGE_CREPUSCULAIRE,
+                          uw_protege=_exiger(element, "Uap_Vert", objet),
+                          uw_horizontal_protege=_nombre(element, "Uap_Horiz"),
+                          sw_protege=sum(_nombre(element, b, 0.0) for b in ("Sw1_ap", "Sw2_ap", "Sw3_ap")),
+                          sw2_protege=_nombre(element, "Sw2_ap", 0.0), sw3_protege=_nombre(element, "Sw3_ap", 0.0),
+                          tl_protege=_nombre(element, "Tli_ap"))
+    elif choix != SANS_PROTECTION:
+        cle = "baies à store vénitien (lues sans protection mobile)"
+        non_repris[cle] = non_repris.get(cle, 0) + 1
+    # Ouverture pour la surventilation naturelle : lue en gestion manuelle (seule traitée par l'outil)
+    ouvrable = _texte(element, "Baie_ouvrable", "0") == "1" and _nombre(element, "Rouv_Max", 0.0) > 0
+    bruit = _texte(element, "Exp_BR")
+    if ouvrable and _texte(element, "Has_Gestion_Auto_Ouverture", "0") != "0":
+        cle = "baies : ouverture automatique (lue en gestion manuelle)"
+        non_repris[cle] = non_repris.get(cle, 0) + 1
+    if _texte(element, "PM2", "0") == "1":
+        cle = "baies : seconde protection mobile (anti-éblouissement)"
+        non_repris[cle] = non_repris.get(cle, 0) + 1
     return Baie(nom, _exiger(element, "Ab", objet), orientation_deg=_exiger(element, "Alpha", objet),
                 inclinaison_deg=_exiger(element, "Beta", objet),
                 uw=_exiger(element, "Usp_Vert", objet), uw_horizontal=_nombre(element, "Usp_Horiz"),
                 sw_c=_exiger(element, "Sw1_sp_c", objet) + sw2_c + sw3_c, sw2_c=sw2_c,
                 sw_e=_exiger(element, "Sw1_sp_e", objet) + sw2_e + sw3_e, sw2_e=sw2_e,
-                tl=_nombre(element, "Tli_sp"), largeur_m=largeur, hauteur_m=hauteur, masques=masques)
+                tl=_nombre(element, "Tli_sp"), largeur_m=largeur, hauteur_m=hauteur, masques=masques,
+                ouvrable=ouvrable, ratio_ouverture_max=_nombre(element, "Rouv_Max") if ouvrable else None,
+                exposition_bruit=("BR" + bruit) if bruit in ("1", "2", "3") else None, **protection)
 
 
 def _decrire_baie(element, cle):
@@ -280,13 +321,13 @@ def _lire_groupe(element, nom, zone, nb_logements, coefficients_b, non_repris, c
         ponts.append(PontThermique(nom_pont, _exiger(pont, "Ll", f"le pont thermique « {nom_pont} »"),
                                    _exiger(pont, "Psil", f"le pont thermique « {nom_pont} »") * b))
     # Ce que l'outil ne modélise pas encore, compté pour le compte rendu
-    for cle, nombre in (("baies : protections mobiles et ouverture (0.8.12)", len(baies)),
-                        ("ponts thermiques : flux solaires (Sf_cl, Sf_el) et masques", len(lineaires)),
+    for cle, nombre in (("ponts thermiques : flux solaires (Sf_cl, Sf_el) et masques", len(lineaires)),
                         ("groupes : perméabilité à l'air (infiltrations nulles dans l'outil)", 1)):
         non_repris[cle] = non_repris.get(cle, 0) + nombre
 
     return Groupe(nom, _exiger(element, "SHAB", f"le groupe « {nom} »"),
-                  traversant=_texte(zone, "Is_Traversant", "0") == "1",
+                  traversant=_texte(element, "Delta_trav_surv", _texte(zone, "Is_Traversant", "0")) == "1",
+                  hauteur_tirage_m=_nombre(element, "Httf") if _texte(element, "Def_Httf", "1") == "0" else None,
                   parois=[_lire_paroi(p, n, coefficients_b, non_repris) for p, n in zip(parois, noms_parois)],
                   baies=[_lire_baie(b, n, non_repris) for b, n in zip(baies, noms_baies)],
                   volume_m3=_nombre(element, "V"), ponts_thermiques=ponts,

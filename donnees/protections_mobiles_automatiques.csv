@@ -1,0 +1,7 @@
+famille;occupation;saison;jour_sombre_chaud;jour_sombre_frais;jour_clair_chaud;jour_clair_frais;nuit_chaud;nuit_frais;source
+habitation;occupation;hiver;0,0;0,0;0,0;0,0;1,0;1,0;Annexe III, fiche 5.9, figure 44
+habitation;occupation;mi_saison;0,0;0,0;0,5;0,0;1,0;1,0;Annexe III, fiche 5.9, figure 44
+habitation;occupation;ete;0,5;0,0;1,0;0,75;0,5;0,9;Annexe III, fiche 5.9, figure 44
+habitation;inoccupation;hiver;0,0;0,0;0,0;0,0;1,0;1,0;Annexe III, fiche 5.9, figure 44
+habitation;inoccupation;mi_saison;0,0;0,0;0,5;0,0;1,0;1,0;Annexe III, fiche 5.9, figure 44
+habitation;inoccupation;ete;1,0;0,75;1,0;0,75;0,5;0,5;Annexe III, fiche 5.9, figure 44

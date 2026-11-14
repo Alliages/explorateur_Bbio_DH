@@ -13,7 +13,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.8.6 | Besoins | Besoins de chauffage, de refroidissement et d'éclairage | fait |
 | 0.8.8 | Bbio | Revue des hypothèses 29, 30, 31 et 36 de l'audit. Bbio = 2 × Bch + 2 × Bfr + 5 × Becl par groupe, zone et bâtiment, comparaison au Bbio max | fait |
 | 0.8.10 | Cas de référence | Lecteur de RSET (`outils/lire_rset.py`), comparaison du Bbio à des études (`outils/comparer_reference.py`), variantes du besoin de froid | fait |
-| 0.8.12 | Protections et ouvertures | Ouverture des baies, dont celle du mode Th-B pour le besoin de froid (fiche 5.13), et protections mobiles (fiche 5.9) ; catalogue tiré de RSEE | à faire |
+| 0.8.12 | Protections et ouvertures | Protections mobiles (fiche 5.9 : volets et stores enroulables, gestion manuelle et automatique) et ouverture des baies du mode Th-B (fiche 5.13) | fait |
 | 0.8.14 | Infiltrations | Débits d'air par les défauts d'étanchéité (perméabilité à l'air), pour le besoin de chauffage | à faire |
 | 0.8.16 | DH | Degrés-heures d'inconfort (fiche 13.5) sur le jeu Th-D, comparaison au DH max, regarde ..\meteo_et_chaleur\calcul avant  | à faire |
 | — | Brasseurs d'air (anticipé pour le DH) | `moteur/brasseurs.py` (fiche 8.32) : régulation, effet ΔθopBA sur le seuil d'inconfort, consommation ; classe `Brasseur`, `Groupe.volume_m3` et `Groupe.brasseurs` ; `tests/test_brasseurs.py` ; branchés sur le groupe en 0.8.4 | fait |
@@ -40,16 +40,23 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   ni le DH ne sont exploitables sans ces modules. `CHANGELOG.md` (0.8.8 et avant), `docs/audit.md` (0.8.8 et avant)
   et les commentaires du code citent encore les anciens numéros : 0.9.4 pour les protections, 0.8.10 pour le DH,
   0.8.12 pour l'interface. Depuis : DH en 0.8.16, interface en 0.8.18.
-- 0.8.12 : **commencer par les protections mobiles** (fiche 5.9), premier levier du besoin de froid d'après les
-  variantes de la 0.8.10 (voir `docs/audit.md`), puis l'ouverture des baies du mode Th-B (fiche 5.13). Les études
-  donnent pour chaque baie Sw, Tl et U avec protection, la gestion de la protection et les réglages d'ouverture par
-  saison : `Reference.baies` de `outils/lire_rset.py` les lit déjà ; il reste à les porter dans `Baie`.
+- **Seuils de la gestion automatique des protections** (`gpm_auto_...` de `donnees/hypotheses.csv` : 10 000 lux,
+  26 et 24 °C) : valeurs de l'outil, absentes de l'annexe et des fichiers d'étude. À lire dans Climawin ou
+  Pleiades (écran de la gestion automatique des volets), puis à corriger. Concernent Sète et Nice.
+- 0.9.8 : stores vénitiens (20 baies sur 80 à Nice, lues sans protection), seconde protection mobile, gestion
+  automatique de l'ouverture des baies.
+- 0.9.8 : éclairage : les protections fermées réduisent la lumière naturelle (fiche 5.10, éq. 235 à 237) ; l'outil
+  calcule encore Becl baies nues (écart actuel aux études : 0,1 kWh/m²).
+- 0.8.16 : ouverture des baies en mode Th-D (même fiche, sans les restrictions du mode Th-B) et ligne Th-D des
+  protections mobiles (fiche 5.9, tableau 34) ; les deux modules sont prêts à les recevoir.
+- 0.9.8 : ouverture des baies la nuit : la fiche 5.13 ne décrit le réglage qu'en journée (7 h à 23 h) ; l'outil
+  garde la position du soir (hypothèse 59), ce qui pèse sur le rafraîchissement nocturne.
 - 0.8.14 : **infiltrations par la perméabilité à l'air** (`Q4PaSurf` des études). L'indicateur d'hiver
   des études vaut 0,5 à 2,3 fois la déperdition de la ventilation ; sans infiltrations, l'outil sous-estime le
   chauffage de 6 à 46 %. Mais injecter cet indicateur tel quel fait dépasser le chauffage des études (voir
   `docs/audit.md`, 0.8.10) : il faut le vrai modèle (débits par les défauts d'étanchéité, selon le vent et le tirage),
   pas un débit constant. Version à part, après les protections (décidé le 14/11/2026).
-- 0.8.12 : baies sur un espace tampon (coefficient b et soleil), aujourd'hui lues comme donnant sur l'extérieur.
+- 0.9.8 : baies sur un espace tampon (coefficient b et soleil), aujourd'hui lues comme donnant sur l'extérieur.
 - 0.9.8 : U des baies en hiver : l'indicateur `Hg_es_hiver` des études est 1 à 15 % sous la somme des A × U sans
   protection de l'outil (protections fermées la nuit ?) ; ventilation : `H_Vent_Hiver` des études vaut 0,1397 × débit,
   contre 0,34 × 0,5 = 0,17 dans l'outil (éq. 382) : à comprendre.

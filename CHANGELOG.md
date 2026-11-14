@@ -3,6 +3,37 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.8.12 — évolution (14/11/2026), protections et ouvertures
+
+Protections mobiles des baies et ouverture des baies pour la surventilation naturelle.
+
+- **Protections mobiles** (`moteur/protections.py`, annexe III, fiches 5.9 et 5.10) : ratio de fermeture
+  conventionnel de chaque baie, heure par heure, pour les volets et les stores enroulables, en gestion manuelle
+  (motorisée ou non) et automatique avec dérogation. Il dépend de la saison du groupe, de l'occupation, de
+  l'éclairement reçu par la baie et de la température de la veille. La baie est partagée entre une part nue et une
+  part protégée : flux solaires, rayonnement froid et déperdition suivent ce ratio.
+- **Matrices conventionnelles** de l'habitation (figures 35, 38 et 44 de la fiche 5.9) dans
+  `donnees/protections_mobiles_manuelles.csv` et `donnees/protections_mobiles_automatiques.csv`.
+- **Ouverture des baies** (`moteur/ouvertures.py`, fiche 5.13) : gestion manuelle du mode Th-B (ouverture en
+  saison de refroidissement et en occupation, selon les températures intérieure et extérieure, le bruit et l'heure),
+  puis débit d'air par tirage thermique ou par le vent, traversant ou non. L'air entre sans passer par l'échangeur.
+- **Besoins** (`moteur/besoins.py`) : les deux modules s'appliquent dès qu'une baie porte une protection ou est
+  ouvrable ; sans cela les résultats sont inchangés. Nouvelles sorties horaires : `rprot_moyen`, `hg_es`,
+  `rouv_moyen`, `debit_ouvertures_m3h`.
+- **Structures** : `Baie` reçoit la protection mobile, sa gestion et ses caractéristiques protégées (`uw_protege`,
+  `sw_protege`, `tl_protege`…), `ouvrable`, `ratio_ouverture_max`, `exposition_bruit` ; `Groupe` reçoit
+  `hauteur_tirage_m`.
+- **Lecture des études** : protections, gestion et ouverture des baies lues dans les RSET ; les variantes de
+  `outils/comparer_reference.py` retirent maintenant un module à la fois.
+- **Résultat** sur les cinq études : le besoin de froid passe de 4 à 46 fois celui des études à 1,7 à 4 fois ; à
+  Paris, seule étude à gestion entièrement manuelle, 1,6 et 0,6 kWh/m² contre 0,4 et 0,3. Détail dans
+  `docs/audit.md`.
+- **Limites** : les trois seuils de la gestion automatique des protections ne sont ni dans l'annexe ni dans les
+  fichiers d'étude (valeurs de l'outil, signalées) ; stores vénitiens, seconde protection et ouverture automatique
+  non traités ; l'éclairage est calculé baies nues ; pas d'infiltrations (0.8.14).
+- **Hypothèses** : 33 constantes ajoutées, chacune sourcée.
+- Tests : 277.
+
 ## 0.8.10 — évolution (14/11/2026), cas de référence
 
 Lecture d'une étude réglementaire et comparaison de son Bbio à celui de l'outil.

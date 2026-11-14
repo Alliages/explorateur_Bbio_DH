@@ -20,12 +20,18 @@
  5.21) : inertie, ponts thermiques, débit de ventilation, part
  réémise Sw2 des baies, U horizontal des baies, coefficient b des
  parois sur un local non chauffé. Les protections mobiles
- arrivent avec le module qui les utilise (0.9.4).
+ arrivent avec le module qui les utilise (0.8.12).
  Version 0.8.8 : données du Bbio max (exposition au bruit du
  groupe, hauteur sous plafond moyenne de la zone). La surface
  du groupe est sa surface habitable : c'est à la fois celle du
  modèle thermique et la surface de référence des résultats
  (fiche 13.1, éq. 2375), comme dans les études réglementaires.
+ Version 0.8.12 : protection mobile des baies (volet ou store
+ enroulable, gestion manuelle ou automatique) et caractéristiques
+ de la baie quand la protection est en place (fiche 5.9) ;
+ ouverture des baies pour la surventilation naturelle (fiche
+ 5.13) : baie ouvrable, ratio d'ouverture maximal, hauteur de
+ tirage du groupe.
 
  Conventions d'angle (annexe III, fiche 3.2, confirmées en 0.8.2) :
    - orientation : azimut de la normale extérieure, en degrés,
@@ -70,6 +76,9 @@ GESTIONS_BRASSEUR = ("manuelle", "thermostat", "automatique")  # mode_gestion_br
 CARACTERES_VALEUR = ("certifiee", "justifiee", "declaree")
 # Exposition au bruit des infrastructures de transport (annexe à l'article R. 172-4, chapitre V)
 EXPOSITIONS_BRUIT = ("BR1", "BR2", "BR3")
+# Protections mobiles des baies (annexe III, fiche 5.9) : type de la première protection et mode de gestion
+PROTECTIONS_MOBILES = ("volet", "store_enroulable")
+GESTIONS_PROTECTION = ("manuelle_non_motorisee", "manuelle_motorisee", "automatique")
 
 
 def _exiger_positif(valeur, nom):
@@ -180,9 +189,47 @@ class Baie:
     largeur_m: float = None     # utiles pour les masques proches
     hauteur_m: float = None
     masques: list = field(default_factory=list)
+    # Protection mobile (annexe III, fiches 5.9 et 5.10) ; None : baie sans protection mobile
+    protection: str = None      # « volet » ou « store_enroulable »
+    gestion_protection: str = "manuelle_non_motorisee"     # ou « manuelle_motorisee », « automatique »
+    protection_exterieure: bool = True      # un store enroulable extérieur est remonté par grand vent
+    detecteur_presence: bool = False        # gestion automatique : dérogation manuelle avec détecteur de présence
+    horloge_crepusculaire: bool = False     # gestion automatique : la nuit commence quand la baie n'est plus éclairée
+    uw_protege: float = None    # Uw avec la protection en place, en position verticale (W/m².K)
+    uw_horizontal_protege: float = None     # idem en position horizontale ; par défaut uw_protege
+    sw_protege: float = None    # facteur solaire global avec la protection en place (mêmes conditions C et E)
+    sw2_protege: float = 0.0    # part réémise (grande longueur d'onde et convection) de sw_protege
+    sw3_protege: float = 0.0    # part transmise par la lame d'air ventilée (protection intérieure) de sw_protege
+    tl_protege: float = None    # transmission lumineuse avec la protection en place
+    # Ouverture pour la surventilation naturelle (annexe III, fiche 5.13)
+    ouvrable: bool = False      # la baie peut s'ouvrir (hors portes d'accès)
+    ratio_ouverture_max: float = None       # Rouvmax : surface maximale d'ouverture / surface en tableau
+    exposition_bruit: str = None            # BR1, BR2 ou BR3 ; par défaut celle du groupe
 
     def __post_init__(self):
         _exiger_positif(self.surface_m2, f"Surface de la baie « {self.nom} »")
+        if self.ouvrable:
+            if self.ratio_ouverture_max is None:
+                raise ValueError(f"Baie « {self.nom} » : ratio_ouverture_max à renseigner pour une baie ouvrable")
+            _exiger_entre(self.ratio_ouverture_max, 0.0, 1.0, f"Ratio d'ouverture de la baie « {self.nom} »")
+        if self.exposition_bruit is not None and self.exposition_bruit not in EXPOSITIONS_BRUIT:
+            raise ValueError(f"Baie « {self.nom} » : exposition au bruit « {self.exposition_bruit} » inconnue "
+                             f"({', '.join(EXPOSITIONS_BRUIT)})")
+        if self.protection is not None:
+            if self.protection not in PROTECTIONS_MOBILES:
+                raise ValueError(f"Baie « {self.nom} » : protection « {self.protection} » inconnue "
+                                 f"({', '.join(PROTECTIONS_MOBILES)})")
+            if self.gestion_protection not in GESTIONS_PROTECTION:
+                raise ValueError(f"Baie « {self.nom} » : gestion « {self.gestion_protection} » inconnue "
+                                 f"({', '.join(GESTIONS_PROTECTION)})")
+            if self.uw_protege is None or self.sw_protege is None:
+                raise ValueError(f"Baie « {self.nom} » : uw_protege et sw_protege à renseigner avec une protection "
+                                 "mobile")
+            _exiger_positif(self.uw_protege, f"Uw protégé de la baie « {self.nom} »")
+            _exiger_entre(self.sw_protege, 0.0, 1.0, f"Sw protégé de la baie « {self.nom} »")
+            _exiger_entre(self.tl_protege, 0.0, 1.0, f"Transmission lumineuse protégée de la baie « {self.nom} »")
+            if self.sw2_protege < 0 or self.sw3_protege < 0 or self.sw2_protege + self.sw3_protege > self.sw_protege:
+                raise ValueError(f"Baie « {self.nom} » : sw2_protege + sw3_protege doit rester entre 0 et sw_protege")
         _exiger_entre(self.sw_e, 0.0, 1.0, f"Sw-e de la baie « {self.nom} »")
         _exiger_entre(self.sw_c, 0.0, 1.0, f"Sw-c de la baie « {self.nom} »")
         _exiger_entre(self.sw2_e, 0.0, 1.0, f"Sw2-e de la baie « {self.nom} »")
@@ -319,6 +366,7 @@ class Groupe:
     cma_surf: float = None      # capacité annuelle (kJ/K/m²), classe personnalisée
     ama_surf: float = None      # surface d'échange annuelle (m²/m²) ; par défaut ams_surf
     exposition_bruit: str = "BR1"   # exposition au bruit des infrastructures de transport : module le Bbio max
+    hauteur_tirage_m: float = None  # Httf : hauteur de tirage thermique des baies ouvertes ; par défaut 1,5 m
 
     def __post_init__(self):
         _exiger_positif(self.surface_m2, f"Surface du groupe « {self.nom} »")

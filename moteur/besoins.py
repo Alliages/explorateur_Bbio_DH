@@ -58,6 +58,14 @@ r"""
    MAX(consigne de refroidissement ; 0,33 × θrm + 18,8 + 2),
    θrm étant la moyenne glissante de la température extérieure.
 
+ Protections mobiles (0.8.12) : si une baie du groupe en porte,
+ les flux solaires et la déperdition des baies sont recalculés
+ chaque heure selon leur ratio de fermeture conventionnel
+ (moteur/protections.py) ; sinon les baies restent nues.
+ Ouverture des baies (0.8.12) : si une baie est ouvrable, le
+ groupe est surventilé en saison de refroidissement, selon la
+ règle du mode Th-B (moteur/ouvertures.py).
+
  Pas de relance du chauffage avant le retour des occupants :
  la fiche 8.5 ne l'applique qu'au calcul des consommations.
 
@@ -78,6 +86,8 @@ from moteur.eclairage import eclairage_groupe
 from moteur.groupe import (avancer_etat, debit_ventilation, etat_initial, pas_groupe, preparer_modele,
                            sollicitations_groupe)
 from moteur.hypotheses import hyp
+from moteur.ouvertures import OuverturesGroupe, groupe_ouvrable
+from moteur.protections import ProtectionsGroupe, groupe_protege, occupation_gpm
 from moteur.scenarios import charger_scenarios
 
 JEU = "th_bc"       # les besoins du Bbio se calculent sur le climat moyen (mode Th-B)
@@ -256,6 +266,10 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         theta_sd                            température de la sonde, émission comprise (°C)
         theta_op_libre                      température opérative moyenne sans émission (°C)
         dh_ch, dh_fr                        écarts d'inconfort froid et chaud de l'heure (°C)
+        rprot_moyen, hg_es                  ratio de fermeture moyen des protections mobiles (pondéré par les
+                                            surfaces de baie) et transmission des baies de l'heure (W/K)
+        rouv_moyen, debit_ouvertures_m3h    part ouverte de la surface ouvrable des baies et débit d'air entrant
+                                            par les baies ouvertes (m³/h)
         phi_occupants, phi_usages, einat    apports internes (W) et éclairement naturel (lux)
         puis les colonnes de moteur.groupe.pas_groupe() : températures et bilan de l'heure.
     Les brasseurs d'air n'interviennent pas dans les besoins (ils servent au confort d'été, calcul Th-D).
@@ -268,7 +282,12 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
 
     # --- Données de l'année, en tableaux numpy ---
     modele = preparer_modele(groupe, JEU)
-    sol = sollicitations_groupe(groupe, meteo, JEU)
+    # Avec des protections mobiles, les flux des baies dépendent de l'heure : ils sont calculés dans la boucle
+    protections = ProtectionsGroupe(groupe, meteo, JEU) if groupe_protege(groupe) else None
+    indice_gpm = occupation_gpm(scenarios, calendrier)
+    ouvertures = OuverturesGroupe(groupe, meteo) if groupe_ouvrable(groupe) else None
+    consigne_fr_confort = scenarios.parametres["consigne_refroidissement_normal"]
+    sol = sollicitations_groupe(groupe, meteo, JEU, avec_baies=protections is None)
     apports = apports_internes(groupe, scenarios, calendrier)
     eclairage = eclairage_groupe(groupe, meteo, scenarios.derouler("eclairage", calendrier))
     s = {c: sol[c].to_numpy() for c in ("te", "fs1", "fs3", "phi_sl", "phi_sh")}
@@ -295,8 +314,13 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
     saisons = Saisons(groupe.surface_m2, scenarios.horaire["occupation"].sum(), refroidissement)
     etat = etat_initial()
     theta_rm_ext = 0.0          # moyenne glissante de la température extérieure : 0 le premier jour (éq. 57)
+    theta_op_max_jour = 0.0     # maximum de la température opérative du jour légal en cours (fiche 5.9, éq. 175)
+    theta_op_max_veille = 0.0   # le même pour la veille : nul le premier jour, comme le prévoit la fiche
     lignes = []
     for h in range(n):
+        theta_op_max_jour = max(theta_op_max_jour, etat.theta_op)
+        if h > 0 and jour[h] != jour[h - 1]:
+            theta_op_max_veille, theta_op_max_jour = theta_op_max_jour, 0.0
         # Chaque jour de simulation, moyenne glissante de la température extérieure (fiche 4.5, éq. 57)
         if h >= HEURES_PAR_JOUR and h % HEURES_PAR_JOUR == 0:
             veille = s["te"][h - HEURES_PAR_JOUR:h].mean()
@@ -305,11 +329,35 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         if hleg[h] == heure_test:
             saisons.nouveau_jour(int(jour[h]))
 
+        # 0. Baies : nues (flux de l'année déjà calculés) ou avec protections mobiles (ratio de l'heure)
+        saison = SAISONS[(saisons.aut_ch, saisons.aut_fr)]
+        rprot = None
+        if protections is None:
+            baies = dict(fs1=s["fs1"][h], fs3=s["fs3"][h], phi_sl=s["phi_sl"][h])
+            rprot_moyen, hg_es = 0.0, modele.hg_es
+        else:
+            rprot, rprot_u = protections.ratios(h, saison, bool(occupe[h]), int(indice_gpm[h]), etat.theta_op,
+                                                theta_op_max_veille)
+            b = protections.flux(h, rprot, rprot_u)
+            baies = dict(fs1=b["fs1"], fs3=b["fs3"], phi_sl=b["fs2"] + b["ftvc"], hg_es=b["hg_es"])    # éq. 343
+            rprot_moyen, hg_es = b["rprot_moyen"], b["hg_es"]
+
+        # Air entrant : ventilation (à travers l'échangeur) et, baies ouvertes, air extérieur direct (fiche 5.13)
+        te = s["te"][h]
+        theta_souffle = te + efficacite_echangeur * (etat.theta_i - te)
+        hg_air, theta_air, rouv_moyen, debit_ouvertures = hg_ei, theta_souffle, 0.0, 0.0
+        if ouvertures is not None:
+            ecart_confort = max(0.0, pente * theta_rm_ext + origine + marge - consigne_fr_confort)
+            o = ouvertures.pas(h, saison, bool(saisons.aut_fr), bool(occupe[h]), int(hleg[h]), consigne_fr[h],
+                               consigne_fr_confort, ecart_confort, etat.theta_op, etat.theta_i, rprot)
+            rouv_moyen, debit_ouvertures = o["rouv_moyen"], o["debit_m3h"]
+            if o["hg"] > 0:
+                hg_air = hg_ei + o["hg"]
+                theta_air = (hg_ei * theta_souffle + o["hg"] * te) / hg_air
+
         # 1. Matrice du groupe : sans émission, 10 W/m² convectifs, 10 W/m² radiatifs
-        entrees = dict(te=s["te"][h], hg_ei=hg_ei,
-                       theta_eieq=s["te"][h] + efficacite_echangeur * (etat.theta_i - s["te"][h]),
-                       fs1=s["fs1"][h], fs3=s["fs3"][h], phi_sl=s["phi_sl"][h], phi_sh=s["phi_sh"][h],
-                       phi_conv=phi_conv[h], phi_rad=phi_rad[h])
+        entrees = dict(te=te, hg_ei=hg_air, theta_eieq=theta_air,
+                       phi_sh=s["phi_sh"][h], phi_conv=phi_conv[h], phi_rad=phi_rad[h], **baies)
         libre = pas_groupe(modele, etat, **entrees)
         convectif = pas_groupe(modele, etat, phi_sys_conv=puissance_10, **entrees)
         radiatif = pas_groupe(modele, etat, phi_sys_rad=puissance_10, **entrees)
@@ -341,7 +389,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         r.update(q_ch_wh=q_ch, q_fr_wh=q_fr, aut_ch=saisons.aut_ch, aut_fr=saisons.aut_fr,
                  saison=SAISONS[(saisons.aut_ch, saisons.aut_fr)], consigne_ch=consigne_ch[h],
                  consigne_fr=consigne_fr[h], theta_sd=temperature_sonde(r), theta_op_libre=theta_op_libre,
-                 dh_ch=dh_ch, dh_fr=dh_fr)
+                 dh_ch=dh_ch, dh_fr=dh_fr, rprot_moyen=rprot_moyen, hg_es=hg_es, rouv_moyen=rouv_moyen,
+                 debit_ouvertures_m3h=debit_ouvertures)
         lignes.append(r)
 
     resultat = pd.DataFrame(lignes, index=meteo.index)

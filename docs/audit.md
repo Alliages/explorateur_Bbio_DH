@@ -501,3 +501,97 @@ Lecture :
   réglementaire Th-D) : référence heure par heure pour le DH (0.8.14). Non exploités dans cette version.
 - Période de confort adaptatif et DH réglementaires de chaque groupe (`Reference.confort`).
 - Aucune sortie horaire du mode Th-B : les dates de saison (hypothèse 36) restent sans référence.
+
+## 0.8.12 — protections et ouvertures
+
+`moteur/protections.py` (annexe III, fiche 5.9, éq. 175 à 192, figures 34, 35, 38 et 44 ; fiche 4.1, éq. 50 à 53 ;
+fiche 5.10, éq. 209 à 211 et 219 à 222) et `moteur/ouvertures.py` (fiche 5.13, éq. 240 à 255, tableaux 41 à 44,
+figures 61 à 63). Équations, figures et matrices relues sur les pages du PDF : 62, 194 à 197, 200, 205 à 207,
+232, 240, 259, 261, 262 et 267 à 270. Les matrices conventionnelles sont des images dans le PDF : leurs valeurs
+ont été recopiées à la main dans les deux fichiers `donnees/protections_mobiles_*.csv`.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Occupation au sens des protections : 6 748 h occupées, 1 844 h d'absence de journée, 168 h de vacances | Fiche 4.1, éq. 50 à 53, compte à la main | identique |
+| Ratio de fermeture d'un volet manuel : nuit d'hiver, absence de journée, vacances, jour d'été chaud | Fiche 5.9, figure 35 et éq. 188-189, calcul à la main | identique |
+| Volet automatique : part automatique, dérogation (0,7 × 0,25), hystérésis, déperdition | Figure 44, éq. 179 et 186 ; fiche 5.10, éq. 211 | identique |
+| Store enroulable extérieur relevé à 10 m/s ; store intérieur maintenu | Fiche 5.9, éq. 192 | conforme |
+| Flux solaires et déperdition d'une baie partagée entre parts nue et protégée | Fiche 5.10, éq. 210, 219 et 220 | identique |
+| Modération par la température extérieure, seuils et hystérésis d'ouverture, frein du bruit | Fiche 5.13, figures 61 et 62, tableau 42, calcul à la main | identique |
+| Débit non traversant (tirage, vent) et traversant ; surface équivalente de deux façades opposées | Fiche 5.13, éq. 251 à 254 | identique |
+| Chaque heure, protections et ouvertures actives : chaleur prise par la masse = somme des flux | Bilan d'énergie | écart < 1e-6 W |
+| Groupe sans protection ni baie ouvrable | Résultats de la 0.8.10 | inchangés |
+| Étude de 317 baies protégées et ouvrables, deux groupes | Temps de calcul | environ 13 s (9 s en 0.8.10) |
+
+### Effet sur les cinq études
+
+Besoin de froid en kWh/m² : étude, outil, puis l'outil privé d'un module à la fois.
+
+| Groupe | Étude | Outil | Sans ouverture | Sans protections | Ni l'un ni l'autre (0.8.10) |
+|---|---|---|---|---|---|
+| Paris, non traversant | 0,4 | 1,6 | 8,9 | 2,1 | 13,3 |
+| Paris, traversant | 0,3 | 0,6 | 7,7 | 0,9 | 13,7 |
+| Sète, traversant | 1,9 | 6,1 | 10,8 | 15,9 | 40,1 |
+| Sète, non traversant | 3,4 | 6,9 | 11,3 | 13,6 | 31,4 |
+| Nice A climatisée, traversant | 4,6 | 10,4 | 19,5 | 15,2 | 31,7 |
+| Nice A climatisée, non traversant | 7,1 | 12,3 | 17,9 | 17,8 | 30,1 |
+| Nice A non climatisée, traversant | 4,3 | 10,2 | 19,4 | 13,5 | 27,5 |
+| Nice A non climatisée, non traversant | 5,6 | 10,7 | 16,2 | 14,0 | 22,9 |
+| Nice B, traversant | 5,3 | 11,3 | 21,6 | 16,7 | 34,8 |
+| Nice B, non traversant | 6,1 | 12,0 | 17,8 | 17,1 | 28,7 |
+
+Lecture :
+
+- **Le froid passe de 4 à 46 fois celui des études à 1,7 à 4 fois.** L'ouverture des baies pèse plus que les
+  protections à Paris ; à Sète ce sont les protections ; à Nice les deux sont du même ordre. La variante « protections fermées toute l'année »
+  de la 0.8.10 surestimait leur effet : les matrices conventionnelles ne ferment un volet qu'à 20 à 50 % un jour
+  d'été peu éclairé.
+- **Paris est le cas le plus sûr** : tous ses volets sont manuels, donc sans seuil inconnu. Le froid y est de 1,6
+  et 0,6 kWh/m² contre 0,4 et 0,3, et sa pointe tombe en août comme dans l'étude (1,1 contre 0,4 et 0,5 contre
+  0,3 kWh/m²).
+- **Sète et Nice restent à un facteur 2 à 3** : volets automatiques (seuils de l'outil, hypothèse 57) et, à Nice, 20
+  baies à store vénitien lues sans protection.
+- **Chauffage presque inchangé à Paris, un peu plus faible ailleurs** (12 à 55 % sous les études) : les volets fermés la nuit
+  réduisent la déperdition des baies ; les infiltrations manquent toujours (0.8.14).
+- **Bbio** : 43,5 et 54,0 points à Paris (étude : 49,2 et 75,3), 28,2 et 28,2 à Sète (29,9 et 24,7), 50,2 et 51,0
+  à Nice B (49,3 et 47,9). La proximité de certains totaux est fortuite : un chauffage trop faible y compense un
+  froid trop fort.
+
+### Lectures du texte et hypothèses de l'outil
+
+55. **Absence de journée** (fiche 4.1, éq. 52) : plage inoccupée comprise entre les cases 7 et 22, précédée et
+    suivie d'une heure occupée le même jour ; les protections y gardent leur position de jour. Le produit de
+    l'éq. 53 (« algèbre de Bool du tableau 5 », non lisible) est lu ainsi : une semaine de vacances impose
+    l'absence longue.
+56. **Jour et nuit des protections.** Gestion manuelle : en occupation, il fait jour quand la baie reçoit de la
+    lumière (éq. 183). Gestion automatique : toujours jour sans horloge, selon la lumière avec une horloge
+    crépusculaire (éq. 182) ; l'horloge personnalisable est lue comme l'absence d'horloge.
+57. **Seuils de la gestion automatique : valeurs de l'outil.** L'annexe les donne comme des données d'entrée sans
+    valeur conventionnelle, et les fichiers d'étude ne les contiennent pas : éclairement 10 000 lux, ambiance
+    chaude au-dessus de 26 °C, fraîche en dessous de 24 °C, hystérésis entre les deux (figure 31). Le vent limite
+    de la gestion automatique est pris égal à celui de la gestion manuelle (10 m/s). **À confirmer dans un
+    logiciel.**
+58. **Température de la veille** (éq. 175) : maximum de la température opérative de fin d'heure sur le jour légal
+    précédent ; nulle le premier jour, comme le prévoit la fiche.
+59. **Ouverture des baies la nuit.** La fiche 5.13 ne décrit le réglage par les occupants qu'en journée (hlég de
+    7 h à 23 h) ; la nuit, l'outil garde le ratio du soir. Hors occupation il est nul (éq. 245).
+60. **Écart de confort adaptatif** de l'éq. 242 : seuil d'inconfort chaud de la fiche 4.5 (catégorie 1) moins la
+    consigne de refroidissement de confort.
+61. **Protection et ouverture** (éq. 248) : la surface ouvrable d'une baie est réduite de sa part protégée,
+    Aouvmax × (1 − Rprot) ; le texte ne définit pas cette surface.
+62. **Vent** : vitesse du fichier météo, sans la correction « Vvent_c » des fiches 5.9 et 5.13.
+63. **Air entrant par les baies** : à la température extérieure, ajouté au débit de la ventilation ; sa masse
+    volumique suit l'éq. 255, rapportée à celle du coefficient 0,34 Wh/m³.K.
+64. **Sw avec protection** : une seule valeur dans les études, sans distinction des conditions C et E ni des
+    composantes directe, diffuse et réfléchie (éq. 214 et 217).
+65. **Famille d'usages** : seules les matrices « habitation, hôtellerie et hébergement » sont saisies ; Pocc = 0,7
+    et Pderog = 0,25 sont ceux du logement collectif (figure 34).
+
+### Simplifications de cette version (à lever plus tard)
+
+- Stores vénitiens, seconde protection mobile, gestion automatique de l'ouverture des baies.
+- Éclairage artificiel calculé baies nues.
+- Lignes propres au mode Th-D (protections : tableau 34 ; ouvertures : règle générale de la fiche 5.13) : avec
+  le DH (0.8.16).
