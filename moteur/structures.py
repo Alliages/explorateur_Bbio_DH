@@ -21,6 +21,11 @@
  réémise Sw2 des baies, U horizontal des baies, coefficient b des
  parois sur un local non chauffé. Les protections mobiles
  arrivent avec le module qui les utilise (0.9.4).
+ Version 0.8.8 : données du Bbio max (exposition au bruit du
+ groupe, hauteur sous plafond moyenne de la zone). La surface
+ du groupe est sa surface habitable : c'est à la fois celle du
+ modèle thermique et la surface de référence des résultats
+ (fiche 13.1, éq. 2375), comme dans les études réglementaires.
 
  Conventions d'angle (annexe III, fiche 3.2, confirmées en 0.8.2) :
    - orientation : azimut de la normale extérieure, en degrés,
@@ -63,6 +68,8 @@ INERTIES_ANNUELLES = ("defaut", "personnalisee")
 USAGES_BRASSEUR = ("nuit", "jour", "jour_et_nuit")          # Usp = 0, 1, 2
 GESTIONS_BRASSEUR = ("manuelle", "thermostat", "automatique")  # mode_gestion_br_p = 1, 2, 3
 CARACTERES_VALEUR = ("certifiee", "justifiee", "declaree")
+# Exposition au bruit des infrastructures de transport (annexe à l'article R. 172-4, chapitre V)
+EXPOSITIONS_BRUIT = ("BR1", "BR2", "BR3")
 
 
 def _exiger_positif(valeur, nom):
@@ -290,7 +297,7 @@ class Brasseur:
 class Groupe:
     """Unité de calcul thermique : un ensemble de locaux à la même température."""
     nom: str
-    surface_m2: float           # surface de référence du groupe
+    surface_m2: float           # surface habitable (SHAB) : surface du modèle thermique et surface de référence
     traversant: bool = False    # logements traversants ou non (confort d'été)
     parois: list = field(default_factory=list)
     baies: list = field(default_factory=list)
@@ -311,9 +318,13 @@ class Groupe:
     inertie_annuelle: str = "defaut"        # « defaut » : Cma = Cms, Ama = Ams
     cma_surf: float = None      # capacité annuelle (kJ/K/m²), classe personnalisée
     ama_surf: float = None      # surface d'échange annuelle (m²/m²) ; par défaut ams_surf
+    exposition_bruit: str = "BR1"   # exposition au bruit des infrastructures de transport : module le Bbio max
 
     def __post_init__(self):
         _exiger_positif(self.surface_m2, f"Surface du groupe « {self.nom} »")
+        if self.exposition_bruit not in EXPOSITIONS_BRUIT:
+            raise ValueError(f"Groupe « {self.nom} » : exposition au bruit « {self.exposition_bruit} » inconnue "
+                             f"({', '.join(EXPOSITIONS_BRUIT)})")
         if self.debit_ventilation_m3h < 0:
             raise ValueError(f"Groupe « {self.nom} » : débit de ventilation négatif ({self.debit_ventilation_m3h})")
         if self.debit_ventilation_pointe_m3h is not None and \
@@ -361,15 +372,24 @@ class Zone:
     nom: str
     usage: str = "logement_collectif"
     groupes: list = field(default_factory=list)
+    hauteur_sous_plafond_m: float = None    # HSPmoy : hauteur sous plafond moyenne, module le Bbio max (facultatif)
 
     def __post_init__(self):
         if self.usage not in USAGES:
             raise ValueError(f"Zone « {self.nom} » : usage « {self.usage} » inconnu ({', '.join(USAGES)})")
+        if self.hauteur_sous_plafond_m is not None:
+            _exiger_positif(self.hauteur_sous_plafond_m, f"Hauteur sous plafond de la zone « {self.nom} »")
 
     @property
     def surface_m2(self):
-        """Surface de référence de la zone : somme de celles de ses groupes."""
+        """Surface de référence de la zone : somme de celles de ses groupes (fiche 13.1, éq. 2377)."""
         return sum(groupe.surface_m2 for groupe in self.groupes)
+
+    @property
+    def nb_logements(self):
+        """Nombre de logements de la zone ; None si un groupe ne le donne pas."""
+        nombres = [groupe.nb_logements for groupe in self.groupes]
+        return None if None in nombres or not nombres else sum(nombres)
 
 
 @dataclass

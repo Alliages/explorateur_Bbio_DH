@@ -3,6 +3,31 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.8.8 — évolution (14/11/2026), Bbio
+
+Bbio d'un projet, par groupe, par zone et par bâtiment, et comparaison au Bbio max.
+
+- **Bbio** (`moteur/bbio.py`, annexe III, fiche 13.1) : `calculer_bbio(projet)` déroule les besoins de chaque
+  groupe, puis donne Bch, Bfr, Becl et Bbio = 2 × Bch + 2 × Bfr + 5 × Becl par groupe, par zone et par bâtiment
+  (pondération par la surface de référence), par mois et par an ; les résultats horaires sont conservés.
+- **Bbio max** (annexe à l'article R. 172-4, version du décret n° 2026-200) : 65 points en logement collectif,
+  modulés par la zone climatique et l'altitude (Mbgéo), la surface moyenne des logements (Mbsurf_moy), la surface
+  du bâtiment (Mbsurf_tot), l'exposition au bruit (Mbbruit) et la hauteur sous plafond (MbHSP). Écart au Bbio max
+  donné à titre indicatif.
+- **Structures** : `Groupe.exposition_bruit` (BR1, BR2, BR3), `Zone.hauteur_sous_plafond_m`, `Zone.nb_logements`.
+  La surface du groupe est sa surface habitable.
+- **Heure légale des tests** : le calendrier donne `hleg`, heure légale de début de pas (Hleg = IHJ + EHLO) ; les
+  saisons sont réévaluées à hlég = 9 (une heure plus tard qu'en 0.8.6). Effet sur l'immeuble d'essai : Bch à
+  ± 0,06 kWh/m².
+- **Revue des quatre points de l'audit** (hypothèses 29, 30, 31 et 36), à partir des textes, de sorties horaires
+  d'un moteur Th-BCE et d'études réglementaires gardées hors du dépôt : besoin de froid compté d'office et surface
+  de référence confirmés, relances sans objet en Bbio, fenêtres des saisons relues sans changement. Détail dans
+  `docs/audit.md`.
+- **Hypothèses** : 51 constantes ajoutées, chacune sourcée (fiche 13.1, annexe à l'article R. 172-4).
+- **Limite** : le besoin de froid reste très surestimé sans protections mobiles ni ouverture des baies ; le Bbio
+  de cette version n'est pas encore comparable à celui d'une étude (voir `docs/audit.md`).
+- Tests : 245 (formule, modulations calculées à la main, pondérations par zone et par bâtiment, projets refusés).
+
 ## 0.8.6 — évolution (13/11/2026), besoins
 
 Besoins de chauffage, de refroidissement et d'éclairage d'un groupe, heure par heure (mode Th-B, climat Th-BC).

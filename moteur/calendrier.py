@@ -17,7 +17,12 @@
    - l'année commence un lundi et compte 52 semaines réparties
      par mois : 4-4-5-4-5-4-4-5-4-4-5-4 ;
    - la « case » d'un scénario (1 à 24) est l'heure légale de
-     FIN du pas de temps : la case 2 couvre [1h ; 2h[ légal.
+     FIN du pas de temps : la case 2 couvre [1h ; 2h[ légal ;
+   - « hlég » dans les tests de la méthode (« à hlég = 9 h »,
+     « 6 < hlég ≤ 22 ») est l'heure légale de DÉBUT du pas,
+     Hleg = IHJ + EHLO : le pas [1h ; 2h[ a hlég = 1. Lecture
+     confirmée en 0.8.8 par les sorties horaires d'un moteur
+     Th-BCE (voir docs/audit.md).
 
  Exemples du tableau de la fiche 4.1, retrouvés par ce module :
      heure 0     → UTC 0h-1h   → légal 1h-2h → case 2
@@ -75,7 +80,9 @@ def construire_calendrier():
         h             heure de simulation (0-8759), début du pas de temps en UTC
         heure_utc     heure du jour UTC de début de pas (0-23)
         ehlo          décalage légal − UTC (1 en hiver, 2 en été)
-        case          case des scénarios = heure légale de fin de pas (1-24)
+        hleg          heure légale de début de pas (0-23) : Hleg = IHJ + EHLO de la fiche 3.1, celle
+                      que lisent les tests « hlég » de la méthode (saisons, jour et nuit du confort)
+        case          case des scénarios = heure légale de fin de pas (1-24) = hleg + 1
         jour_annee    jour légal de l'année (1-365)
         jour_semaine  jour légal de la semaine (1 = lundi … 7 = dimanche)
         mois          mois conventionnel (1-12)
@@ -91,6 +98,7 @@ def construire_calendrier():
         "h": h,
         "heure_utc": h % HEURES_PAR_JOUR,
         "ehlo": ehlo,
+        "hleg": h_legale % HEURES_PAR_JOUR,
         "case": h_legale % HEURES_PAR_JOUR + 1,
         "jour_annee": jour_annee,
         "jour_semaine": (jour_annee - 1) % JOURS_PAR_SEMAINE + 1,

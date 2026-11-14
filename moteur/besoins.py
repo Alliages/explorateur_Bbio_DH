@@ -58,7 +58,11 @@ r"""
    MAX(consigne de refroidissement ; 0,33 × θrm + 18,8 + 2),
    θrm étant la moyenne glissante de la température extérieure.
 
- Lectures et hypothèses de l'outil : docs/audit.md (0.8.6).
+ Pas de relance du chauffage avant le retour des occupants :
+ la fiche 8.5 ne l'applique qu'au calcul des consommations.
+
+ Lectures et hypothèses de l'outil : docs/audit.md (0.8.6,
+ revues en 0.8.8).
 ============================================================
 """
 
@@ -240,7 +244,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
     meteo            météo Th-BC du site (moteur.meteo.charger_meteo(zone, "th_bc", altitude))
     scenarios        scénarios de l'usage ; par défaut ceux du logement collectif
     calendrier       calendrier conventionnel ; par défaut moteur.calendrier.construire_calendrier()
-    refroidissement  le Bbio compte un besoin de froid que le bâtiment soit climatisé ou non ;
+    refroidissement  le Bbio compte un besoin de froid que le bâtiment soit climatisé ou non (constaté
+                     sur des études réglementaires, voir docs/audit.md, hypothèse 29) ;
                      False pour ne calculer que le chauffage et l'éclairage
     efficacite_echangeur   par défaut 0,5 (ventilation conventionnelle du Bbio, fiche 6.1)
 
@@ -272,7 +277,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
     occupe = apports["occupe"].to_numpy()
     consigne_ch = scenarios.consigne("chauffage", calendrier)
     consigne_fr = scenarios.consigne("refroidissement", calendrier)
-    case = calendrier["case"].to_numpy()
+    hleg = calendrier["hleg"].to_numpy()        # heure légale de début de pas (Hleg = IHJ + EHLO)
     jour = calendrier["jour_annee"].to_numpy()
 
     # --- Ventilation conventionnelle du Bbio (fiches 6.1 et 6.2) ---
@@ -297,7 +302,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
             veille = s["te"][h - HEURES_PAR_JOUR:h].mean()
             theta_rm_ext = poids_veille * theta_rm_ext + (1.0 - poids_veille) * veille
         # Chaque jour à 9 h légales, saisons de chauffage et de refroidissement (fiche 4.6)
-        if case[h] == heure_test:
+        if hleg[h] == heure_test:
             saisons.nouveau_jour(int(jour[h]))
 
         # 1. Matrice du groupe : sans émission, 10 W/m² convectifs, 10 W/m² radiatifs

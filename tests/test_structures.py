@@ -108,3 +108,24 @@ def test_saisies_thermiques_refusees(fabrique):
 def test_saisies_des_besoins_refusees(fabrique):
     with pytest.raises(ValueError):
         fabrique()
+
+
+# ------------------------------------------------------------------
+# 0.8.8 : données du Bbio max (bruit, hauteur sous plafond, logements de la zone)
+# ------------------------------------------------------------------
+def test_donnees_du_bbio_max():
+    zone = Zone("Z", groupes=[Groupe("A", 100.0, nb_logements=2), Groupe("B", 50.0, nb_logements=1)],
+                hauteur_sous_plafond_m=2.7)
+    assert zone.nb_logements == 3 and zone.groupes[0].exposition_bruit == "BR1"
+    # Un groupe sans nombre de logements : celui de la zone est inconnu
+    assert Zone("Z", groupes=[Groupe("A", 100.0, nb_logements=2), Groupe("B", 50.0)]).nb_logements is None
+    assert Zone("Z").nb_logements is None
+
+
+@pytest.mark.parametrize("fabrique", [
+    lambda: Groupe("X", 50.0, exposition_bruit="BR4"),
+    lambda: Zone("X", hauteur_sous_plafond_m=0.0),
+])
+def test_saisies_du_bbio_max_refusees(fabrique):
+    with pytest.raises(ValueError):
+        fabrique()

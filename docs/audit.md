@@ -311,3 +311,97 @@ de sens avant le module 0.9.4.
 - Pas de protections mobiles, pas d'ouverture des baies, pas de by-pass de l'échangeur (0.9.4).
 - Infiltrations nulles ; humidité non traitée (pas de besoin latent).
 - Un seul usage : logement collectif.
+
+## 0.8.8 — Bbio
+
+`moteur/bbio.py` (annexe III, fiche 13.1, éq. 2375 à 2386 ; annexe à l'article R. 172-4 du code de la construction
+et de l'habitation, chapitres I à III, version du décret n° 2026-200 du 18 mars 2026). Pages relues sur le PDF :
+annexe III 86 à 89 (saisons), annexe à l'article R. 172-4 pages 8 et 9 (Bbio max des logements collectifs).
+
+Trois sources nouvelles, toutes gardées hors du dépôt :
+
+- deux **sorties horaires d'un moteur Th-BCE** (8 760 heures, zone H3, jeu Th-D, altitude corrigée 100 m) :
+  température extérieure, occupation, températures d'air, radiante et opérative du groupe, θrm, seuils de confort
+  et degrés-heures ;
+- le module `dh_re2020.py` de Météo et Chaleur, qui recalcule les DH de ces sorties ;
+- cinq **études réglementaires de logements collectifs** (13 groupes, zones H1a, H2a et H3) et une étude de maisons
+  (4 groupes, H2b), lues dans leurs sorties du mode Th-B.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Bbio max : 13 groupes de logements collectifs (H1a, H2a, H3 ; BR1 à BR3 ; 92 à 4 872 m²) | Sorties Th-B de 5 études | écart ≤ 0,05 point (arrondi des sorties) |
+| Mbgéo, Mbsurf_moy, Mbsurf_tot, Mbbruit des mêmes groupes | Sorties Th-B | identiques à l'arrondi |
+| Bbio = 2 × Bch + 2 × Bfr + 5 × Becl sur les mêmes groupes | Sorties Th-B (besoins à 0,1 kWh/m²) | écart ≤ 0,3 point (arrondi des besoins) |
+| Zone et bâtiment : besoins et Bbio max pondérés par la surface de référence | Étude à deux zones (1 468,5 et 608,4 m²) | identique à l'arrondi |
+| Modulations et Bbio max de trois cas | Annexe à l'article R. 172-4, calcul à la main | identique |
+| Occupation du logement, 8 760 heures | Sorties horaires (6 748 heures occupées) | identique |
+| Météo H3 Th-D, altitude corrigée 100 m | Sorties horaires | identique |
+| θrm : jours UTC, nul le premier jour, 0,8 / 0,2 | Sorties horaires | écart < 1e-8 °C |
+| Degrés-heures recalculés à partir de la température opérative et du seuil corrigé des sorties | Sorties horaires (399,25 et 1 438,03 °C.h) | écart < 1e-7 °C.h |
+| Année entière, trois groupes | Temps de calcul | environ 1,5 s |
+
+### Revue des quatre points de la 0.8.6
+
+- **29, besoin de froid compté d'office : confirmé.** Dans les études, des groupes non climatisés
+  (`Is_Climatise` = 0) ont un besoin de froid non nul : 1,3 et 1,7 kWh/m² en logements collectifs H1a, 0,7 à
+  4,2 kWh/m² en maisons H2b. Le texte le dit à sa façon, fiche 5.13 : « une exception existe sur le mode de calcul
+  Th-B pour calculer le besoin de froid en permettant une surventilation naturelle par ouverture des baies ».
+  `refroidissement=True` reste la valeur par défaut.
+- **30, surfaces : confirmé.** Un groupe d'habitation ne porte dans les études qu'une surface, la SHAB (sa surface
+  utile est nulle), et sa surface de référence lui est égale (fiche 13.1, éq. 2375). `Groupe.surface_m2` est donc
+  la surface habitable, pour le modèle thermique comme pour les kWh/m². Le ratio 0,9 de l'éq. 33 ne sert qu'aux
+  apports internes (part du local d'habitation). La surface moyenne des logements du Bbio max est Sref / nombre de
+  logements, sans ce ratio (annexe à l'article R. 172-4, chapitre I, XI).
+- **31, relances : sans objet en Bbio.** Fiche 8.5, introduction : la relance « n'est appliquée que lors d'un calcul
+  des consommations ». Les sorties horaires, calculées avec les systèmes du projet, la montrent : en hiver, la
+  consigne normale revient deux heures avant les occupants (tableau 92, horloge à heure fixe), et la sonde remonte
+  de 0,5 à 0,7 °C sur ces deux heures. À ne traiter que si le calcul Th-D le demande (0.8.10).
+- **36, fenêtres glissantes des saisons : lecture maintenue.** Éq. 68 à 81 relues sur le PDF ; aucune des sources
+  nouvelles ne donne les dates de saison d'un calcul Th-B, donc rien ne permet de trancher davantage. Seul
+  changement : l'heure du test (hypothèse 42).
+
+### Lectures du texte et hypothèses de l'outil
+
+42. **« hlég » = heure légale de début de pas** (Hleg = IHJ + EHLO, fiche 3.1), et non la case des scénarios
+    (hypothèses 10 et 35). Preuve : dans les sorties horaires, le seuil de confort passe au régime de jour
+    (« 6 < hlég ≤ 22 », fiche 13.5) aux pas de 7h-8h à 22h-23h légales, soit hlég de 7 à 22 compté au début du
+    pas ; la lecture « case » place mal 354 et 396 heures sur les deux fichiers. Le calendrier donne désormais
+    `hleg` (= case − 1) et les saisons sont testées à hlég = 9 (pas de 9h-10h) au lieu de la case 9. Effet sur
+    l'immeuble d'essai : Bch à ± 0,06 kWh/m², un redémarrage d'automne avancé d'un jour en H1a. **Les brasseurs
+    d'air lisent encore la case** (hypothèse 10) : à aligner en 0.8.10.
+43. **Altitude de 400 m exactement** : ligne « 400 m-800 m » du tableau Mbgéo, dont la première ligne est
+    « < 400 m » ; la correction d'altitude de la météo, elle, range 400 m dans la tranche basse (fiche 3.1, « ≤ »).
+44. **Bbio max par groupe**, comme dans les sorties des études : exposition au bruit du groupe, surface moyenne des
+    logements de la zone, surface de référence de tous les logements collectifs du bâtiment. Zone et bâtiment :
+    moyenne pondérée par la surface de référence (chapitre II, V).
+45. **Agrégation des besoins.** La fiche 13.1 parle d'une « sommation sur l'ensemble des groupes » ; lue comme la
+    somme des kWh rapportée à la somme des surfaces de référence, ce que confirment les études.
+46. **Version du texte du Bbio max** : la plus récente (décret du 18 mars 2026), sans condition de date de permis.
+    Pour les logements collectifs, les trois versions gardées en local ne diffèrent que par MbHSP, ajouté par ce
+    décret. La hauteur sous plafond moyenne se saisit sur la zone ; non renseignée, MbHSP est nul.
+47. **Comparaison au Bbio max** (`ecart_pct`, `respecte`) : indicative, sans valeur réglementaire. L'exigence porte
+    sur le bâtiment.
+
+### Résultats et limite de cette version
+
+Immeuble d'essai de la 0.8.6 (650 m², 10 logements), altitude 100 m :
+
+| Zone | Bch | Bfr | Becl | Bbio | Bbio max | Bbio sans le froid |
+|---|---|---|---|---|---|---|
+| H1a | 12,1 | 21,7 | 1,6 | 75,9 | 81,8 | 32,4 |
+| H2b | 9,2 | 25,0 | 1,6 | 76,5 | 75,2 | 26,5 |
+| H3 | 2,6 | 46,3 | 1,6 | 105,7 | 68,8 | 13,0 |
+
+Dans les études de logements collectifs, Bfr vaut 0 à 0,4 kWh/m² en H2a, 1,3 à 1,7 en H1a et 3,3 à 7 en H3, pour
+des Bbio de 17 à 74 points : **le besoin de froid de l'outil est de l'ordre de dix fois trop fort**, et il pèse
+plus de la moitié du Bbio. Cause connue (0.8.6) : ni protections mobiles, ni ouverture des baies. La fiche 5.13
+décrit pour le mode Th-B une ouverture des baies propre au calcul du besoin de froid : c'est elle qui manque le
+plus. Bch (16 à 32 kWh/m² dans les études H1a et H2a hors petits groupes, 1 à 14 en H3) et Becl (1,6 à 2,2) sont
+dans les ordres de grandeur. Le Bbio de cette version n'est pas comparable à celui d'une étude tant que le module
+0.9.4 n'existe pas.
+
+Autres constats, notés pour la suite dans `ROADMAP.md` : conventions du calcul des DH lues dans les sorties
+horaires (seuils, période, correction des brasseurs) ; débit de ventilation du Bbio des études (`Qv_occ_BBIO`,
+environ 1,2 à 1,5 m³/h par m² habitable).

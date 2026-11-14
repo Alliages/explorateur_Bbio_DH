@@ -30,6 +30,9 @@ def test_correspondance_fiche_4_1(calendrier):
 def test_8760_heures_et_bornes(calendrier):
     assert len(calendrier) == 8760
     assert calendrier["case"].between(1, 24).all()
+    # hlég, heure légale de début de pas (Hleg = IHJ + EHLO), précède la case d'une heure
+    assert calendrier["hleg"].between(0, 23).all() and (calendrier["case"] == calendrier["hleg"] + 1).all()
+    assert (calendrier["hleg"] == (calendrier["heure_utc"] + calendrier["ehlo"]) % 24).all()
     assert calendrier["jour_annee"].between(1, 365).all()
     assert calendrier["jour_semaine"].between(1, 7).all()
     assert calendrier["mois"].between(1, 12).all()
