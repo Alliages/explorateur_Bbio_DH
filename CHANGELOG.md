@@ -3,6 +3,30 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.8.14 — évolution (14/11/2026), infiltrations
+
+Air entrant par les défauts d'étanchéité de l'enveloppe.
+
+- **Infiltrations** (`moteur/infiltrations.py`, annexe III, fiche 5.6) : à partir de la perméabilité à l'air du
+  groupe (débit de fuite sous 4 Pa par m² de paroi), défauts répartis par convention au vent, sous le vent et en
+  toiture ; chaque heure, la pression intérieure qui équilibre les débits entrants et sortants est cherchée par
+  dichotomie, sous l'effet du vent, du tirage thermique et de la ventilation double flux du Bbio. L'air qui entre
+  est à la température extérieure et ne passe pas par l'échangeur.
+- **Besoins** : les infiltrations s'ajoutent à la ventilation dès que la perméabilité du groupe est renseignée ;
+  sinon rien ne change. Nouvelles sorties horaires : `debit_infiltrations_m3h`, `hg_infiltrations`.
+- **Vent corrigé** : la vitesse du vent du fichier météo est multipliée par 0,9 (fiche 3.1), pour les
+  infiltrations comme pour les protections mobiles et l'ouverture des baies de la 0.8.12.
+- **Structures** : `Groupe.permeabilite_q4pa` ; `Zone.hauteur_m` et `Zone.hauteur_moyenne_m`.
+- **Lecture des études** : perméabilité et hauteurs de zone lues dans les RSET ; la comparaison donne la moyenne de
+  janvier et février des infiltrations de l'outil, à côté de l'indicateur des études ; les variantes retirent
+  aussi les infiltrations.
+- **Résultat** sur les cinq études : le chauffage, 12 à 55 % sous les études en 0.8.12, n'en est plus qu'à 2 à
+  26 %. Détail dans `docs/audit.md`.
+- **Point ouvert** : l'indicateur d'infiltrations d'hiver des études vaut 3 à 6 fois celui de l'outil ; les entrées
+  d'air du projet, que l'outil ne compte pas en Bbio, n'en expliquent qu'une partie.
+- **Hypothèses** : 13 constantes ajoutées, chacune sourcée.
+- Tests : 287. Une étude de 800 composants se calcule en 20 s environ (13 s en 0.8.12).
+
 ## 0.8.12 — évolution (14/11/2026), protections et ouvertures
 
 Protections mobiles des baies et ouverture des baies pour la surventilation naturelle.

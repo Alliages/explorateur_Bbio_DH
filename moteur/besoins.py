@@ -65,6 +65,10 @@ r"""
  Ouverture des baies (0.8.12) : si une baie est ouvrable, le
  groupe est surventilé en saison de refroidissement, selon la
  règle du mode Th-B (moteur/ouvertures.py).
+ Infiltrations (0.8.14) : si la perméabilité à l'air du groupe
+ est renseignée, l'air qui entre par les défauts d'étanchéité
+ s'ajoute à la ventilation, sans passer par l'échangeur
+ (moteur/infiltrations.py).
 
  Pas de relance du chauffage avant le retour des occupants :
  la fiche 8.5 ne l'applique qu'au calcul des consommations.
@@ -86,6 +90,7 @@ from moteur.eclairage import eclairage_groupe
 from moteur.groupe import (avancer_etat, debit_ventilation, etat_initial, pas_groupe, preparer_modele,
                            sollicitations_groupe)
 from moteur.hypotheses import hyp
+from moteur.infiltrations import InfiltrationsGroupe, groupe_permeable
 from moteur.ouvertures import OuverturesGroupe, groupe_ouvrable
 from moteur.protections import ProtectionsGroupe, groupe_protege, occupation_gpm
 from moteur.scenarios import charger_scenarios
@@ -248,7 +253,7 @@ def puissance_requise(theta_sd_0, theta_sd_10, puissance_10, consigne_ch, consig
 # 3. CALCUL DES BESOINS SUR L'ANNÉE
 # ============================================================
 def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidissement=True,
-                     efficacite_echangeur=None):
+                     efficacite_echangeur=None, hauteur_zone_m=None, hauteur_moyenne_m=None):
     """Besoins horaires de chauffage, de refroidissement et d'éclairage d'un groupe (mode Th-B).
 
     meteo            météo Th-BC du site (moteur.meteo.charger_meteo(zone, "th_bc", altitude))
@@ -258,6 +263,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                      sur des études réglementaires, voir docs/audit.md, hypothèse 29) ;
                      False pour ne calculer que le chauffage et l'éclairage
     efficacite_echangeur   par défaut 0,5 (ventilation conventionnelle du Bbio, fiche 6.1)
+    hauteur_zone_m, hauteur_moyenne_m   hauteur de la zone et hauteur moyenne au-dessus du sol, pour les
+                     infiltrations (voir moteur.infiltrations) ; facultatives
 
     Sortie : une ligne par heure, avec
         q_ch_wh, q_fr_wh, cecl_wh          besoins de l'heure (Wh)
@@ -270,6 +277,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                                             surfaces de baie) et transmission des baies de l'heure (W/K)
         rouv_moyen, debit_ouvertures_m3h    part ouverte de la surface ouvrable des baies et débit d'air entrant
                                             par les baies ouvertes (m³/h)
+        debit_infiltrations_m3h, hg_infiltrations   air entrant par les défauts d'étanchéité (m³/h) et son
+                                            coefficient d'échange (W/K)
         phi_occupants, phi_usages, einat    apports internes (W) et éclairement naturel (lux)
         puis les colonnes de moteur.groupe.pas_groupe() : températures et bilan de l'heure.
     Les brasseurs d'air n'interviennent pas dans les besoins (ils servent au confort d'été, calcul Th-D).
@@ -303,6 +312,10 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
     hg_ei = hyp("chaleur_volumique_air") * debit_ventilation(groupe)
     if efficacite_echangeur is None:
         efficacite_echangeur = hyp("ventilation_bbio_efficacite")
+    infiltrations = None
+    if groupe_permeable(groupe):
+        infiltrations = InfiltrationsGroupe(groupe, meteo, debit_ventilation(groupe), hauteur_zone_m,
+                                            hauteur_moyenne_m)
 
     # --- Constantes de l'émetteur et du confort ---
     part_conv = hyp("emetteur_bbio_part_convective")
@@ -346,14 +359,21 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         te = s["te"][h]
         theta_souffle = te + efficacite_echangeur * (etat.theta_i - te)
         hg_air, theta_air, rouv_moyen, debit_ouvertures = hg_ei, theta_souffle, 0.0, 0.0
+        debit_infiltrations = hg_infiltrations = 0.0
+        if infiltrations is not None:
+            i = infiltrations.pas(h, etat.theta_i, theta_souffle)
+            debit_infiltrations, hg_infiltrations = i["debit_m3h"], i["hg"]
+            if hg_infiltrations > 0:
+                theta_air = (hg_air * theta_air + hg_infiltrations * te) / (hg_air + hg_infiltrations)
+                hg_air += hg_infiltrations
         if ouvertures is not None:
             ecart_confort = max(0.0, pente * theta_rm_ext + origine + marge - consigne_fr_confort)
             o = ouvertures.pas(h, saison, bool(saisons.aut_fr), bool(occupe[h]), int(hleg[h]), consigne_fr[h],
                                consigne_fr_confort, ecart_confort, etat.theta_op, etat.theta_i, rprot)
             rouv_moyen, debit_ouvertures = o["rouv_moyen"], o["debit_m3h"]
             if o["hg"] > 0:
-                hg_air = hg_ei + o["hg"]
-                theta_air = (hg_ei * theta_souffle + o["hg"] * te) / hg_air
+                theta_air = (hg_air * theta_air + o["hg"] * te) / (hg_air + o["hg"])
+                hg_air += o["hg"]
 
         # 1. Matrice du groupe : sans émission, 10 W/m² convectifs, 10 W/m² radiatifs
         entrees = dict(te=te, hg_ei=hg_air, theta_eieq=theta_air,
@@ -390,7 +410,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                  saison=SAISONS[(saisons.aut_ch, saisons.aut_fr)], consigne_ch=consigne_ch[h],
                  consigne_fr=consigne_fr[h], theta_sd=temperature_sonde(r), theta_op_libre=theta_op_libre,
                  dh_ch=dh_ch, dh_fr=dh_fr, rprot_moyen=rprot_moyen, hg_es=hg_es, rouv_moyen=rouv_moyen,
-                 debit_ouvertures_m3h=debit_ouvertures)
+                 debit_ouvertures_m3h=debit_ouvertures, debit_infiltrations_m3h=debit_infiltrations,
+                 hg_infiltrations=hg_infiltrations)
         lignes.append(r)
 
     resultat = pd.DataFrame(lignes, index=meteo.index)

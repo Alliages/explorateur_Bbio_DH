@@ -14,7 +14,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.8.8 | Bbio | Revue des hypothèses 29, 30, 31 et 36 de l'audit. Bbio = 2 × Bch + 2 × Bfr + 5 × Becl par groupe, zone et bâtiment, comparaison au Bbio max | fait |
 | 0.8.10 | Cas de référence | Lecteur de RSET (`outils/lire_rset.py`), comparaison du Bbio à des études (`outils/comparer_reference.py`), variantes du besoin de froid | fait |
 | 0.8.12 | Protections et ouvertures | Protections mobiles (fiche 5.9 : volets et stores enroulables, gestion manuelle et automatique) et ouverture des baies du mode Th-B (fiche 5.13) | fait |
-| 0.8.14 | Infiltrations | Débits d'air par les défauts d'étanchéité (perméabilité à l'air), pour le besoin de chauffage | à faire |
+| 0.8.14 | Infiltrations | Débits d'air par les défauts d'étanchéité (fiche 5.6) : perméabilité à l'air, vent, tirage thermique, équilibre de pression | fait |
 | 0.8.16 | DH | Degrés-heures d'inconfort (fiche 13.5) sur le jeu Th-D, comparaison au DH max, regarde ..\meteo_et_chaleur\calcul avant  | à faire |
 | — | Brasseurs d'air (anticipé pour le DH) | `moteur/brasseurs.py` (fiche 8.32) : régulation, effet ΔθopBA sur le seuil d'inconfort, consommation ; classe `Brasseur`, `Groupe.volume_m3` et `Groupe.brasseurs` ; `tests/test_brasseurs.py` ; branchés sur le groupe en 0.8.4 | fait |
 | 0.8.18 | Interface | Streamlit : boîte en axonométrie (style cbsh_visuel), saisie, résultats | à faire |
@@ -51,11 +51,15 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   protections mobiles (fiche 5.9, tableau 34) ; les deux modules sont prêts à les recevoir.
 - 0.9.8 : ouverture des baies la nuit : la fiche 5.13 ne décrit le réglage qu'en journée (7 h à 23 h) ; l'outil
   garde la position du soir (hypothèse 59), ce qui pèse sur le rafraîchissement nocturne.
-- 0.8.14 : **infiltrations par la perméabilité à l'air** (`Q4PaSurf` des études). L'indicateur d'hiver
-  des études vaut 0,5 à 2,3 fois la déperdition de la ventilation ; sans infiltrations, l'outil sous-estime le
-  chauffage de 6 à 46 %. Mais injecter cet indicateur tel quel fait dépasser le chauffage des études (voir
-  `docs/audit.md`, 0.8.10) : il faut le vrai modèle (débits par les défauts d'étanchéité, selon le vent et le tirage),
-  pas un débit constant. Version à part, après les protections (décidé le 14/11/2026).
+- 0.9.8 : **indicateur d'infiltrations d'hiver** (`H_V_Def_Hiver`) : celui des études vaut 3 à 6 fois la moyenne de
+  janvier et février de l'outil, alors que le chauffage, lui, est proche. Pistes : les entrées d'air du projet
+  gardées dans le calcul du Bbio (un essai hors moteur remonte l'outil à 43 à 77 % de l'indicateur) ; la définition
+  même de l'indicateur, que la version texte de l'annexe ne donne pas ; le tirage thermique sur toute la hauteur
+  de la zone. À trancher avec une sortie horaire d'un moteur, ou une étude sans entrée d'air.
+- 0.9.8 : bilan aéraulique par zone (une pression commune à tous les groupes, échanges par le hall), au lieu d'un
+  bilan par groupe ; sans effet sur les cinq études, qui n'ont qu'un groupe par zone.
+- 0.9.8 : temps de calcul : la dichotomie des infiltrations a presque doublé la durée d'une année (20 s pour 800
+  composants) ; à accélérer si l'interface le demande.
 - 0.9.8 : baies sur un espace tampon (coefficient b et soleil), aujourd'hui lues comme donnant sur l'extérieur.
 - 0.9.8 : U des baies en hiver : l'indicateur `Hg_es_hiver` des études est 1 à 15 % sous la somme des A × U sans
   protection de l'outil (protections fermées la nuit ?) ; ventilation : `H_Vent_Hiver` des études vaut 0,1397 × débit,

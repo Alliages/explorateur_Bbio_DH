@@ -226,7 +226,7 @@ class ProtectionsGroupe:
                        baie.horloge_crepusculaire, baie.protection_exterieure)
                 self.classes.setdefault(cle, []).append(i)
         self.classes = {cle: np.array(indices) for cle, indices in self.classes.items()}
-        self.vent = meteo["Vent"].to_numpy(float).copy()
+        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.1 : Ventc
         self.part_occupee = hyp("gpm_part_occupee_logement_collectif")
         self.part_derogation = hyp("gpm_part_derogation_logement_collectif")
         self.chaud = False              # gestion automatique : ambiance chaude (hystérésis entre deux seuils)

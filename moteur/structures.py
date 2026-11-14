@@ -32,6 +32,8 @@
  ouverture des baies pour la surventilation naturelle (fiche
  5.13) : baie ouvrable, ratio d'ouverture maximal, hauteur de
  tirage du groupe.
+ Version 0.8.14 : perméabilité à l'air du groupe et hauteurs de
+ la zone, pour les infiltrations (fiche 5.6).
 
  Conventions d'angle (annexe III, fiche 3.2, confirmées en 0.8.2) :
    - orientation : azimut de la normale extérieure, en degrés,
@@ -367,9 +369,13 @@ class Groupe:
     ama_surf: float = None      # surface d'échange annuelle (m²/m²) ; par défaut ams_surf
     exposition_bruit: str = "BR1"   # exposition au bruit des infrastructures de transport : module le Bbio max
     hauteur_tirage_m: float = None  # Httf : hauteur de tirage thermique des baies ouvertes ; par défaut 1,5 m
+    permeabilite_q4pa: float = None     # Q4Pa_surf : débit de fuite sous 4 Pa par m² de paroi hors plancher bas
+                                        # (m³/h/m²) ; None : pas d'infiltrations
 
     def __post_init__(self):
         _exiger_positif(self.surface_m2, f"Surface du groupe « {self.nom} »")
+        if self.permeabilite_q4pa is not None and self.permeabilite_q4pa < 0:
+            raise ValueError(f"Groupe « {self.nom} » : perméabilité à l'air négative ({self.permeabilite_q4pa})")
         if self.exposition_bruit not in EXPOSITIONS_BRUIT:
             raise ValueError(f"Groupe « {self.nom} » : exposition au bruit « {self.exposition_bruit} » inconnue "
                              f"({', '.join(EXPOSITIONS_BRUIT)})")
@@ -421,12 +427,16 @@ class Zone:
     usage: str = "logement_collectif"
     groupes: list = field(default_factory=list)
     hauteur_sous_plafond_m: float = None    # HSPmoy : hauteur sous plafond moyenne, module le Bbio max (facultatif)
+    hauteur_m: float = None                 # hauteur de la zone (infiltrations) ; par défaut 3 m ou plus
+    hauteur_moyenne_m: float = None         # hauteur moyenne au-dessus du sol : fixe la prise au vent (infiltrations)
 
     def __post_init__(self):
         if self.usage not in USAGES:
             raise ValueError(f"Zone « {self.nom} » : usage « {self.usage} » inconnu ({', '.join(USAGES)})")
         if self.hauteur_sous_plafond_m is not None:
             _exiger_positif(self.hauteur_sous_plafond_m, f"Hauteur sous plafond de la zone « {self.nom} »")
+        if self.hauteur_m is not None:
+            _exiger_positif(self.hauteur_m, f"Hauteur de la zone « {self.nom} »")
 
     @property
     def surface_m2(self):

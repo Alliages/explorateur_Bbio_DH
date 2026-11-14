@@ -250,7 +250,8 @@ def calculer_bbio(projet, scenarios=None, calendrier=None, refroidissement=True)
             for groupe in zone.groupes:
                 cle = {"batiment": batiment.nom, "zone": zone.nom, "groupe": groupe.nom}
                 # Besoins du groupe, heure par heure, puis par mois et par an (kWh/m²)
-                heures = calculer_besoins(groupe, meteo, scenarios_zone, calendrier, refroidissement)
+                heures = calculer_besoins(groupe, meteo, scenarios_zone, calendrier, refroidissement,
+                                          hauteur_zone_m=zone.hauteur_m, hauteur_moyenne_m=zone.hauteur_moyenne_m)
                 mensuel, annuel = bilan_besoins(heures, groupe.surface_m2, calendrier)
                 horaire[tuple(cle.values())] = heures
                 mensuels.append(mensuel.reset_index().assign(sref_m2=groupe.surface_m2, **cle))

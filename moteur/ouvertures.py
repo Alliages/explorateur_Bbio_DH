@@ -44,8 +44,7 @@ r"""
  Hypothèses de l'outil (docs/audit.md, 0.8.12) : la nuit, les
  occupants laissent les baies dans la position du soir ; une
  protection mobile fermée réduit d'autant la surface ouvrable ;
- la vitesse du vent est celle du fichier météo ; gestion
- automatique de l'ouverture non traitée.
+ gestion automatique de l'ouverture non traitée.
 ============================================================
 """
 
@@ -171,7 +170,7 @@ class OuverturesGroupe:
         self.traversant = groupe.traversant
         self.hauteur_tirage = (groupe.hauteur_tirage_m if groupe.hauteur_tirage_m is not None
                                else hyp("ouv_hauteur_tirage_defaut"))
-        self.vent = meteo["Vent"].to_numpy(float).copy()
+        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.1 : Ventc
         self.te = meteo["te"].to_numpy(float).copy()
         self.part_occupee = hyp("gpm_part_occupee_logement_collectif")
         self.ratio_temperature = 0.0        # Rouv_op de l'heure précédente (hystérésis)

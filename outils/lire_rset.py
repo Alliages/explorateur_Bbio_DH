@@ -39,6 +39,9 @@ r"""
    Lineaire      Ll, Psil (multiplié par b sur un espace tampon,
                  fiche 5.19, éq. 304 ; l'indicateur H_Th_PT des
                  sorties, lui, est la somme des Ll × Psil sans b)
+   Permeabilite  Q4PaSurf → perméabilité à l'air du groupe
+   Zone          Hauteur_Zone → hauteur ; Hauteur + Hauteur_Zone / 2
+                 → hauteur moyenne (prise au vent des infiltrations)
    Inertie       classe quotidienne 1 à 5 (très légère à très lourde),
                  0 = valeurs Amq_surf et Cmq_surf saisies
    Masques       horizontal (Dhm, Dhp, hauteur hp_b), verticaux gauche
@@ -48,7 +51,7 @@ r"""
  Ce que l'outil ne sait pas encore reprendre est compté dans
  Reference.infos["non_repris"] : gestion automatique de
  l'ouverture, stores vénitiens et secondes protections, baies sur un espace tampon,
- perméabilité à l'air, flux solaires des ponts thermiques, usages autres que le
+ entrées d'air, flux solaires des ponts thermiques, usages autres que le
  logement collectif.
 
  Les RSET sont des études de projets réels : ils restent hors
@@ -322,7 +325,7 @@ def _lire_groupe(element, nom, zone, nb_logements, coefficients_b, non_repris, c
                                    _exiger(pont, "Psil", f"le pont thermique « {nom_pont} »") * b))
     # Ce que l'outil ne modélise pas encore, compté pour le compte rendu
     for cle, nombre in (("ponts thermiques : flux solaires (Sf_cl, Sf_el) et masques", len(lineaires)),
-                        ("groupes : perméabilité à l'air (infiltrations nulles dans l'outil)", 1)):
+                        ("groupes : entrées d'air (absentes du calcul du Bbio)", 1)):
         non_repris[cle] = non_repris.get(cle, 0) + nombre
 
     return Groupe(nom, _exiger(element, "SHAB", f"le groupe « {nom} »"),
@@ -334,6 +337,8 @@ def _lire_groupe(element, nom, zone, nb_logements, coefficients_b, non_repris, c
                   debit_ventilation_m3h=_nombre(element, "Qv_occ_BBIO", 0.0), nb_logements=nb_logements,
                   climatise=_texte(element, "Is_Climatise", "0") == "1",
                   exposition_bruit="BR" + _texte(element, "Exp_BR_Groupe", "1"),
+                  permeabilite_q4pa=(_nombre(element.find("Permeabilite"), "Q4PaSurf")
+                                     if element.find("Permeabilite") is not None else None),
                   **_lire_inertie(element.find("Inertie")))
 
 
@@ -375,7 +380,10 @@ def _lire_projet(racine, non_repris, lignes_baies):
             zones.append(Zone(nom_zone, groupes=[_lire_groupe(g, n, zone, nl, coefficients_b, non_repris, cle,
                                                               lignes_baies)
                                                  for g, n, nl in zip(groupes, noms, logements)],
-                              hauteur_sous_plafond_m=_nombre(zone, "HSP_moy")))
+                              hauteur_sous_plafond_m=_nombre(zone, "HSP_moy"),
+                              hauteur_m=_nombre(zone, "Hauteur_Zone") or None,
+                              hauteur_moyenne_m=(_nombre(zone, "Hauteur", 0.0) + 0.5 * _nombre(zone, "Hauteur_Zone")
+                                                 if _nombre(zone, "Hauteur_Zone") else None)))
         batiments.append(Batiment(nom_batiment, zones=zones))
     simu = entree.find("Simu")
     altitude = _nombre(simu, "Altitude", 0.0) if simu is not None else 0.0

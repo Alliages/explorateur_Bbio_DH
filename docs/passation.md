@@ -4,28 +4,27 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 14/11/2026
 
-- Version **0.8.12** (protections et ouvertures), préparée et testée dans le dossier local, **sans commit** : rien
-  n'est publié tant que « Push » n'est pas donné. Dernier commit de `travail` : 0.8.10.
-- `moteur/protections.py` : ratio de fermeture conventionnel des volets et stores enroulables, flux et
-  déperdition des baies heure par heure. Matrices dans `donnees/protections_mobiles_*.csv`.
-- `moteur/ouvertures.py` : ouverture des baies du mode Th-B et débit de surventilation.
-- `moteur/besoins.py` les applique dès qu'une baie porte une protection ou est ouvrable ; sinon rien ne change.
-- `outils/lire_rset.py` lit protections et ouvertures ; `outils/comparer_reference.py --variantes` retire un module
-  à la fois.
-- Tests : `python -m pytest` → 275 réussis, 2 sautés (classeurs de `_references/` absents).
-- `docs/audit.md`, section 0.8.12 : tableau du froid sur cinq études, hypothèses 55 à 65.
-- **Résultat à garder en tête** : le froid est passé de 4 à 46 fois celui des études à 1,7 à 4 fois (Paris : 1,6 et
-  0,6 kWh/m² contre 0,4 et 0,3). Le chauffage reste 12 à 55 % trop faible, faute d'infiltrations.
+- Versions **0.8.12** (protections et ouvertures) et **0.8.14** (infiltrations) publiées sur `travail` le
+  14/11/2026 (deux commits).
+- `moteur/protections.py` et `moteur/ouvertures.py` (0.8.12) : protections mobiles et ouverture des baies.
+- `moteur/infiltrations.py` (0.8.14) : équilibre de pression du groupe, débit entrant par les défauts d'étanchéité.
+- `moteur/besoins.py` applique les trois modules selon ce que porte le groupe (protection ou ouverture d'une baie,
+  perméabilité) ; sans rien de cela, les résultats de la 0.8.10 sont inchangés.
+- `outils/comparer_reference.py --variantes` retire un module à la fois.
+- Tests : `python -m pytest` → 285 réussis, 2 sautés (classeurs de `_references/` absents).
+- `docs/audit.md`, sections 0.8.12 et 0.8.14 : tableaux sur cinq études, hypothèses 55 à 74.
+- **Résultat à garder en tête** : sur les dix groupes, le chauffage est 2 à 26 % sous les études et le froid 1,7 à
+  4 fois au-dessus (Paris : 1,5 et 0,6 kWh/m² contre 0,4 et 0,3).
+- **Point ouvert** : l'indicateur d'infiltrations d'hiver des études vaut 3 à 6 fois celui de l'outil (voir
+  `docs/audit.md`, 0.8.14).
 - **Les brasseurs d'air lisent encore la case** pour « 6 < hlég ≤ 22 » : une heure trop tôt (hypothèse 42).
 
 ## Prochaine étape
 
-0.8.14 « Infiltrations » : débits d'air par les défauts d'étanchéité (perméabilité à l'air, `Q4PaSurf` des études),
-pour le besoin de chauffage. Cible chiffrée : le Bch des dix groupes de `docs/audit.md`. Avant de coder : trouver
-et relire la fiche de la méthode (débits par les défauts d'étanchéité, vent et tirage), proposer la démarche.
-
-0.8.16 « DH » : les classeurs horaires de Paris, Sète et Nice et le module `..\meteo_et_chaleur\calcul\dh_re2020.py`
-donnent la référence ; voir les points 0.8.16 de `ROADMAP.md`.
+0.8.16 « DH » : degrés-heures de la fiche 13.5 sur le jeu Th-D. Les classeurs horaires de Paris, Sète et Nice et le
+module `..\meteo_et_chaleur\calcul\dh_re2020.py` donnent la référence ; voir les points 0.8.16 de `ROADMAP.md`.
+Avant de coder : aligner les brasseurs sur `hleg`, ajouter aux protections et aux ouvertures leurs règles du mode
+Th-D, proposer la démarche.
 
 ## Pour reprendre
 

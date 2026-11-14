@@ -220,3 +220,16 @@ ouv_coefficient_decharge;0,6;-;Annexe III, fiche 5.13 (C_BAT_Surventilation natu
 ouv_vent_max;3;m/s;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), tableau 41 (Vventmax);Vitesse de vent maximale du débit traversant
 ouv_temperature_reference;19;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), tableau 41 (θref) et éq. 255;Température de référence de la masse volumique de l'air
 ouv_hauteur_tirage_defaut;1,5;m;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), § 5.13.3.2 : Httf = 1,5 m dans le cas général;Hauteur de tirage thermique par défaut
+vent_correction_locale;0,9;-;Annexe III, fiche 3.1 (C_Clim), correction locale de la vitesse du vent : Ventc = Vent × Cvent;Cvent : vitesse du vent corrigée = 0,9 × vitesse du fichier météo
+air_masse_volumique_reference;1,2;kg/m³;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 21 (ρref, à 19 °C);Masse volumique de référence de l'air
+inf_pression_reference;4;Pa;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 21 et éq. 150;Différence de pression de référence de la perméabilité
+inf_hauteur_tirage_max;3;m;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), éq. 138 et § hauteur des défauts : MIN(hzone, 3) sans perméabilité verticale (habitation);Hauteur sur laquelle joue le tirage thermique en habitation
+inf_part_altitude_basse;0,25;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), § hauteur des défauts d'étanchéité;Altitude des défauts bas : 0,25 × hauteur
+inf_part_altitude_haute;0,75;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), § hauteur des défauts d'étanchéité;Altitude des défauts hauts : 0,75 × hauteur
+inf_cp_traversant_vent_bas;0,25;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 23 (écrantage normal, hmoy < 15 m);Cp des façades au vent, zone traversante basse
+inf_cp_traversant_vent_haut;0,45;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 23 (écrantage normal, 15 m < hmoy < 50 m);Cp des façades au vent, zone traversante haute
+inf_cp_traversant_sous_vent;-0,5;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 23 (écrantage normal);Cp des façades sous le vent, zone traversante
+inf_cp_traversant_toit;-0,6;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 23 (écrantage normal, toit incliné de plus de 80° sur la verticale) et sa note;Cp de la toiture, zone traversante (toiture horizontale par convention)
+inf_cp_non_traversant_vent;0,05;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 24;Cp des façades au vent, zone non traversante
+inf_cp_non_traversant_sous_vent;-0,05;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 24;Cp des façades sous le vent, zone non traversante (toiture : 0)
+inf_hauteur_seuil_cp;15;m;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 23;Hauteur moyenne de la zone à partir de laquelle le Cp au vent passe de 0,25 à 0,45

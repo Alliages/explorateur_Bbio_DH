@@ -581,7 +581,8 @@ Lecture :
     consigne de refroidissement de confort.
 61. **Protection et ouverture** (éq. 248) : la surface ouvrable d'une baie est réduite de sa part protégée,
     Aouvmax × (1 − Rprot) ; le texte ne définit pas cette surface.
-62. **Vent** : vitesse du fichier météo, sans la correction « Vvent_c » des fiches 5.9 et 5.13.
+62. **Vent** : vitesse du fichier météo, sans la correction « Vvent_c » des fiches 5.9 et 5.13 (revue en 0.8.14 :
+    vent corrigé).
 63. **Air entrant par les baies** : à la température extérieure, ajouté au débit de la ventilation ; sa masse
     volumique suit l'éq. 255, rapportée à celle du coefficient 0,34 Wh/m³.K.
 64. **Sw avec protection** : une seule valeur dans les études, sans distinction des conditions C et E ni des
@@ -595,3 +596,86 @@ Lecture :
 - Éclairage artificiel calculé baies nues.
 - Lignes propres au mode Th-D (protections : tableau 34 ; ouvertures : règle générale de la fiche 5.13) : avec
   le DH (0.8.16).
+
+## 0.8.14 — infiltrations
+
+`moteur/infiltrations.py` (annexe III, fiche 5.6, éq. 131 à 172, tableaux 21 à 24 et 27 à 30 ; fiche 3.1 pour le
+vent corrigé ; fiche 13.1, éq. 2407, pour l'indicateur d'hiver). Équations et tableaux relus sur les pages du
+PDF : 41, 142, 143, 145, 151, 152, 155 et 1362.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Surfaces perméables : murs et baies en façade, toiture à part, plancher bas exclu | Fiche 5.6, § 5.6.3.1.4 ; indicateur `A_T_perm` d'une étude (1 536,1 m²) | identique |
+| Défauts d'un groupe : quatre quarts de façade, toiture entière, altitudes 0,75, 2,25 et 3 m | Tableaux 28 et 29, éq. 150 | identique |
+| Vent seul, Cp = ± 0,05, 4 m/s : pression nulle, débit entrant 2 × C × 0,48^(2/3) | Éq. 136, 137 et 151, calcul à la main | identique |
+| Tirage seul : l'air entre en bas et sort en haut, masse conservée ; débit proportionnel à la perméabilité | Éq. 167 | conforme |
+| Double flux à volumes égaux, air soufflé plus froid : surplus de masse évacué par les défauts | Éq. 156, 157 et 167 | bilan nul à 1e-9 kg/s |
+| Chaque heure, infiltrations comprises : chaleur prise par la masse = somme des flux | Bilan d'énergie | écart < 1e-6 W |
+| Groupe sans perméabilité renseignée | Résultats de la 0.8.12 | inchangés (au vent corrigé près) |
+| Étude de 800 composants | Temps de calcul | environ 20 s (13 s en 0.8.12) |
+
+### Effet sur les cinq études
+
+Besoins en kWh/m² et Bbio en points.
+
+| Groupe | Bch étude | Bch 0.8.12 | Bch 0.8.14 | Bfr étude | Bfr 0.8.14 | Bbio étude | Bbio 0.8.14 |
+|---|---|---|---|---|---|---|---|
+| Paris, non traversant | 19,5 | 15,7 | 16,9 | 0,4 | 1,5 | 49,2 | 45,8 |
+| Paris, traversant | 33,0 | 22,2 | 27,7 | 0,3 | 0,6 | 75,3 | 64,9 |
+| Sète, traversant | 8,7 | 3,9 | 7,2 | 1,9 | 6,3 | 29,9 | 35,3 |
+| Sète, non traversant | 4,4 | 2,8 | 3,5 | 3,4 | 6,9 | 24,7 | 29,6 |
+| Nice A climatisée, traversant | 10,9 | 7,8 | 10,4 | 4,6 | 10,6 | 39,8 | 50,5 |
+| Nice A climatisée, non traversant | 9,5 | 7,9 | 8,3 | 7,1 | 12,3 | 42,8 | 50,2 |
+| Nice A non climatisée, traversant | 15,7 | 12,3 | 15,4 | 4,3 | 10,3 | 48,3 | 59,5 |
+| Nice A non climatisée, non traversant | 17,1 | 15,0 | 15,6 | 5,6 | 10,7 | 54,2 | 61,1 |
+| Nice B, traversant | 15,1 | 9,7 | 13,9 | 5,3 | 11,7 | 49,3 | 59,3 |
+| Nice B, non traversant | 13,0 | 9,0 | 9,6 | 6,1 | 12,0 | 47,9 | 52,2 |
+
+Lecture :
+
+- **Chauffage : de 12 à 55 % sous les études à 2 à 26 %.** L'effet est fort dans les groupes traversants, exposés
+  au vent (Cp de + 0,25 et − 0,5), faible dans les non traversants (± 0,05), où il ne reste que le tirage sur 3 m.
+- **Les non traversants restent les plus bas** (Nice B : 9,6 contre 13,0 ; Sète : 3,5 contre 4,4).
+- **Bbio** : sous les études à Paris (chauffage encore faible), au-dessus à Nice et à Sète (froid encore fort). Les
+  compensations d'erreurs de la 0.8.12 ont en partie disparu : l'écart restant se lit poste par poste.
+
+### Point ouvert : l'indicateur d'hiver des études
+
+Les études donnent par zone `H_V_Def_Hiver`, moyenne de janvier et février de la déperdition par les défauts
+d'étanchéité (fiche 13.1, éq. 2407). La même moyenne dans l'outil vaut 26 à 34 % de cet indicateur dans les zones
+traversantes et 15 à 18 % dans les autres. Deux constats vont en sens contraire :
+
+- injecté tel quel comme un débit constant (variante de la 0.8.10), cet indicateur faisait dépasser le chauffage
+  des études de 3 à 105 % ;
+- avec le modèle de la fiche 5.6, le chauffage de l'outil reste sous celui des études.
+
+Essai hors moteur : en ajoutant les entrées d'air du projet (`Entree_Air`, modules de 400 à 5 900 m³/h sous 20 Pa),
+la moyenne d'hiver remonte à 43 à 77 % de l'indicateur. Elles en expliquent donc une partie, pas tout. L'outil ne
+les compte pas (hypothèse 67) ; la question reste ouverte et figure dans `ROADMAP.md`.
+
+### Lectures du texte et hypothèses de l'outil
+
+62. **(revue) Vent corrigé** : vitesse du fichier météo × 0,9 (fiche 3.1, Cvent), pour les infiltrations, les
+    protections mobiles et l'ouverture des baies.
+66. **Un bilan par groupe.** La fiche 5.6 équilibre la zone entière, avec une pression commune et des échanges entre
+    groupes par un hall ; l'outil équilibre chaque groupe seul. Identique quand la zone n'a qu'un groupe.
+67. **Pas d'entrées d'air en mode Bbio** : la ventilation conventionnelle du Bbio est une double flux (fiche 6.1),
+    qui n'en a pas besoin ; le texte ne dit pas ce que deviennent celles du projet.
+68. **Double flux à débits volumiques égaux** : les masses soufflée et reprise diffèrent par leur température
+    (éq. 156-157), ce qui met le groupe en légère surpression en hiver.
+69. **Habitation : pas de tirage entre niveaux** (éq. 138) : les altitudes des défauts sont comptées sur 3 m au
+    plus (0,75, 2,25 et 3 m), quelle que soit la hauteur de l'immeuble.
+70. **Coefficients de pression** : écrantage « normal » et toiture horizontale par convention (tableau 23) ;
+    hauteur moyenne de la zone = `Hauteur` + `Hauteur_Zone` / 2 des études (lecture de hmoy = hzone + 0,5 hplafond) ;
+    au vent 0,25 sous 15 m, 0,45 au-delà. Une zone non traversante prend ± 0,05 et 0 en toiture (tableau 24).
+71. **Caractère traversant** : celui du groupe (`Groupe.traversant`), lu dans `Delta_trav_surv` des études, pour les
+    infiltrations comme pour l'ouverture des baies ; la fiche 5.6 distingue en principe un caractère traversant
+    « d'hiver », portes fermées.
+72. **Humidité ignorée** dans les masses volumiques (éq. 131 à 133) ; masse volumique de référence 1,2 kg/m³ à
+    19 °C.
+73. **Surfaces perméables** : façade entre 60 et 120° d'inclinaison, toiture en dessous de 60°, parois de type
+    plancher bas exclues ; les parois sur un espace tampon comptent, comme dans l'indicateur `A_T_perm` des études.
+74. **Perméabilité lue telle quelle** : pas de majoration pour une mesure par échantillonnage ou des travaux restant
+    à faire (fiche 5.6) ; les études donnent déjà la valeur de calcul.

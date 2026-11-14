@@ -65,9 +65,11 @@ def rset_essai(usage_seconde_zone=3):
               + "<Lineaire>" + _balises(Name="Sous-sol", Ll=20, Psil=0.6, Id_Et=7) + "</Lineaire>"
               + "</Lineaire_Collection>"
               + "<Inertie>" + _balises(Type_Inertie_Quotidienne=4, Amq_surf=4, Cmq_surf=100) + "</Inertie>"
+              + "<Permeabilite>" + _balises(Q4PaSurf=0.8) + "</Permeabilite>"
               + "<Baie_Collection>" + _baie("Baie sud", 0) + _baie("Baie nord", 180) + "</Baie_Collection>"
               + "</Groupe>")
-    zone = ("<Zone>" + _balises(Name="Logements", Usage=2, NB_logement=5, Is_Traversant=1, HSP_moy=2.7)
+    zone = ("<Zone>" + _balises(Name="Logements", Usage=2, NB_logement=5, Is_Traversant=1, HSP_moy=2.7, Hauteur=3,
+                                Hauteur_Zone=9)
             + f"<Groupe_Collection>{groupe}</Groupe_Collection></Zone>")
     autre = ("<Zone>" + _balises(Name="Commerce", Usage=usage_seconde_zone, NB_logement=1)
              + "<Groupe_Collection><Groupe>" + _balises(Name="G", SHAB=0, SU=80) + "</Groupe></Groupe_Collection></Zone>")
@@ -226,22 +228,26 @@ def test_comparaison_complete(chemin_rset):
     assert groupe["bbio_max_outil"] == pytest.approx(65.0 * (1.0 + 0.08 / 1.5) + 15.0)
     assert len(c.mensuel) == 12 and c.mensuel["b_fr_etude"].tolist() == [0.5] * 12
     assert c.mensuel["b_ch_outil"].sum() == pytest.approx(groupe["b_ch_outil"])
+    # Infiltrations : l'outil donne sa moyenne de janvier et février, à côté de l'indicateur de l'étude (60 W/K)
+    infiltrations = c.enveloppe.set_index("grandeur").loc["h_infiltrations"]
+    assert infiltrations["etude"] == 60.0 and infiltrations["outil"] > 5.0
+    assert infiltrations["ecart_pct"] == pytest.approx((infiltrations["outil"] / 60.0 - 1.0) * 100.0)
 
 
 def test_variantes_des_besoins(lecture):
     projet, reference = lecture
     v = variantes_besoins(projet, reference).set_index("variante")
-    assert list(v.index) == ["outil", "infiltrations de l'étude", "sans ouverture des baies",
-                             "sans protections mobiles", "baies nues et fermées"]
+    assert list(v.index) == ["outil", "sans infiltrations", "sans ouverture des baies", "sans protections mobiles",
+                             "sans aucun des trois"]
     assert (v["b_fr_etude"] == 6.0).all() and (v["b_ch_etude"] == 12.0).all()
-    # Infiltrations de l'étude (60 W/K, plus que la ventilation : 56 W/K) : nettement plus de chauffage
-    assert v.loc["infiltrations de l'étude", "b_ch"] > 1.3 * v.loc["outil", "b_ch"]
-    # Chaque module retiré augmente le besoin de froid ; les deux retirés, encore plus
-    assert v.loc["outil", "b_fr"] < v.loc["sans ouverture des baies", "b_fr"] < v.loc["baies nues et fermées", "b_fr"]
-    assert v.loc["outil", "b_fr"] < v.loc["sans protections mobiles", "b_fr"] < v.loc["baies nues et fermées", "b_fr"]
+    # Sans infiltrations : moins de chauffage
+    assert v.loc["sans infiltrations", "b_ch"] < v.loc["outil", "b_ch"]
+    # Chaque module retiré augmente le besoin de froid
+    assert v.loc["outil", "b_fr"] < v.loc["sans ouverture des baies", "b_fr"]
+    assert v.loc["outil", "b_fr"] < v.loc["sans protections mobiles", "b_fr"] < v.loc["sans aucun des trois", "b_fr"]
     # Le projet lu n'est pas modifié par les variantes
-    baie = projet.batiments[0].zones[0].groupes[0].baies[0]
-    assert baie.protection == "volet" and baie.ouvrable
+    groupe = projet.batiments[0].zones[0].groupes[0]
+    assert groupe.baies[0].protection == "volet" and groupe.baies[0].ouvrable and groupe.permeabilite_q4pa == 0.8
 
 
 def test_protections_et_ouvertures_lues(lecture):
@@ -252,6 +258,9 @@ def test_protections_et_ouvertures_lues(lecture):
     assert (baie.uw_protege, baie.sw_protege, baie.sw2_protege, baie.tl_protege) == (1.1, pytest.approx(0.08), 0.03, 0.1)
     assert (baie.ouvrable, baie.ratio_ouverture_max, baie.exposition_bruit) == (True, 0.64, None)
     assert groupe.traversant and groupe.hauteur_tirage_m is None
+    # Perméabilité du groupe ; hauteur de la zone et hauteur moyenne au-dessus du sol (3 + 9 / 2)
+    zone = lecture[0].batiments[0].zones[0]
+    assert (groupe.permeabilite_q4pa, zone.hauteur_m, zone.hauteur_moyenne_m) == (0.8, 9.0, 7.5)
 
 
 # ------------------------------------------------------------------

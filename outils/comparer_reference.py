@@ -12,16 +12,12 @@ r"""
    mensuel     les mêmes besoins, mois par mois, par groupe.
 
  Variantes (variantes_besoins) : le même calcul en retirant un
- module à la fois, pour mesurer ce que chacun apporte, et une
- variante grossière sur ce qui manque encore :
+ module à la fois, pour mesurer ce que chacun apporte :
 
-   infiltrations de l'étude   débit d'air ajouté, sans échangeur,
-                              pour retrouver la déperdition d'hiver
-                              par les défauts d'étanchéité que donne
-                              l'étude ; lire le CHAUFFAGE ;
+   sans infiltrations         enveloppe étanche (lire le chauffage) ;
    sans ouverture des baies   baies jamais ouvertes ;
    sans protections mobiles   baies toujours nues ;
-   baies nues et fermées      ni l'un ni l'autre (outil 0.8.10).
+   sans aucun des trois       outil de la 0.8.10.
 
  Usage (PowerShell) :
      python -m outils.comparer_reference "_sources\mon_etude.xml"
@@ -40,6 +36,7 @@ import pandas as pd
 
 from moteur.bbio import calculer_bbio
 from moteur.besoins import JEU, bilan_besoins, calculer_besoins
+from moteur.calendrier import construire_calendrier
 from moteur.enveloppe import transmission_baies, transmission_parois, transmission_ponts
 from moteur.hypotheses import hyp
 from moteur.meteo import charger_meteo
@@ -51,12 +48,12 @@ from outils.lire_rset import lire_rset
 # ============================================================
 GRANDEURS = ["b_ch", "b_fr", "b_ecl", "bbio", "bbio_max"]
 CLES = {"groupe": ["batiment", "zone", "groupe"], "zone": ["batiment", "zone"], "batiment": ["batiment"]}
-# Variantes : (nom, infiltrations de l'étude, protections mobiles, ouverture des baies)
-VARIANTES = (("outil", False, True, True),
-             ("infiltrations de l'étude", True, True, True),
-             ("sans ouverture des baies", False, True, False),
-             ("sans protections mobiles", False, False, True),
-             ("baies nues et fermées", False, False, False))
+# Variantes : (nom, infiltrations, protections mobiles, ouverture des baies)
+VARIANTES = (("outil", True, True, True),
+             ("sans infiltrations", False, True, True),
+             ("sans ouverture des baies", True, True, False),
+             ("sans protections mobiles", True, False, True),
+             ("sans aucun des trois", False, False, False))
 TOLERANCE_VERTICALE_DEG = 1.0       # une paroi à ±1° de l'inclinaison de son type est comptée dans ce type
 
 
@@ -79,6 +76,7 @@ def enveloppe_zone(zone):
 
     h_ventilation : 0,34 × débit × (1 − efficacité de l'échangeur du Bbio), fiche 6.1, éq. 382.
     h_ponts : avec le coefficient b des espaces tampons (l'indicateur des études ne l'applique pas).
+    h_infiltrations : nul ici ; comparer() y met la moyenne de janvier et février du calcul horaire.
     """
     def surface(type_paroi):
         return sum(p.surface_m2 for g in zone.groupes for p in g.parois if p.type == type_paroi
@@ -143,8 +141,17 @@ def comparer(chemin):
     """Lit le RSET « chemin », calcule le Bbio avec l'outil et compare aux résultats de l'étude."""
     projet, reference = lire_rset(chemin)
     resultat = calculer_bbio(projet)
-    return Comparaison(projet=projet, reference=reference, resultat=resultat,
-                       enveloppe=comparer_enveloppe(projet, reference),
+    enveloppe = comparer_enveloppe(projet, reference)
+    # Infiltrations : moyenne de janvier et février du coefficient d'échange, comme l'indicateur des études
+    # (fiche 13.1, éq. 2407) ; elle vient du calcul horaire, pas de la seule description
+    mois = construire_calendrier()["mois"].to_numpy()
+    for (batiment, zone, _), heures in resultat.horaire.items():
+        ligne = ((enveloppe["batiment"] == batiment) & (enveloppe["zone"] == zone)
+                 & (enveloppe["grandeur"] == "h_infiltrations"))
+        enveloppe.loc[ligne, "outil"] += float(heures["hg_infiltrations"].to_numpy()[mois <= 2].mean())
+    avec_etude = enveloppe["etude"].notna() & (enveloppe["etude"] != 0)
+    enveloppe.loc[avec_etude, "ecart_pct"] = (enveloppe["outil"] / enveloppe["etude"] - 1.0)[avec_etude] * 100.0
+    return Comparaison(projet=projet, reference=reference, resultat=resultat, enveloppe=enveloppe,
                        annuel=comparer_annuel(resultat, reference),
                        mensuel=comparer_mensuel(resultat, reference))
 
@@ -152,9 +159,11 @@ def comparer(chemin):
 # ============================================================
 # 3. VARIANTES DES BESOINS
 # ============================================================
-def _groupe_variante(groupe, protections, ouvertures):
-    """Copie du groupe pour une variante : sans protections mobiles, ou sans ouverture des baies."""
+def _groupe_variante(groupe, infiltrations, protections, ouvertures):
+    """Copie du groupe pour une variante : sans infiltrations, sans protections mobiles ou sans ouverture."""
     variante = copy.deepcopy(groupe)
+    if not infiltrations:
+        variante.permeabilite_q4pa = None
     for baie in variante.baies:
         if not protections:
             baie.protection = None
@@ -163,41 +172,23 @@ def _groupe_variante(groupe, protections, ouvertures):
     return variante
 
 
-def _avec_infiltrations(groupe, h_infiltrations):
-    """Débit (m³/h) et efficacité d'échangeur équivalents quand on ajoute des infiltrations de h_infiltrations W/K.
-
-    Les infiltrations entrent sans passer par l'échangeur : débit' = débit + q_inf, et l'efficacité est réduite
-    pour que 0,34 × débit' × (1 − ε') = 0,34 × débit × (1 − ε) + h_infiltrations.
-    """
-    debit = groupe.debit_ventilation_m3h
-    debit_total = debit + h_infiltrations / hyp("chaleur_volumique_air")
-    efficacite = hyp("ventilation_bbio_efficacite") * debit / debit_total if debit_total > 0 else 0.0
-    return debit_total, efficacite
-
-
 def variantes_besoins(projet, reference):
     """Besoins des groupes du projet pour chaque variante de VARIANTES (kWh/m²), à côté de ceux de l'étude.
 
     Sortie : une ligne par groupe et par variante (batiment, zone, groupe, variante, b_ch, b_fr, b_ch_etude,
-    b_fr_etude). Les infiltrations d'une zone sont réparties entre ses groupes au prorata des surfaces.
+    b_fr_etude).
     """
     meteo = charger_meteo(projet.zone_climatique, JEU, projet.altitude_m)
     lignes = []
     for batiment in projet.batiments:
         for zone in batiment.zones:
-            etude_zone = reference.zones[(reference.zones["batiment"] == batiment.nom)
-                                         & (reference.zones["zone"] == zone.nom)]
-            h_zone = float(etude_zone["h_infiltrations"].iloc[0]) if len(etude_zone) \
-                and pd.notna(etude_zone["h_infiltrations"].iloc[0]) else 0.0
             for groupe in zone.groupes:
                 cle = {"batiment": batiment.nom, "zone": zone.nom, "groupe": groupe.nom}
                 etude = reference.groupes[(reference.groupes[list(cle)] == pd.Series(cle)).all(axis=1)]
                 for nom, infiltrations, protections, ouvertures in VARIANTES:
-                    variante, efficacite = _groupe_variante(groupe, protections, ouvertures), None
-                    if infiltrations:
-                        variante.debit_ventilation_m3h, efficacite = _avec_infiltrations(
-                            groupe, h_zone * groupe.surface_m2 / zone.surface_m2)
-                    heures = calculer_besoins(variante, meteo, efficacite_echangeur=efficacite)
+                    variante = _groupe_variante(groupe, infiltrations, protections, ouvertures)
+                    heures = calculer_besoins(variante, meteo, hauteur_zone_m=zone.hauteur_m,
+                                              hauteur_moyenne_m=zone.hauteur_moyenne_m)
                     _, annuel = bilan_besoins(heures, groupe.surface_m2)
                     lignes.append(dict(cle, variante=nom, b_ch=annuel["b_ch"], b_fr=annuel["b_fr"],
                                        b_ch_etude=float(etude["b_ch"].iloc[0]) if len(etude) else None,
@@ -237,7 +228,7 @@ def main(arguments=None):
         mois = c.mensuel.drop(columns=["batiment", "zone"])
         _afficher("Besoins mensuels par groupe (kWh/m²) et Bbio (points)", mois)
     if options.variantes:
-        _afficher("Variantes (kWh/m²) — infiltrations : lire Bch ; les trois suivantes : lire Bfr",
+        _afficher("Variantes (kWh/m²) : l'outil privé d'un module à la fois",
                   variantes_besoins(c.projet, c.reference))
 
 
