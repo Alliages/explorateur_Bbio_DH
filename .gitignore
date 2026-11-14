@@ -12,7 +12,7 @@ env/
 # Données locales, jamais dans le dépôt : tout dossier dont le nom commence par « _ », par exemple
 #   _references/  classeurs officiels, sources de outils/extraire_donnees.py
 #   _sources/     textes officiels (annexes de l'arrêté, règles Th-Bât)
-# Les RSEE (études RE2020 de projets réels) sont hors du dépôt, dans ../RSEE ; ces lignes empêchent
+# Les RSEE (études RE2020 de projets réels) sont hors du dépôt, dans ../_RSEE ; ces lignes empêchent
 # d'en publier une copie placée ici par erreur.
 _*/
 RSEE/

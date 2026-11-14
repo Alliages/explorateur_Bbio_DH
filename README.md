@@ -9,14 +9,21 @@ ses résultats ne peuvent pas servir à une attestation. Cible : un Bbio à ± 1
 
 Version en cours : voir `VERSION` et `CHANGELOG.md`. Suite prévue : `ROADMAP.md`.
 
-## État (0.8.6)
+## État (0.8.10)
 
 Socle (structures de projet, calendrier conventionnel, fichiers météo, scénarios du logement collectif), module
 solaire (rayonnement et éclairement reçus par une paroi orientée, masques, flux transmis par les baies et les parois
 opaques), modèle thermique horaire du groupe (réseau RC de la fiche 5.21) et besoins de chauffage, de
-refroidissement et d'éclairage d'un groupe (apports internes, émetteur conventionnel, saisons, lumière naturelle).
-Sans protections mobiles ni ouverture des baies (0.9.4), le besoin de froid est encore surestimé. Le Bbio, les DH et
-l'interface arrivent dans les versions suivantes.
+refroidissement et d'éclairage d'un groupe (apports internes, émetteur conventionnel, saisons, lumière naturelle),
+Bbio d'un projet par groupe, zone et bâtiment, comparé au Bbio max des logements collectifs.
+Sans protections mobiles ni ouverture des baies (0.8.12), le besoin de froid est encore très surestimé : le Bbio
+calculé n'est pas comparable à celui d'une étude. Les DH et l'interface arrivent dans les versions suivantes.
+
+L'outil sait lire le fichier XML d'une étude réglementaire (RSET) et refaire son Bbio pour le comparer :
+
+```powershell
+python -m outils.comparer_reference "_sources\mon_etude.xml" --variantes
+```
 
 ## Installation (Windows, PowerShell)
 
@@ -36,17 +43,19 @@ python -m pytest
 | `moteur/` | Calcul, sans aucune dépendance à l'interface |
 | `donnees/` | Météo, scénarios et hypothèses (CSV : séparateur `;`, virgule décimale, UTF-8) |
 | `config/` | Chemins, formats et listes |
-| `outils/` | Scripts de préparation des données |
+| `outils/` | Préparation des données, lecture d'une étude (RSET) et comparaison à ses résultats |
 | `tests/` | Tests automatiques |
 | `docs/` | Journal d'audit et note de passation |
 
 Données locales, **jamais dans le dépôt** : les études RE2020 de projets réels (RSEE), rangées à côté du dépôt dans
-`../RSEE`, et tout dossier dont le nom commence par `_`, dont `_references/` (classeurs
+`../_RSEE`, et tout dossier dont le nom commence par `_`, dont `_references/` (classeurs
 officiels). Un test échoue si l'un de ces fichiers est suivi par git.
 
 ## Sources
 
 - Arrêté du 4 août 2021, annexe III (méthode Th-BCE 2020) et annexe IV (règles Th-Bat 2020).
+- Code de la construction et de l'habitation, annexe à l'article R. 172-4 (exigences : Bbio max), version du
+  décret n° 2026-200 du 18 mars 2026.
 - Classeur « scénarios conventionnels » de la RE2020, version du 29/04/2026.
 - Classeur « scénarios météorologiques Th-BC / Th-D » de la RE2020 (DHUP, données Météo-France 2000-2018).
 

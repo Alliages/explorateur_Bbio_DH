@@ -405,3 +405,99 @@ dans les ordres de grandeur. Le Bbio de cette version n'est pas comparable à ce
 Autres constats, notés pour la suite dans `ROADMAP.md` : conventions du calcul des DH lues dans les sorties
 horaires (seuils, période, correction des brasseurs) ; débit de ventilation du Bbio des études (`Qv_occ_BBIO`,
 environ 1,2 à 1,5 m³/h par m² habitable).
+
+## 0.8.10 — cas de référence
+
+`outils/lire_rset.py` et `outils/comparer_reference.py`. Aucune équation nouvelle dans le moteur, sauf la hauteur
+sous plafond moyenne du Bbio max (hypothèse 46 revue).
+
+Cinq études de logements collectifs, gardées dans `_sources/` (hors dépôt), dix groupes en tout :
+
+| Étude | Zone | Logiciel, moteur | Groupes (m²) | Parois, baies, ponts |
+|---|---|---|---|---|
+| Paris | H1a | Pleiades, 2026.E1 | 717 et 4 092 | 511, 317, 1 387 |
+| Sète | H3 | Pleiades, 2026.E1 | 2 793 et 2 079 | 489, 299, 619 |
+| Nice A (variante climatisée) | H3 | Climawin, 2022.E3 | 1 791 et 291 | 30, 77, 209 |
+| Nice A (variante non climatisée) | H3 | Climawin, 2022.E3 | 1 791 et 291 | 30, 77, 209 |
+| Nice B | H3 | Climawin, 2022.E3 | 1 488 et 497 | 36, 80, 213 |
+
+Les deux logiciels écrivent le même format (celui du moteur du CSTB) : un seul lecteur suffit. Le fichier `.cwx`
+de Climawin, lui, est une base Firebird 3 au schéma en partie chiffré : non utilisé.
+
+### Vérifications : la lecture
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Déperdition des parois opaques, somme des A × b × U (10 zones) | Indicateur `H_Th_op` des études | identique à 0,01 W/K |
+| Surfaces des murs, toitures, planchers bas et baies, longueur des ponts thermiques | `A_opv`, `A_ophh`, `A_ophb`, `A_baies`, `L_PT` | identiques à l'arrondi (0,1 m²) |
+| Ponts thermiques, somme des l × ψ sans coefficient b (Paris) | `H_Th_PT` | identique (95,22 et 500,66 W/K) |
+| Bbio max des dix groupes | `O_Bbio_Max` | écart ≤ 0,05 point |
+| Classe d'inertie, code 4 | Récapitulatif PDF d'une étude : « lourde » | conforme |
+| Éclairage Becl des dix groupes | `O_B_Ecl_annuel` (1,6 à 1,9 kWh/m²) | écart ≤ 0,2 kWh/m² |
+| Lecture et calcul d'une étude de 800 composants | Temps | 0,5 s et 9 s |
+
+### Écarts constatés entre l'outil et les études
+
+Besoins annuels en kWh/m², outil / étude. Variantes du froid : Sw des baies avec protection toute l'année
+(« protections »), 2 volumes par heure en permanence sans échangeur (« surventilation »), les deux ensemble.
+
+| Groupe | Bch | Bfr | Bfr, protections | Bfr, surventilation | Bfr, les deux |
+|---|---|---|---|---|---|
+| Paris, non traversant | 15,5 / 19,5 | 13,3 / 0,4 | 2,5 | 2,2 | 0,6 |
+| Paris, traversant | 21,8 / 33,0 | 13,7 / 0,3 | 1,7 | 2,6 | 0,6 |
+| Sète, traversant | 4,7 / 8,7 | 40,1 / 1,9 | 8,3 | 23,7 | 5,6 |
+| Sète, non traversant | 3,4 / 4,4 | 31,4 / 3,4 | 8,7 | 17,3 | 5,7 |
+| Nice A climatisée, traversant | 8,2 / 10,9 | 31,7 / 4,6 | 11,7 | 19,8 | 8,0 |
+| Nice A climatisée, non traversant | 8,4 / 9,5 | 30,1 / 7,1 | 16,5 | 19,5 | 11,0 |
+| Nice A non climatisée, traversant | 13,2 / 15,7 | 27,5 / 4,3 | 15,0 | 18,4 | 10,1 |
+| Nice A non climatisée, non traversant | 16,1 / 17,1 | 22,9 / 5,6 | 15,0 | 15,7 | 10,7 |
+| Nice B, traversant | 9,6 / 15,1 | 34,8 / 5,3 | 11,8 | 22,7 | 8,3 |
+| Nice B, non traversant | 8,9 / 13,0 | 28,7 / 6,1 | 16,5 | 18,7 | 10,8 |
+
+Lecture :
+
+- **Froid : 4 à 46 fois trop fort.** Les protections mobiles sont le premier levier (elles divisent Bfr par 1,5 à
+  8 à elles seules), l'ouverture des baies le second ; ensemble, ces deux bornes grossières ramènent Bfr à 1,5 à
+  3 fois celui des études, et à 0,6 contre 0,3 à 0,4 à Paris. L'ordre de la 0.8.12 s'en déduit : protections
+  d'abord. À Nice B, le froid de l'étude n'apparaît que de juin à septembre ; celui de l'outil, d'avril à octobre.
+- **Chauffage : 6 à 46 % trop faible.** L'outil n'a pas d'infiltrations ; l'indicateur `H_V_Def_Hiver` des études
+  vaut 0,5 à 2,3 fois la déperdition de leur ventilation. Variante « infiltrations de l'étude » (cet indicateur
+  ajouté comme un débit constant sans échangeur) : Bch passe au-dessus des études (22,3 contre 15,1 à Nice B, 46,7
+  contre 33,0 à Paris, 17,8 contre 8,7 à Sète). Les infiltrations comptent donc, mais l'indicateur d'hiver ne se
+  transpose pas en débit constant : il faut le modèle de la méthode.
+- **Baies en hiver** : la somme des A × U sans protection de l'outil dépasse `Hg_es_hiver` de 1 à 17 % ; l'étude
+  donne aussi un U avec protection, plus faible, que l'outil n'utilise pas encore.
+- **Ventilation** : `H_Vent_Hiver` vaut 0,1397 × `Qv_occ_BBIO` dans les dix groupes, contre 0,34 × (1 − 0,5) = 0,17
+  dans l'outil (fiche 6.1, éq. 382), soit 22 % de plus dans l'outil. Écart non expliqué.
+
+### Lectures et hypothèses de l'outil
+
+46. **(revue) Hauteur sous plafond moyenne** : moyenne des hauteurs des zones de logements collectifs du bâtiment,
+    pondérée par leur surface, et appliquée à toutes. Constat à Paris : zones à 2,65 et 2,71 m, MbHSP = 0,054 pour
+    les deux, soit la moyenne pondérée 2,70 m. Les zones sans hauteur saisie ne comptent pas.
+48. **Débit du Bbio** : `Qv_occ_BBIO` du groupe, constant sur l'année (le scénario de ventilation du logement vaut
+    1 en permanence), avec l'échangeur à 0,5 (fiche 6.1). Remplace, pour une étude lue, le débit moyen de
+    l'hypothèse 39.
+49. **Baies lues sans protection mobile** : U, Sw (Sw1 + Sw2 + Sw3) et Tl « sp ». Les valeurs avec protection sont
+    gardées dans `Reference.baies` pour la 0.8.12.
+50. **Espaces tampons** : une paroi opaque sur un espace tampon non solarisé prend son coefficient b et ne reçoit pas
+    de soleil ; un pont thermique voit son ψ multiplié par b (fiche 5.19, éq. 304), alors que l'indicateur
+    `H_Th_PT` des études ne l'applique pas ; une baie sur un espace tampon est lue comme donnant dehors (4 baies au
+    plus par étude).
+51. **Inertie** : codes 1 à 5 lus comme très légère à très lourde (seul le code 4 est recoupé) ; code 0 : valeurs
+    saisies, l'inertie séquentielle l'étant alors aussi. Sans effet en Bbio pour la séquentielle.
+52. **Masques lointains** : les 36 valeurs `Gamma` sont passées telles quelles au masque par tranches, donc comptées
+    depuis la normale à la paroi (fiche 3.2, hypothèse 7). Les logiciels donnent pourtant le même horizon à toutes
+    les orientations d'un bâtiment : convention à vérifier (0.9.8).
+53. **Logements** : le nombre de logements est donné par zone ; avec plusieurs groupes dans une zone (aucun cas dans
+    les cinq études), il est réparti au prorata des surfaces.
+54. **Non repris**, et compté à chaque lecture : protections mobiles et ouverture des baies, perméabilité à l'air,
+    flux solaires et masques des ponts thermiques, parois végétalisées, espaces tampons solarisés, zones d'un autre
+    usage.
+
+### Ce que les études apportent encore
+
+- Classeurs horaires de Paris, Sète et Nice (températures et degrés-heures de sept scénarios météo, dont le
+  réglementaire Th-D) : référence heure par heure pour le DH (0.8.14). Non exploités dans cette version.
+- Période de confort adaptatif et DH réglementaires de chaque groupe (`Reference.confort`).
+- Aucune sortie horaire du mode Th-B : les dates de saison (hypothèse 36) restent sans référence.

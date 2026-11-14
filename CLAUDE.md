@@ -9,7 +9,7 @@ https://claude.ai/artifact/6joP54tckVZQdM8LYVeLRF
 - Dépôt : https://github.com/Alliages/explorateur_Bbio_DH — licence GPL 3.
 - Branches : `travail` pour les versions intermédiaires, `main` pour le déploiement.
 - Environnement : Windows (PowerShell, `.venv`, pas d'Anaconda).
-- Les RSEE sont hors du dépôt, dans `../RSEE`, et n'y vont jamais ; les dossiers commençant par `_` (classeurs
+- Les RSEE sont hors du dépôt, dans `../_RSEE`, et n'y vont jamais ; les dossiers commençant par `_` (classeurs
   officiels `_references/`, textes `_sources/`) non plus.
 - Outil pédagogique, non réglementaire. Le moteur reste cohérent avec la méthode Th-BCE 2020.
 

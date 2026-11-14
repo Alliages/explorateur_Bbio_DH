@@ -2,8 +2,8 @@
 
 import pytest
 
-from moteur.bbio import (bbio_max, calculer_bbio, classe_altitude, mb_bruit, mb_geo, mb_hsp, mb_surf_moy,
-                         mb_surf_tot, points_bbio, ponderer)
+from moteur.bbio import (bbio_max, calculer_bbio, classe_altitude, hauteur_sous_plafond_moyenne, mb_bruit, mb_geo,
+                         mb_hsp, mb_surf_moy, mb_surf_tot, points_bbio, ponderer)
 from moteur.besoins import bilan_besoins, calculer_besoins
 from moteur.meteo import charger_meteo
 from moteur.structures import Baie, Batiment, Groupe, Paroi, Projet, Zone
@@ -22,7 +22,8 @@ def groupe(nom, surface, nb_logements, orientation_baies=0, **options):
 
 def projet_essai():
     """Un bâtiment de deux zones : logements traversants (deux groupes) et non traversants (un groupe)."""
-    traversants = Zone("Traversants", groupes=[groupe("Sud", 600.0, 9), groupe("Nord", 300.0, 6, 180)])
+    traversants = Zone("Traversants", groupes=[groupe("Sud", 600.0, 9), groupe("Nord", 300.0, 6, 180)],
+                       hauteur_sous_plafond_m=2.5)
     non_traversants = Zone("Non traversants", groupes=[groupe("Est", 200.0, 5, -90, exposition_bruit="BR2")],
                            hauteur_sous_plafond_m=2.7)
     return Projet("Essai", zone_climatique="H2c", altitude_m=150.0,
@@ -151,12 +152,16 @@ def test_bbio_max_du_projet(resultat):
     # H2c à 150 m : Mbgéo = −0,1 ; bâtiment de 1 100 m² : Mbsurf_tot = (19,5 − 16,5) / 65
     assert (g["mb_geo"] == -0.1).all() and (g["bbio_max_moyen"] == MOYEN).all()
     assert g["mb_surf_tot"].tolist() == pytest.approx([3.0 / MOYEN] * 3)
-    # Traversants : 60 m² par logement (0) ; non traversants : 40 m² (−2 / 65), BR2 en H2c (0,1), 2,7 m sous plafond
+    # Traversants : 60 m² par logement (0) ; non traversants : 40 m² (−2 / 65), BR2 en H2c (0,1)
     assert g["mb_surf_moy"].tolist() == pytest.approx([0.0, 0.0, -2.0 / MOYEN])
     assert g["mb_bruit"].tolist() == [0.0, 0.0, 0.1]
-    assert g["mb_hsp"].tolist() == pytest.approx([0.0, 0.0, 0.08 / 1.5])
-    assert g.loc[0, "bbio_max"] == pytest.approx(MOYEN * 0.9 + 3.0)                         # 61,5 points
-    assert g.loc[2, "bbio_max"] == pytest.approx(MOYEN * (1.0 + 0.08 / 1.5) + 1.0)          # 65 × 1,0533 + 3 − 2
+    # Hauteur sous plafond moyenne du bâtiment : (900 × 2,5 + 200 × 2,7) / 1 100 = 2,536 m, pour tous les groupes
+    hsp = (900.0 * 2.5 + 200.0 * 2.7) / 1100.0
+    assert hauteur_sous_plafond_moyenne(projet_essai().batiments[0], "logement_collectif") == pytest.approx(hsp)
+    mb = (hsp / 2.5 - 1.0) / 1.5
+    assert g["mb_hsp"].tolist() == pytest.approx([mb] * 3)
+    assert g.loc[0, "bbio_max"] == pytest.approx(MOYEN * (0.9 + mb) + 3.0)
+    assert g.loc[2, "bbio_max"] == pytest.approx(MOYEN * (1.0 + mb) + 1.0)                  # 65 × (1 + mb) + 3 − 2
 
 
 def test_sans_refroidissement():

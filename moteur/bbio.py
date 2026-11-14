@@ -39,7 +39,8 @@ r"""
      Mbsurf_tot  surface de référence du bâtiment (tous les
                  logements collectifs du bâtiment) ;
      Mbbruit     exposition au bruit (BR1, BR2, BR3) ;
-     MbHSP       hauteur sous plafond moyenne au-delà de 2,5 m.
+     MbHSP       hauteur sous plafond moyenne des logements
+                 collectifs du bâtiment, au-delà de 2,5 m.
    Le Bbio max d'une zone ou d'un bâtiment est la moyenne de
    ceux de ses parties, pondérée par leur surface de référence
    (chapitre II, V).
@@ -209,6 +210,19 @@ def _controler_projet(projet):
                                  "(apports internes et Bbio max)")
 
 
+def hauteur_sous_plafond_moyenne(batiment, usage):
+    """HSPmoy des zones d'un usage du bâtiment : moyenne des hauteurs saisies, pondérée par la surface de référence.
+
+    Les zones sans hauteur saisie ne comptent pas ; None si aucune n'en a. Les études appliquent bien la même
+    hauteur moyenne à toutes les zones de logements d'un bâtiment (voir docs/audit.md, 0.8.10).
+    """
+    zones = [z for z in batiment.zones if z.usage == usage and z.hauteur_sous_plafond_m is not None
+             and z.surface_m2 > 0]
+    if not zones:
+        return None
+    return sum(z.hauteur_sous_plafond_m * z.surface_m2 for z in zones) / sum(z.surface_m2 for z in zones)
+
+
 def calculer_bbio(projet, scenarios=None, calendrier=None, refroidissement=True):
     """Bbio et Bbio max d'un projet, par groupe, par zone et par bâtiment (mode Th-B, climat Th-BC).
 
@@ -227,6 +241,7 @@ def calculer_bbio(projet, scenarios=None, calendrier=None, refroidissement=True)
         sref_par_usage = {}
         for zone in batiment.zones:
             sref_par_usage[zone.usage] = sref_par_usage.get(zone.usage, 0.0) + zone.surface_m2
+        hsp_par_usage = {usage: hauteur_sous_plafond_moyenne(batiment, usage) for usage in sref_par_usage}
         for zone in batiment.zones:
             if not zone.groupes:
                 continue
@@ -242,7 +257,7 @@ def calculer_bbio(projet, scenarios=None, calendrier=None, refroidissement=True)
                 # Bbio max de la partie de bâtiment que forme le groupe
                 maxi = bbio_max(projet.zone_climatique, projet.altitude_m, surface_moyenne,
                                 sref_par_usage[zone.usage], groupe.exposition_bruit,
-                                zone.hauteur_sous_plafond_m, zone.usage)
+                                hsp_par_usage[zone.usage], zone.usage)
                 lignes.append({**cle, "usage": zone.usage, "sref_m2": groupe.surface_m2,
                                "nb_logements": groupe.nb_logements, **annuel.to_dict(), **maxi})
 

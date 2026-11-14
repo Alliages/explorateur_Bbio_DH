@@ -3,6 +3,31 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.8.10 — évolution (14/11/2026), cas de référence
+
+Lecture d'une étude réglementaire et comparaison de son Bbio à celui de l'outil.
+
+- **Lecteur de RSET** (`outils/lire_rset.py`) : `lire_rset(chemin)` transforme le fichier XML d'une étude RE2020
+  (Climawin, Pleiades : même format du moteur) en `Projet` de l'outil : groupes, parois opaques, baies sans
+  protection, ponts thermiques, espaces tampons, masques proches et lointains, inertie, débit du Bbio. Il rend aussi
+  une `Reference` : résultats de l'étude par groupe, zone et bâtiment (annuels et mensuels), indicateurs de
+  déperdition, confort d'été, et description des baies avec leurs protections et leurs réglages d'ouverture. Ce que
+  l'outil ne reprend pas encore est compté.
+- **Comparaison** (`outils/comparer_reference.py`) : enveloppe (contrôle de la lecture), besoins annuels et
+  mensuels, Bbio et Bbio max, côte à côte ; six variantes grossières (infiltrations de l'étude, protections fermées,
+  sans échangeur, surventilation) pour mesurer ce qui manque. En ligne de commande :
+  `python -m outils.comparer_reference "_sources\mon_etude.xml" --variantes`.
+- **Bbio max** : la hauteur sous plafond moyenne est celle de tous les logements collectifs du bâtiment, pondérée
+  par la surface (`hauteur_sous_plafond_moyenne()`), comme dans les études ; en 0.8.8 chaque zone gardait la sienne.
+- **Constat** sur cinq études (Paris, Sète, Nice ; dix groupes) : parois opaques, surfaces et Bbio max retrouvés à
+  l'arrondi, éclairage à 0,1 kWh/m² ; chauffage sous-estimé de 6 à 46 % (pas d'infiltrations) ; froid 4 à 46 fois
+  trop fort (ni protections mobiles, ni ouverture des baies). Détail et variantes dans `docs/audit.md`.
+- **Feuille de route** : « Cas de référence » intercalé ; protections et ouvertures en 0.8.12, infiltrations en
+  0.8.14, DH en 0.8.16, interface en 0.8.18.
+- Aucune étude réelle n'entre dans le dépôt : les tests fabriquent leur propre RSET ; un test supplémentaire
+  contrôle les études présentes dans `_sources/`, et il est sauté ailleurs.
+- Tests : 255.
+
 ## 0.8.8 — évolution (14/11/2026), Bbio
 
 Bbio d'un projet, par groupe, par zone et par bâtiment, et comparaison au Bbio max.

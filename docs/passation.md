@@ -2,32 +2,36 @@
 
 Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis claude.ai ou Claude Code.
 
-## État au 13/11/2026
+## État au 14/11/2026
 
-- Version **0.8.6** (besoins), préparée et testée, **sans commit**, à la suite de la 0.8.4 elle aussi non publiée :
-  rien n'est publié tant que « Push » n'est pas donné.
-- `moteur/besoins.py` : `calculer_besoins()` (année, mode Th-B : émetteur conventionnel, saisons, consignes) et
-  `bilan_besoins()` (Bch, Bfr, Becl mensuels et annuels en kWh/m²). Une année : environ 0,6 s.
-- `moteur/apports.py` : apports internes du logement collectif (fiche 4.1). `moteur/eclairage.py` : lumière
-  naturelle et consommation d'éclairage (fiches 5.10 et 7.1).
-- `moteur/groupe.py` (0.8.4) : modèle thermique horaire du groupe ; `debit_ventilation()` ajouté (base et pointe).
-- `structures.py` : `nb_logements` et `debit_ventilation_pointe_m3h` sur `Groupe`.
-- Tests : `python -m pytest` → 226 réussis, 3 sautés (comparaisons aux classeurs si `_references/` est vide, test
-  git hors dépôt).
-- Lectures du texte et simplifications : `docs/audit.md`, hypothèses 17 à 28 (0.8.4) et 29 à 41 (0.8.6). À relire en
-  priorité : le besoin de froid compté d'office (29), la surface habitable du groupe (30), les relances non
-  traitées (31), les fenêtres glissantes des saisons (36).
-- **Résultat à garder en tête** : sur un immeuble d'essai, Bch ≈ 12 kWh/m² en H1a et Bfr ≈ 22 kWh/m². Le froid est
-  surestimé tant que les protections mobiles et l'ouverture des baies ne sont pas modélisées (0.9.4).
-- **Le dossier de travail local n'est pas un dépôt git** (`git status` échoue) : à cloner ou à rattacher au dépôt
-  avant « Push ».
+- Version **0.8.10** (cas de référence), préparée et testée dans le dossier local, publiée sur `travail` le 14/11/2026, après
+  la 0.8.8 (deux commits).
+- `outils/lire_rset.py` : `lire_rset(chemin)` rend le `Projet` de l'outil et la `Reference` de l'étude (résultats,
+  indicateurs, baies avec protections et ouvertures, confort d'été).
+- `outils/comparer_reference.py` : `comparer(chemin)` et `variantes_besoins(projet, reference)` ; en ligne de
+  commande : `python -m outils.comparer_reference "_sources\mon_etude.xml" --variantes`.
+- `moteur/bbio.py` (0.8.8) : `calculer_bbio(projet)` ; la hauteur sous plafond du Bbio max est maintenant la moyenne
+  du bâtiment.
+- Tests : `python -m pytest` → 253 réussis, 2 sautés (classeurs de `_references/` absents). Le test des études
+  locales tourne ici, il est sauté sans RSET dans `_sources/`.
+- `docs/audit.md`, section 0.8.10 : tableau des écarts sur cinq études, hypothèses 46 (revue) et 48 à 54.
+- **Résultat à garder en tête** : la lecture est juste (parois, surfaces, Bbio max retrouvés), l'éclairage aussi.
+  Le chauffage est 6 à 46 % trop faible (pas d'infiltrations), le froid 4 à 46 fois trop fort. Les protections
+  mobiles sont le premier levier du froid, l'ouverture des baies le second.
+- **Les brasseurs d'air lisent encore la case** pour « 6 < hlég ≤ 22 » : une heure trop tôt (hypothèse 42).
 
 ## Prochaine étape
 
-0.8.8 « Bbio » : Bbio = 2 × Bch + 2 × Bfr + 5 × Becl (fiche 13.1, éq. 2385), sommé sur les groupes d'une zone et
-d'un bâtiment, comparé au Bbio max (annexe de l'arrêté : modulations selon la zone climatique, l'altitude, la
-surface). Avant de coder : relire la fiche 13.1 et le texte du Bbio max, proposer la démarche et le numéro de
-version.
+0.8.12 « Protections et ouvertures » : protections mobiles d'abord (fiche 5.9), puis ouverture des baies du mode
+Th-B (fiche 5.13). Cible chiffrée : le Bfr des dix groupes de `docs/audit.md`. Les données d'entrée existent déjà
+dans `Reference.baies` (Sw, Tl et U avec protection, gestion, réglages d'ouverture par saison) ; il reste à les
+porter dans `Baie`. Avant de coder : relire les fiches 5.9 et 5.13, proposer la démarche.
+
+0.8.14 « Infiltrations » : version à part, après les protections (décidé le 14/11/2026). Sans elles le chauffage reste
+sous-estimé ; elles demandent le vrai modèle de la méthode (voir `ROADMAP.md`).
+
+0.8.16 « DH » : les classeurs horaires de Paris, Sète et Nice et le module `..\meteo_et_chaleur\calcul\dh_re2020.py`
+donnent la référence ; voir les points 0.8.16 de `ROADMAP.md`.
 
 ## Pour reprendre
 
@@ -41,13 +45,15 @@ python -m pytest
 
 ## Fichiers locaux nécessaires (hors dépôt)
 
-- `_references/4_scenarios_meteorologiques_th-bc_th-d_re2020.xlsx`
-- `_references/2026-04-29_scenarios_conventionnels.xlsx`
-- `../RSEE` (à côté du dépôt) : études de logements collectifs, pour la validation (0.9.8).
-- `_sources/` : annexes de l'arrêté et règles Th-Bât (PDF), pour relire la méthode.
+- `_sources/` : annexes de l'arrêté, annexe à l'article R. 172-4 (trois versions), règles Th-Bât (PDF), et les
+  études de référence : `paris_…`, `sete_…`, `nice_…` (XML et classeur horaire, PDF pour Paris),
+  `Fichier source + RSET 04-2026` (Nice A) et le dossier « Annexe 3 … BAT B_V2 » (Nice B).
+- `../_RSEE` (à côté du dépôt) : autres études RE2020, pour la validation (0.9.8).
+- `../bon résultat.csv`, `../bon résultat_H3_tracc.csv` : sorties horaires d'un moteur Th-BCE (référence du DH).
+- `_references/` : les deux classeurs officiels (absents de ce poste : deux tests sautés).
 - Tout dossier commençant par `_` est exclu de git (`.gitignore`).
 
 ## En attente de Guillaume
 
-Lien Streamlit (0.9.0), extraction OPEE (0.9.8), accord DHUP (avant 1.0.0), seuils du plan de
-contrôle.
+Lien Streamlit (0.9.0), extraction OPEE (0.9.8), accord DHUP (avant 1.0.0),
+seuils du plan de contrôle.
