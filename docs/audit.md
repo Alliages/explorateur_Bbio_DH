@@ -952,3 +952,26 @@ Temps : 3 s par bâtiment et par niveau, Bbio et DH (poste chargé).
 89. **Niveaux tirés de 6 opérations** (18 zones, 17 305 m²) : repères indicatifs, non représentatifs du parc. Le
     niveau « performant » d'une variable vient de quantiles calculés variable par variable : les 13 valeurs
     ne décrivent aucune étude réelle prise en entier.
+
+## 0.9.4 — bâtiments de départ en CSV
+
+Les bâtiments de départ sont lus dans `donnees/batiments/` (un CSV par bâtiment). Le logement de 70 m² change :
+H1a, façade principale 7 m sur 10 m de profondeur, baies 25 % devant et derrière, pignons aveugles, gestion
+manuelle motorisée des volets ; l'immeuble prend les mêmes valeurs hors forme. Le moteur ne change pas.
+
+### Vérifications
+
+| Bâtiment | Niveau | Bbio (max) | DH °C.h (max) |
+|---|---|---|---|
+| Logement de 70 m², `Boite()` | — | 121,2 (91,0) | 1 062 (1 250) |
+| Logement de 70 m² | Performant | 90,7 (91,0) | 609 (1 250) |
+| Logement de 70 m² | Moyen | 114,8 (91,0) | 786 (1 250) |
+| Logement de 70 m² | Faible | 135,5 (91,0) | 991 (1 250) |
+| Immeuble de 9 logements | Performant | 48,7 (82,8) | 511 (1 250) |
+| Immeuble de 9 logements | Moyen | 58,2 (82,8) | 675 (1 250) |
+| Immeuble de 9 logements | Faible | 65,8 (82,8) | 859 (1 250) |
+
+En H1a, le Bbio max monte (91,0 et 82,8 contre 78,0 et 69,8 en H3) et le Bbio aussi (chauffage plus fort) ; le
+DH baisse nettement (climat plus frais, pignons aveugles, volets motorisés). Les six cas respectent le DH max ;
+le logement isolé ne respecte le Bbio max qu'au niveau performant, à peine, comme en 0.9.2. Temps : 4 à 7 s par
+cas, Bbio et DH (poste chargé).

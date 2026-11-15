@@ -1,7 +1,9 @@
-"""Interface (0.8.18, 0.9.0, 0.9.1, 0.9.2) : la boîte et son projet, les bâtiments de départ, les niveaux
-d'enveloppe, l'axonométrie, les briques, la comparaison de deux variantes, le choix du calcul et la page entière.
+"""Interface (0.8.18, 0.9.0, 0.9.1, 0.9.2, 0.9.4) : la boîte et son projet, les bâtiments de départ (lus dans
+donnees/batiments/), les niveaux d'enveloppe, l'axonométrie, les briques, la comparaison de deux variantes, le
+choix du calcul et la page entière.
 
-Les chiffres de la 0.9.0 (576 m², Bbio 62,3, DH 1 777) sont ceux de l'immeuble de 9 logements."""
+L'immeuble de 9 logements fait 576 m² ; depuis la 0.9.4, ses pignons sont aveugles : les tests qui suivent les
+quatre façades emploient QUATRE_FACADES, l'immeuble vitré comme en 0.9.0."""
 
 import math
 import os
@@ -15,12 +17,17 @@ import pytest
 from config.reglages import RACINE
 from interface.axonometrie import VUES, Projection, decouper_baies, dessiner, direction
 from interface.comparaison import LIBELLES, differences, ecarts
+from config.reglages import DOSSIER_BATIMENTS
 from interface.saisie import (BATIMENTS_DE_DEPART, CHAMPS_TYPOLOGIES, CLE_GROUPE, NIVEAUX_ENVELOPPE,
                               PART_VITREE_MAX, Boite, boite_de_depart, construire_projet, gabarit_baie,
-                              largeur_travee, lire_niveaux_enveloppe, point_cardinal)
+                              largeur_travee, lire_batiment, lire_batiments, lire_niveaux_enveloppe,
+                              point_cardinal)
 from moteur.hypotheses import hyp
 
 IMMEUBLE = BATIMENTS_DE_DEPART["Immeuble de 9 logements"]
+# Les parts vitrées de la 0.9.0 (30, 10, 20 et 10 %), sur lesquelles les tests de géométrie ont été écrits
+QUATRE_FACADES = replace(IMMEUBLE, part_vitree_principale=0.30, part_vitree_pignon_a=0.10,
+                         part_vitree_arriere=0.20, part_vitree_pignon_b=0.10)
 
 
 def _groupe(boite):
@@ -31,7 +38,7 @@ def _groupe(boite):
 # SAISIE : de la boîte au projet
 # ============================================================
 def test_boite_de_depart_surfaces_et_orientations():
-    boite = IMMEUBLE
+    boite = QUATRE_FACADES
     groupe = _groupe(boite)
     # 20 m × 12 m × 3 niveaux × 0,8 de part habitable
     assert groupe.surface_m2 == pytest.approx(576.0)
@@ -49,15 +56,69 @@ def test_boite_de_depart_surfaces_et_orientations():
 
 def test_batiments_de_depart():
     """Le logement de 70 m² est la boîte par défaut ; l'immeuble ne change que la forme."""
+    assert list(BATIMENTS_DE_DEPART) == ["Logement de 70 m²", "Immeuble de 9 logements"]
     logement = BATIMENTS_DE_DEPART["Logement de 70 m²"]
     assert next(iter(BATIMENTS_DE_DEPART.values())) == logement == Boite()
+    # 7 m de façade principale sur 10 m de profondeur, en H1a, vitré à 25 % devant et derrière, pignons aveugles
+    assert (logement.zone_climatique, logement.longueur_m, logement.profondeur_m) == ("H1a", 7.0, 10.0)
+    assert logement.gestion_protection == "manuelle_motorisee"
     groupe = _groupe(logement)
     assert groupe.surface_m2 == pytest.approx(70.0) and groupe.nb_logements == 1
     assert [p.surface_m2 for p in groupe.parois if p.type != "mur"] == [70.0, 70.0]
+    assert [b.orientation_deg for b in groupe.baies] == [0.0, -180.0]
+    assert groupe.surface_baies_m2 == pytest.approx(2 * 7.0 * 2.8 * 0.25)
     assert _groupe(IMMEUBLE).surface_m2 == pytest.approx(576.0)
-    from dataclasses import fields
     changes = {c.name for c in fields(Boite) if getattr(logement, c.name) != getattr(IMMEUBLE, c.name)}
     assert changes == {"longueur_m", "profondeur_m", "nb_niveaux", "part_habitable", "nb_logements"}
+
+
+def test_batiments_lus_dans_les_csv(tmp_path):
+    """Un CSV par bâtiment : les deux fichiers fournis sont complets ; un champ absent prend la valeur par défaut ;
+    l'enveloppe, un champ inconnu ou une valeur illisible sont refusés en nommant le fichier et la ligne."""
+    # Fichiers fournis : toutes les saisies hors enveloppe, pour servir de modèle
+    hors_enveloppe = {c.name for c in fields(Boite)} - set(CHAMPS_TYPOLOGIES.values())
+    for fichier in sorted(os.listdir(DOSSIER_BATIMENTS)):
+        if fichier.endswith(".csv"):
+            with open(os.path.join(DOSSIER_BATIMENTS, fichier), encoding="utf-8") as f:
+                champs = {ligne.split(";")[0] for ligne in f.read().splitlines()[1:]}
+            assert champs == hors_enveloppe | {"nom"}, fichier
+
+    entete = "champ;valeur;unite;description\n"
+
+    def ecrire(nom_fichier, lignes):
+        chemin = tmp_path / nom_fichier
+        chemin.write_text(entete + lignes, encoding="utf-8")
+        return chemin
+
+    # Un bâtiment réduit à trois lignes : le reste vient de Boite ; virgule décimale, oui / non, liste
+    chemin = ecrire("b_maison.csv", "nom;Maison;;\nhauteur_etage_m;3,1;m;\nnb_niveaux;2;;\ntraversant;non;;\n"
+                                    "\n" "facades_debord;principale, arriere;;\n")
+    assert lire_batiment(chemin) == ("Maison", replace(Boite(), hauteur_etage_m=3.1, nb_niveaux=2,
+                                                       traversant=False, facades_debord=("principale", "arriere")))
+    # Ordre alphabétique des fichiers ; les fichiers d'un autre type sont ignorés
+    ecrire("a_studio.csv", "nom;Studio;;\nlongueur_m;6;m;\n")
+    (tmp_path / "notes.txt").write_text("rien", encoding="utf-8")
+    assert list(lire_batiments(tmp_path)) == ["Studio", "Maison"]
+    ecrire("c_double.csv", "nom;Studio;;\n")
+    with pytest.raises(ValueError, match="déjà pris"):
+        lire_batiments(tmp_path)
+
+    # Refus en clair
+    refus = {"nom;X;;\nuw;1,2;;\n": "c.csv, ligne 3 : « uw » fait partie de l'enveloppe",
+             "nom;X;;\nlargeur_m;7;;\n": "ligne 3 : champ inconnu « largeur_m »",
+             "nom;X;;\nnb_niveaux;1,5;;\n": "valeur illisible pour « nb_niveaux »",
+             "nom;X;;\ntraversant;vrai;;\n": "écrire oui ou non",
+             "nom;X;;\nlongueur_m;7;;\nlongueur_m;8;;\n": "« longueur_m » écrit deux fois",
+             "longueur_m;7;;\n": "ligne « nom » absente",
+             "nom;X;;\nzone_climatique;H1;;\n": "zone climatique inconnue « H1 »",
+             "nom;X;;\npart_vitree_principale;0,95;;\n": "c.csv : Façade principale : la part vitrée",
+             "nom;X;;\nteinte;rose;;\n": "valeur inconnue 'rose'"}
+    for lignes, message in refus.items():
+        with pytest.raises(ValueError, match=message):
+            lire_batiment(ecrire("c.csv", lignes))
+    (tmp_path / "d.csv").write_text("champ,valeur\nnom,X\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="colonnes"):
+        lire_batiment(tmp_path / "d.csv")
 
 
 def test_niveaux_d_enveloppe(tmp_path):
@@ -95,7 +156,7 @@ def test_niveaux_d_enveloppe(tmp_path):
 
 
 def test_orientation_tourne_toutes_les_facades():
-    groupe = _groupe(replace(IMMEUBLE, orientation_deg=135.0))
+    groupe = _groupe(replace(QUATRE_FACADES, orientation_deg=135.0))
     assert [b.orientation_deg for b in groupe.baies] == [135.0, -135.0, -45.0, 45.0]
     assert point_cardinal(135.0) == "nord-ouest" and point_cardinal(-180.0) == "nord"
     assert point_cardinal(350.0) == "sud" and point_cardinal(-80.0) == "est"
@@ -103,7 +164,7 @@ def test_orientation_tourne_toutes_les_facades():
 
 def test_options_de_la_boite():
     # Façade aveugle : pas de baie ; sans protection ni ouverture : le moteur le saura
-    groupe = _groupe(replace(IMMEUBLE, part_vitree_arriere=0.0, protection="aucune", ouvrable=False))
+    groupe = _groupe(replace(QUATRE_FACADES, part_vitree_arriere=0.0, protection="aucune", ouvrable=False))
     assert len(groupe.baies) == 3
     assert all(b.protection is None and not b.ouvrable for b in groupe.baies)
     # Teinte : absorption lue dans les hypothèses ; plancher sur l'extérieur ; étanchéité parfaite
@@ -136,7 +197,7 @@ def test_balcons_masque_et_gabarit():
     assert largeur_travee(20.0) == pytest.approx(20.0 / 7) and largeur_travee(2.0) == 2.0
     # Sans balcon (boîte de départ) : aucun masque
     assert all(b.masques == [] for b in _groupe(IMMEUBLE).baies)
-    groupe = _groupe(replace(IMMEUBLE, debord_m=1.2, facades_debord=("principale", "pignon_b")))
+    groupe = _groupe(replace(QUATRE_FACADES, debord_m=1.2, facades_debord=("principale", "pignon_b")))
     assert [len(b.masques) for b in groupe.baies] == [1, 0, 0, 1]
     masque, baie = groupe.baies[0].masques[0], groupe.baies[0]
     assert masque.debord_m == 1.2 and masque.distance_m == pytest.approx(linteau)
@@ -218,7 +279,7 @@ def test_differences_de_saisie():
     variante = replace(IMMEUBLE, uw=1.1, orientation_deg=90.0, traversant=False, part_vitree_arriere=0.35)
     assert differences(IMMEUBLE, variante) == [
         ("Orientation de la façade principale", "sud", "ouest"), ("Logements traversants", "oui", "non"),
-        ("Part vitrée, façade arrière", "20 %", "35 %"), ("Uw des baies", "1,40 W/m².K", "1,10 W/m².K")]
+        ("Part vitrée, façade arrière", "25 %", "35 %"), ("Uw des baies", "1,40 W/m².K", "1,10 W/m².K")]
     # Un réglage sans effet des deux côtés n'est pas listé ; il l'est dès que son option est allumée
     assert differences(IMMEUBLE, replace(IMMEUBLE, brasseur_debit_m3h=9000.0)) == []
     assert len(differences(replace(IMMEUBLE, brasseurs=True),

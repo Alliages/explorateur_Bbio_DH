@@ -113,7 +113,7 @@ python -m pytest
 |---|---|
 | `moteur/` | Calcul, sans aucune dépendance à l'interface |
 | `app.py`, `interface/` | Interface Streamlit : saisie d'une boîte, axonométrie, briques pédagogiques (`interface/briques/`), comparaison de deux variantes |
-| `donnees/` | Météo, scénarios, hypothèses et niveaux d'enveloppe des logements (CSV : séparateur `;`, virgule décimale, UTF-8) |
+| `donnees/` | Météo, scénarios, hypothèses et niveaux d'enveloppe des logements (CSV : séparateur `;`, virgule décimale, UTF-8) ; `donnees/batiments/` : un CSV par bâtiment de départ (format dans son `README.md`) |
 | `config/` | Chemins, formats et listes |
 | `outils/` | Préparation des données, lecture d'une étude (RSET) et comparaison à ses résultats ; `outils/typologies/` : niveaux d'enveloppe tirés des études |
 | `tests/` | Tests automatiques |

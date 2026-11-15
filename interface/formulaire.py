@@ -229,7 +229,8 @@ def choisir_depart():
     batiment = st.selectbox("Bâtiment de départ", list(BATIMENTS_DE_DEPART), key="batiment_depart",
                             on_change=_reprendre_batiment,
                             help="Choisir un bâtiment remet toutes les saisies à ses valeurs, avec l'enveloppe "
-                            "du niveau choisi.")
+                            "du niveau choisi. Chaque bâtiment est un fichier CSV du dossier donnees/batiments/ : "
+                            "en ajouter un l'ajoute à cette liste.")
     niveau = st.segmented_control("Enveloppe", list(NIVEAUX_ENVELOPPE), default=NIVEAU_D_OUVERTURE, required=True,
                                   key="niveau_enveloppe", on_change=_reprendre_niveau,
                                   help="Valeurs observées sur 18 zones de logements de 6 études RE2020, pondérées "

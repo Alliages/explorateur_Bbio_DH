@@ -32,9 +32,11 @@
 
 import csv
 import math
-from dataclasses import dataclass, replace
+import os
+from dataclasses import dataclass, fields, replace
 
-from config.reglages import CHEMIN_TYPOLOGIES, DECIMALE_CSV, SEPARATEUR_CSV
+from config.reglages import (CHEMIN_TYPOLOGIES, DECIMALE_CSV, DOSSIER_BATIMENTS, SEPARATEUR_CSV,
+                             ZONES_CLIMATIQUES)
 from moteur.hypotheses import hyp
 from moteur.structures import (Baie, Batiment, Brasseur, Groupe, MasqueProcheHorizontal, Paroi, PontThermique,
                                Projet, Zone, ramener_azimut)
@@ -76,6 +78,10 @@ CHAMPS_TYPOLOGIES = {"uw": "uw", "sw_e": "sw", "tl": "tl", "sw_protege": "sw_pro
 # Classes d'inertie écrites dans le CSV → classes du moteur
 CLASSES_INERTIE = {"très légère": "tres_legere", "légère": "legere", "moyenne": "moyenne", "lourde": "lourde",
                    "très lourde": "tres_lourde"}
+# CSV des bâtiments de départ (donnees/batiments/) : colonnes lues, ligne du nom, écriture des oui / non
+COLONNES_BATIMENT = ("champ", "valeur")         # les autres colonnes (unité, description) servent au lecteur
+CHAMP_NOM = "nom"
+OUI_NON = {"oui": True, "non": False}
 
 
 # ============================================================
@@ -85,19 +91,20 @@ CLASSES_INERTIE = {"très légère": "tres_legere", "légère": "legere", "moyen
 class Boite:
     """Description simple d'un bâtiment de logements : tout ce que l'interface fait saisir.
 
-    Valeurs par défaut : le logement de 70 m² de BATIMENTS_DE_DEPART, un petit bâtiment isolé (quatre façades,
-    toiture et plancher bas sur l'extérieur ou le sol), calculé comme du logement collectif. La page, elle,
-    s'ouvre sur l'enveloppe du niveau « Moyen » (boite_de_depart) : seules la forme et les saisies hors enveloppe
-    viennent de ces valeurs.
+    Valeurs par défaut : celles du logement de 70 m² (donnees/batiments/01_logement_70m2.csv ; un test vérifie
+    l'accord), un petit bâtiment isolé (quatre façades, toiture et plancher bas sur l'extérieur ou le sol), calculé
+    comme du logement collectif. Elles complètent un CSV de bâtiment qui omet un champ. La page, elle, s'ouvre sur
+    l'enveloppe du niveau « Moyen » (boite_de_depart) : seules la forme et les saisies hors enveloppe viennent de
+    ces valeurs.
     Figée (frozen) : deux boîtes égales donnent le même calcul, ce qui sert de clé au cache de l'interface.
     """
     # --- Site ---
-    zone_climatique: str = "H3"
+    zone_climatique: str = "H1a"
     altitude_m: float = 50.0
     exposition_bruit: str = "BR1"           # BR1, BR2 ou BR3 : module le Bbio max et l'ouverture des baies
     # --- Forme ---
-    longueur_m: float = 10.0                # façade principale
-    profondeur_m: float = 7.0
+    longueur_m: float = 7.0                 # façade principale
+    profondeur_m: float = 10.0
     nb_niveaux: int = 1
     hauteur_etage_m: float = 2.8            # de plancher à plancher
     hauteur_sous_plafond_m: float = 2.5
@@ -106,15 +113,15 @@ class Boite:
     nb_logements: int = 1
     traversant: bool = True
     # --- Baies ---
-    part_vitree_principale: float = 0.30    # surface de baies / surface de la façade
-    part_vitree_pignon_a: float = 0.10
-    part_vitree_arriere: float = 0.20
-    part_vitree_pignon_b: float = 0.10
+    part_vitree_principale: float = 0.25    # surface de baies / surface de la façade
+    part_vitree_pignon_a: float = 0.0
+    part_vitree_arriere: float = 0.25
+    part_vitree_pignon_b: float = 0.0
     uw: float = 1.4                         # W/m².K
     sw: float = 0.5                         # facteur solaire sans protection
     tl: float = 0.6                         # transmission lumineuse
     protection: str = "volet"               # « aucune », « volet » ou « store_enroulable »
-    gestion_protection: str = "manuelle_non_motorisee"
+    gestion_protection: str = "manuelle_motorisee"      # ou « manuelle_non_motorisee », « automatique »
     uw_protege: float = 1.1                 # avec la protection en place
     sw_protege: float = 0.1
     ouvrable: bool = True
@@ -180,14 +187,94 @@ class Boite:
 # BÂTIMENTS DE DÉPART (premier choix du menu de gauche)
 # ============================================================
 # Choisir l'un d'eux remet toutes les saisies à ses valeurs, l'enveloppe étant celle du niveau choisi
-# (boite_de_depart). Le premier est celui de la page à son ouverture.
-BATIMENTS_DE_DEPART = {
-    # 10 m × 7 m, un niveau, un logement : 70 m² habitables
-    "Logement de 70 m²": Boite(),
-    # 20 m × 12 m, trois niveaux, 80 % habitables : 576 m² (la boîte de départ de la 0.9.0, Bbio 62,3, DH 1 777)
-    "Immeuble de 9 logements": Boite(longueur_m=20.0, profondeur_m=12.0, nb_niveaux=3, part_habitable=0.8,
-                                     nb_logements=9),
-}
+# (boite_de_depart). Chaque bâtiment est un CSV de donnees/batiments/ (format décrit dans le README.md du
+# dossier) : un fichier ajouté apparaît dans le menu au lancement suivant. Les fichiers sont lus par ordre
+# alphabétique (d'où le numéro en tête de leur nom) ; le premier est celui de la page à son ouverture.
+#
+#   champ;valeur;unite;description
+#   nom;Logement de 70 m²;;nom affiché dans le menu
+#   longueur_m;7;m;longueur de la façade principale
+#   …
+#
+# Un champ absent prend la valeur par défaut de Boite ; les 13 saisies d'enveloppe sont refusées (elles viennent
+# du niveau) ; un champ inconnu, une valeur illisible ou une boîte que construire_projet refuse lèvent une
+# ValueError qui nomme le fichier.
+def _convertir(champ, texte):
+    """Valeur d'un CSV de bâtiment, convertie au type du champ de Boite (nombre, entier, oui / non, liste, texte)."""
+    if champ.type is bool:
+        if texte.lower() not in OUI_NON:
+            raise ValueError(f"« {texte} » : écrire oui ou non")
+        return OUI_NON[texte.lower()]
+    if champ.type is int:
+        return int(texte)                                       # « 1,5 » est refusé : un entier est attendu
+    if champ.type is float:
+        return float(texte.replace(DECIMALE_CSV, "."))
+    if champ.type is tuple:                                     # clés séparées par une virgule
+        return tuple(cle.strip() for cle in texte.split(",") if cle.strip())
+    return texte
+
+
+def lire_batiment(chemin):
+    """Lit un CSV de bâtiment : (nom affiché, Boite). L'enveloppe de la Boite rendue est celle des valeurs par
+    défaut, remplacée ensuite par celle du niveau choisi (boite_de_depart)."""
+    fichier = os.path.basename(chemin)
+    champs = {champ.name: champ for champ in fields(Boite)}
+    enveloppe = set(CHAMPS_TYPOLOGIES.values())
+    nom, valeurs = None, {}
+    with open(chemin, encoding="utf-8-sig", newline="") as f:          # accepte un CSV enregistré par Excel (BOM)
+        lecteur = csv.DictReader(f, delimiter=SEPARATEUR_CSV)
+        if not set(COLONNES_BATIMENT) <= set(lecteur.fieldnames or ()):
+            raise ValueError(f"{fichier} : colonnes « {' » et « '.join(COLONNES_BATIMENT)} » attendues "
+                             f"(séparateur « {SEPARATEUR_CSV} »)")
+        for numero, ligne in enumerate(lecteur, start=2):               # ligne 1 : les titres des colonnes
+            champ, texte = (ligne["champ"] or "").strip(), (ligne["valeur"] or "").strip()
+            lieu = f"{fichier}, ligne {numero}"
+            if not champ:                                               # ligne vide : ignorée
+                continue
+            if champ == CHAMP_NOM:
+                if nom is not None:
+                    raise ValueError(f"{lieu} : « nom » écrit deux fois")
+                nom = texte
+            elif champ in enveloppe:
+                raise ValueError(f"{lieu} : « {champ} » fait partie de l'enveloppe, donnée par le niveau "
+                                 "(performant, moyen ou faible) et non par le bâtiment")
+            elif champ not in champs:
+                raise ValueError(f"{lieu} : champ inconnu « {champ} »")
+            elif champ in valeurs:
+                raise ValueError(f"{lieu} : « {champ} » écrit deux fois")
+            else:
+                try:
+                    valeurs[champ] = _convertir(champs[champ], texte)
+                except ValueError as erreur:
+                    raise ValueError(f"{lieu} : valeur illisible pour « {champ} » ({erreur})") from None
+    if not nom:
+        raise ValueError(f"{fichier} : ligne « {CHAMP_NOM} » absente ou vide")
+    boite = Boite(**valeurs)
+    # Contrôles de la boîte entière : ceux de construire_projet et du moteur, plus la zone (lue par la météo)
+    if boite.zone_climatique not in ZONES_CLIMATIQUES:
+        raise ValueError(f"{fichier} : zone climatique inconnue « {boite.zone_climatique} » "
+                         f"({', '.join(ZONES_CLIMATIQUES)})")
+    try:
+        construire_projet(boite)
+    except KeyError as erreur:
+        raise ValueError(f"{fichier} : valeur inconnue {erreur}") from None
+    except ValueError as erreur:
+        raise ValueError(f"{fichier} : {erreur}") from None
+    return nom, boite
+
+
+def lire_batiments(dossier=DOSSIER_BATIMENTS):
+    """Lit tous les CSV du dossier, par ordre alphabétique des fichiers : {nom affiché: Boite}."""
+    fichiers = sorted(f for f in os.listdir(dossier) if f.lower().endswith(".csv"))
+    if not fichiers:
+        raise ValueError(f"{dossier} : aucun bâtiment de départ (fichier .csv)")
+    batiments = {}
+    for fichier in fichiers:
+        nom, boite = lire_batiment(os.path.join(dossier, fichier))
+        if nom in batiments:
+            raise ValueError(f"{fichier} : le nom « {nom} » est déjà pris par un autre bâtiment")
+        batiments[nom] = boite
+    return batiments
 
 
 # ============================================================
@@ -334,3 +421,10 @@ def construire_projet(boite):
                 hauteur_m=boite.hauteur_m, hauteur_moyenne_m=boite.hauteur_m / 2.0)
     return Projet("Boîte", boite.zone_climatique, altitude_m=boite.altitude_m,
                   batiments=[Batiment(NOM_BATIMENT, zones=[zone])])
+
+
+# ============================================================
+# LECTURE DES BÂTIMENTS DE DÉPART
+# ============================================================
+# En fin de module : la lecture contrôle chaque bâtiment avec construire_projet, défini plus haut.
+BATIMENTS_DE_DEPART = lire_batiments()

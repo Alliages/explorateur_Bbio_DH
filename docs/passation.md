@@ -4,7 +4,17 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 15/11/2026
 
-- Dernière version publiée sur `travail` : **0.9.2**.
+- Dernière version publiée sur `travail` : **0.9.2**. **0.9.4** prête, non poussée (attend « Push »).
+- **0.9.4** : bâtiments de départ lus dans `donnees/batiments/` (un CSV par bâtiment, `champ;valeur;unite;
+  description`, ligne `nom`, ordre alphabétique des fichiers ; mode d'emploi dans le `README.md` du dossier).
+  `saisie.lire_batiment`, `lire_batiments` ; `BATIMENTS_DE_DEPART` est lu en fin de `interface/saisie.py`
+  (la lecture contrôle chaque boîte avec `construire_projet`). Champ absent = valeur de `Boite` ; enveloppe,
+  champ inconnu, valeur illisible, zone inconnue refusés avec fichier et ligne. Nouveau logement de 70 m²
+  (= `Boite()`) : H1a, 7 × 10 m, baies 25 / 0 / 25 / 0 %, gestion manuelle motorisée ; l'immeuble suit (seule
+  la forme diffère). Logement : Bbio 90,7 / 114,8 / 135,5 (max 91,0), DH 609 / 786 / 991 ; immeuble : Bbio
+  48,7 / 58,2 / 65,8 (max 82,8), DH 511 / 675 / 859 (performant / moyen / faible). Vu dans Chrome. Toute
+  nouvelle saisie de `Boite` doit aussi entrer dans les deux CSV (un test vérifie qu'ils sont complets).
+  Versions revues : pédagogie 0.9.6, export CSV 0.9.8 (avec la validation), diffusion de la chaleur 0.9.12.
 - **0.9.2** : trois niveaux d'enveloppe, « Performant », « Moyen » (à l'ouverture) et « Faible », lus dans
   `donnees/typologies_logements.csv` (`saisie.NIVEAUX_ENVELOPPE`, `CHAMPS_TYPOLOGIES` : colonne du CSV → champ de
   `Boite`). Choix « Enveloppe » sous « Bâtiment de départ » (`formulaire.choisir_depart`) ; départ =
@@ -43,7 +53,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 - 0.8.17 : relecture sans effet sur le calcul. 0.8.16 : `moteur/confort.py`, `moteur/dh.py`,
   `calculer_besoins(mode="th_d")`, règles Th-D des protections et des ouvertures, brasseurs lus dans les RSET,
   `outils/comparer_reference.py --dh`.
-- Tests : `python -m pytest` → 347 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
+- Tests : `python -m pytest` → 348 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
   minute sur un poste peu chargé.
 - `docs/audit.md` : sections 0.8.16 (hypothèses 75 à 84), 0.8.17, 0.9.0 (constats du contrôle visuel, temps de
   calcul, hypothèses 85 et 86) et 0.9.1 (temps par calcul, hypothèse 87).
@@ -56,7 +66,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## Prochaine étape
 
-« Push » de la 0.9.2, puis mise en ligne sur accord. Ensuite la 0.9.4 (pédagogie) : page d'accueil,
+« Push » de la 0.9.4, puis mise en ligne sur accord. Ensuite la 0.9.6 (pédagogie) : page d'accueil,
 nouvelles briques (point « Interface, suites de la 0.9.0 » de `ROADMAP.md`). Écrire une brique : un fichier dans
 `interface/briques/` (voir `base.py`) et une ligne dans `__init__.py`. Deux points vus à l'écran et notés dans
 `ROADMAP.md` : protections baissées à 75 % jour et nuit pendant la semaine chaude ; dernier jour incomplet sur le

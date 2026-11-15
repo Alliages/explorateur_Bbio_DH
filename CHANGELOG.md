@@ -3,6 +3,42 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.4 — évolution (15/11/2026), bâtiments de départ en CSV
+
+« Pédagogie » passe en 0.9.6 ; « Diffusion » (module de la chaleur), qui occupait ce numéro, passe en 0.9.12,
+après la maison individuelle, pour ne pas renuméroter la validation (0.9.8) ni la maison individuelle (0.9.10).
+
+- **Bâtiments de départ lus dans des CSV** (`donnees/batiments/`, `interface/saisie.py`, `lire_batiment`,
+  `lire_batiments`) : un fichier par bâtiment, colonnes `champ;valeur;unite;description`, ligne `nom` obligatoire.
+  Les fichiers sont lus au lancement par ordre alphabétique ; le premier est celui de la page à son ouverture.
+  Un champ absent prend la valeur par défaut de `Boite`. Refusés avec le fichier et la ligne : les 13 saisies
+  d'enveloppe (données par le niveau), un champ inconnu ou écrit deux fois, une valeur illisible, une zone
+  climatique inconnue, une boîte que `construire_projet` refuse, deux bâtiments de même nom. Deux fichiers
+  fournis, complets, qui servent de modèle : `01_logement_70m2.csv`, `02_immeuble_9_logements.csv` ; mode
+  d'emploi dans `donnees/batiments/README.md`.
+- **Nouveau logement de 70 m²** (valeurs par défaut de `Boite`) : zone H1a (H3 avant), façade principale 7 m et
+  profondeur 10 m (10 × 7 avant), baies 25 % devant et derrière, pignons aveugles (30 / 10 / 20 / 10 % avant),
+  protections à gestion manuelle motorisée (manuelle avant). L'immeuble prend les mêmes valeurs et ne garde à
+  lui que sa forme.
+- `config/reglages.py` : `DOSSIER_BATIMENTS`. Aide du menu « Bâtiment de départ » : le dossier des CSV.
+
+Vérification
+
+| Bâtiment | Niveau | Bbio (max) | DH °C.h (max 1 250) |
+|---|---|---|---|
+| Logement de 70 m² | Performant | 90,7 (91,0) | 609 |
+| Logement de 70 m² | Moyen | 114,8 (91,0) | 786 |
+| Logement de 70 m² | Faible | 135,5 (91,0) | 991 |
+| Immeuble de 9 logements | Performant | 48,7 (82,8) | 511 |
+| Immeuble de 9 logements | Moyen | 58,2 (82,8) | 675 |
+| Immeuble de 9 logements | Faible | 65,8 (82,8) | 859 |
+
+- `Boite()` : Bbio 121,2 (max 91,0), DH 1 062 °C.h.
+- Tests : 348 réussis, 2 sautés ; 1 nouveau (lecture des CSV et refus). Les tests de géométrie emploient
+  `QUATRE_FACADES`, l'immeuble vitré comme en 0.9.0.
+- Vu dans Chrome : ouverture sur le logement 7 × 10 m (pignon A à 0 %, façade principale à 25 %, DH 786) ;
+  passage à l'immeuble, curseurs à jour.
+
 ## 0.9.2 — évolution (15/11/2026), niveaux d'enveloppe
 
 « Pédagogie » passe en 0.9.4 (numéro libre depuis la révision de l'ordre des versions).

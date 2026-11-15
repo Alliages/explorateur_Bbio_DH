@@ -1,0 +1,30 @@
+champ;valeur;unite;description
+nom;Logement de 70 m²;;nom affiché dans le menu « Bâtiment de départ »
+zone_climatique;H1a;;zone climatique RE2020 : H1a, H1b, H1c, H2a, H2b, H2c, H2d ou H3
+altitude_m;50;m;altitude du terrain
+exposition_bruit;BR1;;exposition au bruit : BR1, BR2 ou BR3 (module le Bbio max et l'ouverture des baies)
+longueur_m;7;m;longueur de la façade principale
+profondeur_m;10;m;profondeur du bâtiment (longueur des pignons)
+nb_niveaux;1;;nombre de niveaux
+hauteur_etage_m;2,8;m;hauteur d'étage, de plancher à plancher
+hauteur_sous_plafond_m;2,5;m;hauteur sous plafond
+orientation_deg;0;°;orientation de la façade principale : 0 sud, 90 ouest, 180 nord, -90 est
+part_habitable;1;-;surface habitable / surface de plancher (entre 0 et 1)
+nb_logements;1;;nombre de logements
+traversant;oui;;logements traversants : oui ou non
+part_vitree_principale;0,25;-;surface de baies / surface de la façade principale (0,25 = 25 %)
+part_vitree_pignon_a;0;-;surface de baies / surface du pignon A (façade principale + 90° : à l'ouest si elle est au sud)
+part_vitree_arriere;0,25;-;surface de baies / surface de la façade arrière
+part_vitree_pignon_b;0;-;surface de baies / surface du pignon B (façade principale - 90° : à l'est si elle est au sud)
+protection;volet;;protection mobile des baies : aucune, volet ou store_enroulable
+gestion_protection;manuelle_motorisee;;gestion de la protection : manuelle_non_motorisee, manuelle_motorisee ou automatique
+ouvrable;oui;;baies ouvrables : oui ou non
+debord_m;0;m;profondeur des balcons ou casquettes au-dessus des baies (0 : aucun ; 3 m au plus)
+facades_debord;principale;;façades qui portent les balcons, séparées par une virgule : principale, pignon_a, arriere, pignon_b
+plancher_sur_sol;oui;;plancher bas sur le sol (oui) ou sur l'extérieur (non)
+teinte;moyenne;;teinte des murs et de la toiture : claire, moyenne, sombre ou noire
+climatise;non;;logements climatisés : oui ou non (change le DH max ; le DH se calcule toujours sans climatisation)
+brasseurs;non;;brasseurs d'air : oui ou non
+brasseurs_par_logement;2;;nombre de brasseurs par logement
+brasseur_debit_m3h;11000;m³/h;débit d'un brasseur (valeur du fabricant)
+brasseur_puissance_w;40;W;puissance d'un brasseur (valeur du fabricant)

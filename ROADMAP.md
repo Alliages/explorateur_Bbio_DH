@@ -22,10 +22,11 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.0 | Fonctionnel | Outil utilisable de bout en bout : contrôle visuel, balcons, comparaison de deux variantes, calcul plus rapide | fait, hors mise en ligne (accord et lien en attente) |
 | 0.9.1 | Choix du calcul | DH, Bbio ou les deux (seul le calcul demandé est lancé) ; bâtiment de départ : logement de 70 m² ou immeuble de 9 logements | fait |
 | 0.9.2 | Niveaux d'enveloppe | Trois enveloppes de départ (performante, moyenne, faible) tirées de 18 zones de logements de 6 études RE2020 (`donnees/typologies_logements.csv`, `outils/typologies/`) | fait |
-| 0.9.4 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées, explications | à faire |
-| 0.9.6 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) | à faire |
-| 0.9.8 | Validation | Calage sur plus de 10 RSEE de logements collectifs et sur OPEE ; cible Bbio à ± 10 % | à faire |
+| 0.9.4 | Bâtiments en CSV | Bâtiments de départ lus dans `donnees/batiments/` (un CSV par bâtiment) ; nouveau logement de 70 m² (H1a, 7 × 10 m, baies 25 % devant et derrière, pignons aveugles, gestion motorisée) | fait |
+| 0.9.6 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées, explications | à faire |
+| 0.9.8 | Validation | Calage sur plus de 10 RSEE de logements collectifs et sur OPEE ; cible Bbio à ± 10 %. Export d'un bâtiment en CSV depuis l'interface (bouton « Télécharger ce bâtiment ») | à faire |
 | 0.9.10 | Maison individuelle | Second usage | à faire |
+| 0.9.12 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
 ## En attente
@@ -52,7 +53,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - saisies restantes : masque lointain (immeuble en face), joues et loggias, Sw2, gestion des brasseurs par
     thermostat (à attendre le calage du DH de Sète, voir plus bas), plusieurs groupes (traversant et non
     traversant). Le Uw horizontal ne concerne pas la boîte (pas de baie en toiture) ;
-  - briques à écrire (0.9.4) : bilan des flux d'une journée (baies, parois, ventilation, apports, inertie),
+  - briques à écrire (0.9.6) : bilan des flux d'une journée (baies, parois, ventilation, apports, inertie),
     effet des protections mobiles, rafraîchissement nocturne, Bbio max et ses modulations, brasseurs d'air,
     effet d'un balcon selon l'orientation ;
   - comparaison : superposer la référence sur les graphiques des briques (aujourd'hui : un tableau d'écarts) ;
@@ -68,7 +69,11 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - 6 opérations seulement : refaire `donnees/typologies_logements.csv` avec les RSEE du calage (0.9.8), et
     séparer collectif et maison individuelle quand ce second usage arrivera (0.9.10) ;
   - montrer le graphique `docs/graphique_pedagogique_logements.png` (ou son équivalent interactif) dans
-    l'interface, par exemple dans une brique ou la page d'accueil (0.9.4) ;
+    l'interface, par exemple dans une brique ou la page d'accueil (0.9.6) ;
+- **Bâtiments en CSV, suites de la 0.9.4** :
+  - export du bâtiment affiché en CSV, bouton « Télécharger ce bâtiment » (0.9.8) ;
+  - ouvrir un CSV de bâtiment depuis l'interface (dépôt de fichier) : nécessaire une fois l'outil en ligne, où
+    l'utilisateur ne peut pas écrire dans `donnees/batiments/`.
   - ponts thermiques : le ψ moyen des études couvre tous les ponts, la boîte ne compte que les rives des
     planchers (hypothèse 88) ; une longueur de ponts par m² habitable, tirée des mêmes études, serait plus juste.
 
