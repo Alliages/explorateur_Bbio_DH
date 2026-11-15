@@ -20,6 +20,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.8.17 | Relecture | Correction : documentation (premier calcul et modules dans le README), avertissement du DH, appariement des études par nom, doublons et noms clarifiés ; résultats inchangés | fait |
 | 0.8.18 | Interface | Streamlit : boîte en axonométrie (style cbsh_visuel), saisie, résultats ; briques pédagogiques à deux niveaux (Bbio, DH, semaine chaude) | fait |
 | 0.9.0 | Fonctionnel | Outil utilisable de bout en bout : contrôle visuel, balcons, comparaison de deux variantes, calcul plus rapide | fait, hors mise en ligne (accord et lien en attente) |
+| 0.9.1 | Choix du calcul | DH, Bbio ou les deux (seul le calcul demandé est lancé) ; bâtiment de départ : logement de 70 m² ou immeuble de 9 logements | fait |
 | 0.9.2 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées, explications | à faire |
 | 0.9.6 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) | à faire |
 | 0.9.8 | Validation | Calage sur plus de 10 RSEE de logements collectifs et sur OPEE ; cible Bbio à ± 10 % | à faire |
@@ -43,6 +44,10 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 - **Interface, suites de la 0.9.0** :
   - fait en 0.9.0 : contrôle visuel dans un navigateur et capture du `README.md` ; balcons et casquettes ;
     comparaison de deux variantes ;
+  - **appartement dans un immeuble** (vu en 0.9.1) : le logement de 70 m² est aujourd'hui un petit bâtiment
+    isolé (quatre façades, toiture et plancher bas sur l'extérieur). Un appartement demande des parois mitoyennes
+    et un plancher et un plafond sur d'autres logements (parois sans échange, ou coefficient b), et une saisie
+    pour choisir les façades sur l'extérieur ;
   - saisies restantes : masque lointain (immeuble en face), joues et loggias, Sw2, gestion des brasseurs par
     thermostat (à attendre le calage du DH de Sète, voir plus bas), plusieurs groupes (traversant et non
     traversant). Le Uw horizontal ne concerne pas la boîte (pas de baie en toiture) ;

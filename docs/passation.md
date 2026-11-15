@@ -4,9 +4,17 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 15/11/2026
 
-- Versions **0.8.16** (DH), **0.8.17** (relecture), **0.8.18** (interface) et **0.9.0** (outil fonctionnel)
-  préparées et testées dans l'arbre de travail, **non publiées** (pas de commit : attendre « Push »). Dernière
-  version publiée sur `travail` : 0.8.14. Les quatre versions sont mêlées dans les mêmes fichiers.
+- Dernière version publiée sur `travail` : **0.9.0** (commit f840dc7). **0.9.1** préparée et testée dans l'arbre
+  de travail, non publiée (attendre « Push »).
+- **0.9.1** : choix du calcul, « DH » (par défaut), « Bbio » ou « Bbio et DH » (`formulaire.choisir_calculs`) ;
+  seul le calcul demandé est lancé, chacun a son cache dans `app.py` (`_bbio`, `_dh`) ; `Brique.besoin` dit
+  quel calcul une brique lit. Bâtiment de départ (`saisie.BATIMENTS_DE_DEPART`) : « Logement de 70 m² »
+  (= `Boite()`) ou « Immeuble de 9 logements » (la boîte de la 0.9.0). Changer de bâtiment écrit la valeur de
+  chaque widget (`formulaire.valeurs_des_widgets`). Effacer les clés ne suffit pas : à l'écran, les curseurs
+  gardaient l'ancienne valeur, défaut que seul le navigateur montrait. Toute nouvelle saisie montrée en pour cent ou en
+  entier doit être inscrite dans `CHAMPS_EN_POURCENT` ou `CHAMPS_ENTIERS`.
+  Logement : Bbio 114,7 (max 78,0), DH 1 964 °C.h (max 1 250), hypothèse 87. Temps : 2 s par calcul (4 s les
+  deux) sur un poste peu chargé.
 - **0.9.0** : l'outil s'emploie de bout en bout (`streamlit run app.py`) : décrire une boîte, calculer,
   comprendre par briques, comparer deux variantes. **Non mis en ligne** : il faut un accord explicite et le lien
   Streamlit ; le dépôt est prêt (`README.md`, « Mise en ligne »).
@@ -19,14 +27,16 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
     `gabarit_baie` et `largeur_travee` communs au dessin et au calcul (hypothèse 85 de `docs/audit.md`).
   - `moteur/infiltrations.py` : pression d'équilibre par fausse position bornée (12 évaluations du bilan par
     heure au lieu de 62) ; résultats égaux à 12 chiffres ; étude de Paris inchangée.
-- Boîte de départ : Bbio 62,3 pour un maximum de 69,8 ; DH 1 777 °C.h pour 1 250. Temps de calcul sur ce poste
-  chargé : 15 s (25 s avant), 10 s sans infiltrations. Streamlit 1.67 dans `.venv`.
+- Immeuble de 9 logements (boîte de départ de la 0.9.0) : Bbio 62,3 pour un maximum de 69,8 ; DH 1 777 °C.h
+  pour 1 250. Temps de calcul en 0.9.0 sur le poste chargé : 15 s (25 s avant), 10 s sans infiltrations.
+  Streamlit 1.67 dans `.venv`.
 - 0.8.17 : relecture sans effet sur le calcul. 0.8.16 : `moteur/confort.py`, `moteur/dh.py`,
   `calculer_besoins(mode="th_d")`, règles Th-D des protections et des ouvertures, brasseurs lus dans les RSET,
   `outils/comparer_reference.py --dh`.
-- Tests : `python -m pytest` → 345 réussis, 2 sautés (classeurs de `_references/` absents), en 2 à 3 min.
-- `docs/audit.md` : sections 0.8.16 (hypothèses 75 à 84), 0.8.17 et 0.9.0 (constats du contrôle visuel, temps de
-  calcul, hypothèses 85 et 86).
+- Tests : `python -m pytest` → 346 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
+  minute sur un poste peu chargé.
+- `docs/audit.md` : sections 0.8.16 (hypothèses 75 à 84), 0.8.17, 0.9.0 (constats du contrôle visuel, temps de
+  calcul, hypothèses 85 et 86) et 0.9.1 (temps par calcul, hypothèse 87).
 - **Résultat à garder en tête** : période de confort adaptatif et DH max identiques aux études ; DH de − 2 à
   + 13 % sur les quatre groupes sans brasseurs, + 14 à + 28 % à Paris et à Nice avec brasseurs, − 35 à − 41 % à
   Sète.
@@ -36,7 +46,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## Prochaine étape
 
-« Push » des quatre versions, puis mise en ligne sur accord. Ensuite la 0.9.2 (pédagogie) : page d'accueil,
+« Push » de la 0.9.1, puis mise en ligne sur accord. Ensuite la 0.9.2 (pédagogie) : page d'accueil,
 nouvelles briques (point « Interface, suites de la 0.9.0 » de `ROADMAP.md`). Écrire une brique : un fichier dans
 `interface/briques/` (voir `base.py`) et une ligne dans `__init__.py`. Deux points vus à l'écran et notés dans
 `ROADMAP.md` : protections baissées à 75 % jour et nuit pendant la semaine chaude ; dernier jour incomplet sur le

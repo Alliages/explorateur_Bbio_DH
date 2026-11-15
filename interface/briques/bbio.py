@@ -110,4 +110,5 @@ BRIQUE = Brique(
              "$B_{bio,max} = B_{bio,max\\,moyen} \\times (1 + \\sum M_b)$."),
     reference=("arrêté du 4 août 2021, annexe III, fiche 13.1, éq. 2385 ; Bbio max : code de la construction et "
                "de l'habitation, annexe à l'article R. 172-4, chapitres II et III."),
-    code=(points_bbio, bbio_max))
+    code=(points_bbio, bbio_max),
+    besoin="bbio")

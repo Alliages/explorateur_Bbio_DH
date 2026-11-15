@@ -1,5 +1,7 @@
-"""Interface (0.8.18, 0.9.0) : la boîte et son projet, l'axonométrie, les briques, la comparaison de deux
-variantes et la page entière."""
+"""Interface (0.8.18, 0.9.0, 0.9.1) : la boîte et son projet, les bâtiments de départ, l'axonométrie, les
+briques, la comparaison de deux variantes, le choix du calcul et la page entière.
+
+Les chiffres de la 0.9.0 (576 m², Bbio 62,3, DH 1 777) sont ceux de l'immeuble de 9 logements."""
 
 import math
 import os
@@ -13,9 +15,11 @@ import pytest
 from config.reglages import RACINE
 from interface.axonometrie import VUES, Projection, decouper_baies, dessiner, direction
 from interface.comparaison import LIBELLES, differences, ecarts
-from interface.saisie import (CLE_GROUPE, PART_VITREE_MAX, Boite, construire_projet, gabarit_baie, largeur_travee,
-                              point_cardinal)
+from interface.saisie import (BATIMENTS_DE_DEPART, CLE_GROUPE, PART_VITREE_MAX, Boite, construire_projet,
+                              gabarit_baie, largeur_travee, point_cardinal)
 from moteur.hypotheses import hyp
+
+IMMEUBLE = BATIMENTS_DE_DEPART["Immeuble de 9 logements"]
 
 
 def _groupe(boite):
@@ -26,7 +30,7 @@ def _groupe(boite):
 # SAISIE : de la boîte au projet
 # ============================================================
 def test_boite_de_depart_surfaces_et_orientations():
-    boite = Boite()
+    boite = IMMEUBLE
     groupe = _groupe(boite)
     # 20 m × 12 m × 3 niveaux × 0,8 de part habitable
     assert groupe.surface_m2 == pytest.approx(576.0)
@@ -42,8 +46,21 @@ def test_boite_de_depart_surfaces_et_orientations():
     assert (construire_projet(boite).batiments[0].nom, "Logements", groupe.nom) == CLE_GROUPE
 
 
+def test_batiments_de_depart():
+    """Le logement de 70 m² est la boîte par défaut ; l'immeuble ne change que la forme."""
+    logement = BATIMENTS_DE_DEPART["Logement de 70 m²"]
+    assert next(iter(BATIMENTS_DE_DEPART.values())) == logement == Boite()
+    groupe = _groupe(logement)
+    assert groupe.surface_m2 == pytest.approx(70.0) and groupe.nb_logements == 1
+    assert [p.surface_m2 for p in groupe.parois if p.type != "mur"] == [70.0, 70.0]
+    assert _groupe(IMMEUBLE).surface_m2 == pytest.approx(576.0)
+    from dataclasses import fields
+    changes = {c.name for c in fields(Boite) if getattr(logement, c.name) != getattr(IMMEUBLE, c.name)}
+    assert changes == {"longueur_m", "profondeur_m", "nb_niveaux", "part_habitable", "nb_logements"}
+
+
 def test_orientation_tourne_toutes_les_facades():
-    groupe = _groupe(replace(Boite(), orientation_deg=135.0))
+    groupe = _groupe(replace(IMMEUBLE, orientation_deg=135.0))
     assert [b.orientation_deg for b in groupe.baies] == [135.0, -135.0, -45.0, 45.0]
     assert point_cardinal(135.0) == "nord-ouest" and point_cardinal(-180.0) == "nord"
     assert point_cardinal(350.0) == "sud" and point_cardinal(-80.0) == "est"
@@ -51,29 +68,29 @@ def test_orientation_tourne_toutes_les_facades():
 
 def test_options_de_la_boite():
     # Façade aveugle : pas de baie ; sans protection ni ouverture : le moteur le saura
-    groupe = _groupe(replace(Boite(), part_vitree_arriere=0.0, protection="aucune", ouvrable=False))
+    groupe = _groupe(replace(IMMEUBLE, part_vitree_arriere=0.0, protection="aucune", ouvrable=False))
     assert len(groupe.baies) == 3
     assert all(b.protection is None and not b.ouvrable for b in groupe.baies)
     # Teinte : absorption lue dans les hypothèses ; plancher sur l'extérieur ; étanchéité parfaite
-    groupe = _groupe(replace(Boite(), teinte="sombre", plancher_sur_sol=False, permeabilite_q4pa=0.0,
+    groupe = _groupe(replace(IMMEUBLE, teinte="sombre", plancher_sur_sol=False, permeabilite_q4pa=0.0,
                              psi_planchers=0.0))
     assert groupe.parois[0].alpha == hyp("alpha_teinte_sombre") == 0.8
     assert groupe.parois[-1].contact == "exterieur"
     assert groupe.permeabilite_q4pa is None and groupe.ponts_thermiques == []
     # Ponts thermiques : une rive par plancher, sur tout le périmètre
-    assert _groupe(Boite()).ponts_thermiques[0].longueur_m == pytest.approx(64.0 * 4)
+    assert _groupe(IMMEUBLE).ponts_thermiques[0].longueur_m == pytest.approx(64.0 * 4)
     # Brasseurs : surface desservie plafonnée (15 m² par brasseur, sans dépasser la surface habitable)
-    brasseur = _groupe(replace(Boite(), brasseurs=True)).brasseurs[0]
+    brasseur = _groupe(replace(IMMEUBLE, brasseurs=True)).brasseurs[0]
     assert brasseur.nombre == 18 and brasseur.surface_desservie_m2 == pytest.approx(270.0)
-    assert _groupe(replace(Boite(), brasseurs=True, brasseurs_par_logement=6)).brasseurs[0] \
+    assert _groupe(replace(IMMEUBLE, brasseurs=True, brasseurs_par_logement=6)).brasseurs[0] \
         .surface_desservie_m2 == pytest.approx(576.0)
 
 
 def test_saisies_refusees_en_clair():
     with pytest.raises(ValueError, match="part vitrée"):
-        construire_projet(replace(Boite(), part_vitree_principale=PART_VITREE_MAX + 0.05))
+        construire_projet(replace(IMMEUBLE, part_vitree_principale=PART_VITREE_MAX + 0.05))
     with pytest.raises(ValueError, match="climatisé"):
-        construire_projet(replace(Boite(), brasseurs=True, climatise=True))
+        construire_projet(replace(IMMEUBLE, brasseurs=True, climatise=True))
 
 
 def test_balcons_masque_et_gabarit():
@@ -83,8 +100,8 @@ def test_balcons_masque_et_gabarit():
     assert hauteur + allege + linteau == pytest.approx(2.8) and hauteur == pytest.approx(fh * 2.8)
     assert largeur_travee(20.0) == pytest.approx(20.0 / 7) and largeur_travee(2.0) == 2.0
     # Sans balcon (boîte de départ) : aucun masque
-    assert all(b.masques == [] for b in _groupe(Boite()).baies)
-    groupe = _groupe(replace(Boite(), debord_m=1.2, facades_debord=("principale", "pignon_b")))
+    assert all(b.masques == [] for b in _groupe(IMMEUBLE).baies)
+    groupe = _groupe(replace(IMMEUBLE, debord_m=1.2, facades_debord=("principale", "pignon_b")))
     assert [len(b.masques) for b in groupe.baies] == [1, 0, 0, 1]
     masque, baie = groupe.baies[0].masques[0], groupe.baies[0]
     assert masque.debord_m == 1.2 and masque.distance_m == pytest.approx(linteau)
@@ -92,17 +109,17 @@ def test_balcons_masque_et_gabarit():
     # La surface de la façade principale se retrouve : baies de (largeur × hauteur) par travée et par niveau
     assert baie.largeur_m * baie.hauteur_m * 7 * 3 == pytest.approx(baie.surface_m2)
     with pytest.raises(ValueError, match="balcons"):
-        construire_projet(replace(Boite(), debord_m=5.0))
+        construire_projet(replace(IMMEUBLE, debord_m=5.0))
     with pytest.raises(ValueError, match="inconnues"):
-        construire_projet(replace(Boite(), debord_m=1.0, facades_debord=("toit",)))
+        construire_projet(replace(IMMEUBLE, debord_m=1.0, facades_debord=("toit",)))
 
 
 def test_boite_figee_et_comparable():
     """Deux boîtes égales sont la même clé de cache ; une boîte ne se modifie pas en place."""
-    assert Boite() == Boite() and hash(Boite()) == hash(Boite())
-    assert replace(Boite(), nb_niveaux=4) != Boite()
+    assert IMMEUBLE == IMMEUBLE and hash(IMMEUBLE) == hash(IMMEUBLE)
+    assert replace(IMMEUBLE, nb_niveaux=4) != IMMEUBLE
     with pytest.raises(Exception):
-        Boite().nb_niveaux = 4
+        IMMEUBLE.nb_niveaux = 4
 
 
 # ============================================================
@@ -129,7 +146,7 @@ def test_baies_dessinees_a_l_echelle(part):
 
 @pytest.mark.parametrize("vue", list(VUES))
 def test_svg_valide_dans_toutes_les_vues(vue):
-    boite = replace(Boite(), orientation_deg=30.0, nb_niveaux=6, teinte="sombre")
+    boite = replace(IMMEUBLE, orientation_deg=30.0, nb_niveaux=6, teinte="sombre")
     svg = dessiner(boite, VUES[vue])
     assert svg.startswith("<svg xmlns=")
     racine = ET.fromstring(svg)
@@ -148,10 +165,10 @@ def test_svg_valide_dans_toutes_les_vues(vue):
 
 def test_balcons_dessines_et_etiquettes_couchees():
     espace = "{http://www.w3.org/2000/svg}"
-    sans = ET.fromstring(dessiner(Boite()))
-    avec = ET.fromstring(dessiner(replace(Boite(), debord_m=1.5, facades_debord=("principale", "arriere"))))
+    sans = ET.fromstring(dessiner(IMMEUBLE))
+    avec = ET.fromstring(dessiner(replace(IMMEUBLE, debord_m=1.5, facades_debord=("principale", "arriere"))))
     # Du sud-ouest, seule la façade principale est visible : une dalle par niveau
-    assert len(avec.findall(f"{espace}polygon")) - len(sans.findall(f"{espace}polygon")) == Boite().nb_niveaux
+    assert len(avec.findall(f"{espace}polygon")) - len(sans.findall(f"{espace}polygon")) == IMMEUBLE.nb_niveaux
     # Les deux étiquettes de façade suivent le pied de leur façade
     assert sum("rotate(" in t.get("transform", "") for t in sans.findall(f"{espace}text")) == 2
 
@@ -162,16 +179,16 @@ def test_balcons_dessines_et_etiquettes_couchees():
 def test_differences_de_saisie():
     from dataclasses import fields
     assert set(LIBELLES) == {champ.name for champ in fields(Boite)}        # chaque saisie a son libellé
-    assert differences(Boite(), Boite()) == []
-    variante = replace(Boite(), uw=1.1, orientation_deg=90.0, traversant=False, part_vitree_arriere=0.35)
-    assert differences(Boite(), variante) == [
+    assert differences(IMMEUBLE, IMMEUBLE) == []
+    variante = replace(IMMEUBLE, uw=1.1, orientation_deg=90.0, traversant=False, part_vitree_arriere=0.35)
+    assert differences(IMMEUBLE, variante) == [
         ("Orientation de la façade principale", "sud", "ouest"), ("Logements traversants", "oui", "non"),
         ("Part vitrée, façade arrière", "20 %", "35 %"), ("Uw des baies", "1,4 W/m².K", "1,1 W/m².K")]
     # Un réglage sans effet des deux côtés n'est pas listé ; il l'est dès que son option est allumée
-    assert differences(Boite(), replace(Boite(), brasseur_debit_m3h=9000.0)) == []
-    assert len(differences(replace(Boite(), brasseurs=True),
-                           replace(Boite(), brasseurs=True, brasseur_debit_m3h=9000.0))) == 1
-    assert differences(Boite(), replace(Boite(), debord_m=1.0, facades_debord=("principale", "pignon_a"))) == [
+    assert differences(IMMEUBLE, replace(IMMEUBLE, brasseur_debit_m3h=9000.0)) == []
+    assert len(differences(replace(IMMEUBLE, brasseurs=True),
+                           replace(IMMEUBLE, brasseurs=True, brasseur_debit_m3h=9000.0))) == 1
+    assert differences(IMMEUBLE, replace(IMMEUBLE, debord_m=1.0, facades_debord=("principale", "pignon_a"))) == [
         ("Balcons ou casquettes", "0,0 m", "1,0 m"),
         ("Façades à balcons", "façade principale", "façade principale, pignon a")]
 
@@ -183,7 +200,10 @@ def test_briques_completes_et_code_lisible():
     import inspect
 
     from interface.briques import BRIQUES
+    from interface.calcul import CALCULS
     assert len({b.cle for b in BRIQUES}) == len(BRIQUES) >= 3
+    # Chaque calcul a au moins une brique, et chaque brique dit de quel calcul elle lit les résultats
+    assert {b.besoin for b in BRIQUES} == set(CALCULS)
     for brique in BRIQUES:
         assert brique.titre and brique.phenomene and brique.equation and brique.lecture and brique.reference
         assert brique.icone.startswith(":material/") and callable(brique.afficher)
@@ -207,7 +227,7 @@ def test_moteur_ignore_l_interface():
 @pytest.fixture(scope="module")
 def resultats():
     from interface.calcul import calculer
-    return calculer(replace(Boite(), permeabilite_q4pa=0.0))       # sans infiltrations : deux fois plus rapide
+    return calculer(replace(IMMEUBLE, permeabilite_q4pa=0.0))       # sans infiltrations : deux fois plus rapide
 
 
 def test_calcul_de_la_boite(resultats):
@@ -246,32 +266,71 @@ def test_ecarts_entre_deux_calculs(resultats):
     assert lignes["Bbio"]["ecart_pct"] == pytest.approx(-10.0)
     assert lignes["DH"]["ecart"] == pytest.approx(100.0) and lignes["Chauffage"]["ecart"] == 0.0
     assert all(ligne["ecart"] == 0.0 for ligne in ecarts(resultats, resultats))
+    # DH seul d'un côté : seuls les indicateurs du DH sont comparés
+    from interface.calcul import Resultats
+    dh_seul = Resultats(dh=resultats.dh, ete=resultats.ete)
+    assert dh_seul.calculs() == ("dh",) and resultats.calculs() == ("bbio", "dh")
+    assert [ligne["indicateur"] for ligne in ecarts(resultats, dh_seul)] == [
+        "DH", "Heures d'inconfort", "Température la plus haute"]
 
 
 def test_page_entiere(resultats, monkeypatch):
-    """La page s'affiche, chaque brique aussi, et une saisie modifiée attend le bouton « Calculer »."""
+    """La page s'affiche avec le DH seul, puis avec le Bbio et le DH ; chaque brique s'affiche ; une saisie
+    modifiée attend le bouton « Calculer » ; changer de bâtiment remet les saisies à ses valeurs."""
     from streamlit.testing.v1 import AppTest
 
     import interface.calcul
-    monkeypatch.setattr(interface.calcul, "calculer", lambda boite: resultats)      # pas de second calcul
+    from interface.briques import BRIQUES
+    # Pas de vrai calcul : chaque appel est compté, pour vérifier que seul le calcul demandé est lancé
+    appels = []
+    monkeypatch.setattr(interface.calcul, "resultats_bbio", lambda boite: appels.append(("bbio", boite)) or {
+        "bbio": resultats.bbio, "mensuel": resultats.mensuel})
+    monkeypatch.setattr(interface.calcul, "resultats_dh", lambda boite: appels.append(("dh", boite)) or {
+        "dh": resultats.dh, "ete": resultats.ete})
     page = AppTest.from_file(os.path.join(RACINE, "app.py"), default_timeout=60).run()
     assert not page.exception
-    assert [m.label for m in page.metric][:4] == ["Surface habitable", "Baies / surface habitable", "Bbio", "DH"]
-    assert page.button(key="calculer").disabled and not page.warning
 
-    from interface.briques import BRIQUES
+    # Ouverture : le logement de 70 m², le DH seul, sans brique Bbio
+    assert [m.label for m in page.metric][:3] == ["Surface habitable", "Baies / surface habitable", "DH"]
+    assert "Bbio (points)" not in [m.label for m in page.metric] and page.metric[0].value.startswith("70")
+    assert [nom for nom, _ in appels] == ["dh"] and page.button(key="calculer").disabled and not page.warning
+    assert page.segmented_control(key="brique").options == [b.titre for b in BRIQUES if b.besoin == "dh"]
+
+    # Bbio et DH : seul le Bbio est calculé, le DH vient de la mémoire
+    page.segmented_control(key="choix_calculs").set_value("Bbio et DH").run()
+    assert not page.button(key="calculer").disabled and any("calcul précédent" in w.value for w in page.warning)
+    page.button(key="calculer").click().run()
+    assert not page.exception and [nom for nom, _ in appels] == ["dh", "bbio"]
+    assert [m.label for m in page.metric][2:4] == ["Bbio (points)", "DH"]
     for brique in BRIQUES:
         page.session_state["brique"] = brique.cle
         page.run()
         assert not page.exception and page.subheader[-1].value == brique.titre
 
+    # Retour au DH seul alors que la brique Bbio est affichée : la page revient à la première brique du DH
+    page.session_state["brique"] = "bbio"
+    page.segmented_control(key="choix_calculs").set_value("DH").run()
+    page.button(key="calculer").click().run()
+    assert not page.exception and page.subheader[-1].value == BRIQUES[1].titre and len(appels) == 2
+
     # Saisie modifiée : le dessin suit, les résultats attendent
     page.slider(key="nb_niveaux").set_value(5).run()
     assert not page.exception and not page.button(key="calculer").disabled
     assert any("calcul précédent" in w.value for w in page.warning)
-    assert page.metric[0].value.startswith("960")
+    assert page.metric[0].value.startswith("350")
     page.button(key="calculer").click().run()
     assert not page.exception and page.button(key="calculer").disabled
+
+    # Changer de bâtiment remet toutes les saisies à ses valeurs, y compris celles modifiées à la main
+    from interface.formulaire import valeurs_des_widgets
+    page.selectbox(key="batiment_depart").set_value("Immeuble de 9 logements").run()
+    assert not page.exception and page.slider(key="nb_niveaux").value == 3 and page.slider(key="longueur_m").value == 20
+    assert all(page.session_state[cle] == valeur for cle, valeur in valeurs_des_widgets(IMMEUBLE).items())
+    assert page.metric[0].value.startswith("576")
+    page.button(key="calculer").click().run()
+    assert not page.exception and appels[-1] == ("dh", IMMEUBLE)
+    page.selectbox(key="batiment_depart").set_value("Logement de 70 m²").run()
+    assert page.slider(key="nb_niveaux").value == 1 and page.metric[0].value.startswith("70")
 
     # Référence : gardée, puis comparée à une variante avec balcons ; le second bouton « Calculer » sert aussi
     assert not page.dataframe

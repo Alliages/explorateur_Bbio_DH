@@ -120,4 +120,5 @@ BRIQUE = Brique(
              "$\\theta_{rm}(j) = 0{,}8 \\times \\theta_{rm}(j-1) + 0{,}2 \\times$ moyenne de la veille. La nuit, "
              "en habitation, le seuil est la consigne."),
     reference="arrêté du 4 août 2021, annexe III, fiche 3.1, éq. 1 et 2, et fiche 13.5, éq. 2543 à 2545.",
-    code=(seuil_confort_chaud, moyenne_glissante_exterieure))
+    code=(seuil_confort_chaud, moyenne_glissante_exterieure),
+    besoin="dh")

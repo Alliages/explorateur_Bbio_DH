@@ -19,9 +19,11 @@ puis ouvrir http://localhost:8501.
 
 ![La page : la boîte dessinée, ses chiffres clés et les briques](docs/capture_interface.jpg)
 
-1. **Décrire** une boîte de logements dans le menu de gauche (site, forme, baies et balcons, parois, air, confort
-   d'été) : elle se dessine aussitôt en axonométrie.
-2. **Calculer** : le bouton lance le Bbio et le DH, heure par heure sur deux années (quelques secondes).
+1. **Décrire** une boîte de logements dans le menu de gauche, en partant d'un logement de 70 m² ou d'un immeuble
+   de 9 logements (site, forme, baies et balcons, parois, air, confort d'été) : elle se dessine aussitôt en
+   axonométrie.
+2. **Calculer** : le bouton lance le calcul choisi, DH (par défaut), Bbio ou les deux, heure par heure sur une
+   année chacun (quelques secondes par calcul).
 3. **Comprendre** : les résultats se lisent par briques, sur deux niveaux : le phénomène, un graphique et des
    ordres de grandeur ; puis, dans un volet, l'équation, sa référence et le code du moteur.
 4. **Comparer** : « Garder comme référence », changer une saisie, recalculer : la page montre ce qui a changé et

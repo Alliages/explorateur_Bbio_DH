@@ -134,9 +134,14 @@ def differences(reference, variante):
 # ============================================================
 def ecarts(resultats_reference, resultats):
     """Indicateurs côte à côte : liste de dictionnaires indicateur, unite, decimales, reference, variante,
-    ecart (variante − référence) et ecart_pct (None si la référence est nulle)."""
+    ecart (variante − référence) et ecart_pct (None si la référence est nulle).
+
+    Seuls figurent les indicateurs des calculs lancés des deux côtés (Bbio, DH ou les deux).
+    """
     lignes = []
     for nom, table, cle, unite, decimales in INDICATEURS:
+        if getattr(resultats_reference, table) is None or getattr(resultats, table) is None:
+            continue
         avant, apres = getattr(resultats_reference, table)[cle], getattr(resultats, table)[cle]
         lignes.append({"indicateur": nom, "unite": unite, "decimales": decimales, "reference": avant,
                        "variante": apres, "ecart": apres - avant,

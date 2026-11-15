@@ -44,6 +44,8 @@ class Brique:
     lecture     ce que désignent les symboles de l'équation
     reference   où la trouver dans les textes (annexe, fiche, équation)
     code        fonctions du moteur montrées dans le volet
+    besoin      calcul dont la brique lit les résultats : « bbio » ou « dh » (interface/calcul.py) ; la page
+                ne propose la brique que si ce calcul a été lancé
     """
     cle: str
     titre: str
@@ -55,6 +57,7 @@ class Brique:
     lecture: str
     reference: str
     code: tuple = ()
+    besoin: str = ""
 
 
 def montrer(brique, resultats, boite):

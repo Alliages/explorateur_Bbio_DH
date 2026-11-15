@@ -68,8 +68,10 @@ CLE_GROUPE = (NOM_BATIMENT, NOM_ZONE, NOM_GROUPE)       # clé des résultats ho
 # ============================================================
 @dataclass(frozen=True)
 class Boite:
-    """Description simple d'un immeuble de logements : tout ce que l'interface fait saisir.
+    """Description simple d'un bâtiment de logements : tout ce que l'interface fait saisir.
 
+    Valeurs par défaut : le logement de 70 m² de BATIMENTS_DE_DEPART, un petit bâtiment isolé (quatre façades,
+    toiture et plancher bas sur l'extérieur ou le sol), calculé comme du logement collectif.
     Figée (frozen) : deux boîtes égales donnent le même calcul, ce qui sert de clé au cache de l'interface.
     """
     # --- Site ---
@@ -77,14 +79,14 @@ class Boite:
     altitude_m: float = 50.0
     exposition_bruit: str = "BR1"           # BR1, BR2 ou BR3 : module le Bbio max et l'ouverture des baies
     # --- Forme ---
-    longueur_m: float = 20.0                # façade principale
-    profondeur_m: float = 12.0
-    nb_niveaux: int = 3
+    longueur_m: float = 10.0                # façade principale
+    profondeur_m: float = 7.0
+    nb_niveaux: int = 1
     hauteur_etage_m: float = 2.8            # de plancher à plancher
     hauteur_sous_plafond_m: float = 2.5
     orientation_deg: float = 0.0            # de la façade principale : 0 = sud, 90 = ouest
-    part_habitable: float = 0.8             # surface habitable / surface de plancher
-    nb_logements: int = 9
+    part_habitable: float = 1.0             # surface habitable / surface de plancher
+    nb_logements: int = 1
     traversant: bool = True
     # --- Baies ---
     part_vitree_principale: float = 0.30    # surface de baies / surface de la façade
@@ -155,6 +157,19 @@ class Boite:
                           "largeur_m": largeur, "recul_m": autre / 2.0, "surface_m2": surface, "part_vitree": part,
                           "baies_m2": surface * part, "mur_m2": surface * (1.0 - part)})
         return liste
+
+
+# ============================================================
+# BÂTIMENTS DE DÉPART (premier choix du menu de gauche)
+# ============================================================
+# Choisir l'un d'eux remet toutes les saisies à ses valeurs. Le premier est celui de la page à son ouverture.
+BATIMENTS_DE_DEPART = {
+    # 10 m × 7 m, un niveau, un logement : 70 m² habitables
+    "Logement de 70 m²": Boite(),
+    # 20 m × 12 m, trois niveaux, 80 % habitables : 576 m² (la boîte de départ de la 0.9.0, Bbio 62,3, DH 1 777)
+    "Immeuble de 9 logements": Boite(longueur_m=20.0, profondeur_m=12.0, nb_niveaux=3, part_habitable=0.8,
+                                     nb_logements=9),
+}
 
 
 def gabarit_baie(part_vitree, hauteur_etage_m):

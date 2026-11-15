@@ -4,19 +4,22 @@
 ============================================================
  Lancement local :  streamlit run app.py
 
- La page tient en trois gestes :
-   1. décrire une boîte dans le menu de gauche (interface/formulaire.py) ;
-   2. la voir tourner et se vitrer aussitôt (interface/axonometrie.py) ;
-   3. lancer le calcul, puis lire les résultats brique par brique
-      (interface/briques/) : le phénomène d'abord, l'équation, la
-      référence et le code dans un volet ;
+ La page tient en quatre gestes :
+   1. partir d'un bâtiment (logement de 70 m² ou immeuble) et le
+      modifier dans le menu de gauche (interface/formulaire.py) ;
+   2. le voir tourner et se vitrer aussitôt (interface/axonometrie.py) ;
+   3. lancer le calcul (DH, Bbio ou les deux), puis lire les
+      résultats brique par brique (interface/briques/) : le
+      phénomène d'abord, l'équation, la référence et le code dans
+      un volet ;
    4. garder un calcul comme référence, changer une saisie et lire
       l'écart (interface/comparaison.py).
 
- Le dessin suit la saisie sans attendre ; le calcul (3 à 8 s),
- lui, ne part qu'au bouton « Calculer ». Tant qu'il n'est pas
- relancé, les résultats affichés sont ceux de la saisie
- précédente, et la page le dit.
+ Le dessin suit la saisie sans attendre ; le calcul (2 à 8 s
+ chacun), lui, ne part qu'au bouton « Calculer ». Tant qu'il
+ n'est pas relancé, les résultats affichés sont ceux de la saisie
+ précédente, et la page le dit. Le Bbio et le DH sont gardés en
+ mémoire séparément : ajouter l'un à l'autre ne relance que lui.
 
  Ce fichier ne fait qu'assembler : aucun calcul ici. Le moteur
  (moteur/) ne connaît pas l'interface.
@@ -26,13 +29,12 @@
 import streamlit as st
 
 from config.reglages import lire_version
-from interface import axonometrie, comparaison
+from interface import axonometrie, calcul, comparaison
 from interface.briques import BRIQUES
 from interface.briques.base import montrer
 from interface.briques.graphiques import nombre
-from interface.calcul import calculer
-from interface.formulaire import saisir
-from interface.saisie import Boite, point_cardinal
+from interface.formulaire import CHOIX_CALCULS, choisir_batiment, choisir_calculs, saisir
+from interface.saisie import BATIMENTS_DE_DEPART, point_cardinal
 
 # ============================================================
 # RÉGLAGES
@@ -41,35 +43,57 @@ TITRE = "Explorateur Bbio / DH"
 SOUS_TITRE = ("Recalculer, de façon approchée, le Bbio et les degrés-heures d'inconfort d'une boîte de logements, "
               "pour comprendre ce qui les fait bouger. Outil pédagogique, sans valeur réglementaire.")
 DEPOT = "https://github.com/Alliages/explorateur_Bbio_DH"
-CALCULS_GARDES = 24             # nombre de saisies dont le résultat reste en mémoire (0,7 Mo chacune)
+CALCULS_GARDES = 24             # nombre de saisies dont chaque calcul reste en mémoire (0,7 Mo pour le DH)
+LIBELLES_CALCULS = {"bbio": "du Bbio", "dh": "du DH"}
 
 st.set_page_config(page_title=TITRE, page_icon=":material/deployed_code:", layout="wide")
 
 
+# Un cache par calcul : revenir à une saisie déjà calculée est immédiat, et demander le Bbio en plus du DH ne
+# relance pas le DH. Les fonctions sont lues dans le module calcul à chaque appel (les tests les remplacent).
 @st.cache_data(max_entries=CALCULS_GARDES, show_spinner=False)
-def _calculer(boite):
-    """Bbio et DH d'une boîte ; gardés en mémoire : revenir à une saisie déjà calculée est immédiat."""
-    return calculer(boite)
+def _bbio(boite):
+    return calcul.resultats_bbio(boite)
+
+
+@st.cache_data(max_entries=CALCULS_GARDES, show_spinner=False)
+def _dh(boite):
+    return calcul.resultats_dh(boite)
+
+
+def _calculer(boite, calculs):
+    """Résultats des calculs demandés pour une boîte, chacun pris dans son cache."""
+    parties = {"bbio": _bbio, "dh": _dh}
+    champs = {}
+    for nom in calculs:
+        champs.update(parties[nom](boite))
+    return calcul.Resultats(**champs)
 
 
 # ============================================================
 # 1. SAISIE (menu de gauche)
 # ============================================================
-if "boite_calculee" not in st.session_state:
-    st.session_state["boite_calculee"] = Boite()            # premier affichage : la boîte de départ, déjà calculée
+if "boite_calculee" not in st.session_state:                # premier affichage : le premier bâtiment, déjà calculé
+    st.session_state["boite_calculee"] = next(iter(BATIMENTS_DE_DEPART.values()))
+    st.session_state["calculs_lances"] = next(iter(CHOIX_CALCULS.values()))
 
 with st.sidebar:
     st.header("La boîte")
+    depart = choisir_batiment()
+    calculs = choisir_calculs()
     zone_bouton = st.container()                            # le bouton reste en haut, au-dessus des volets
-    boite = saisir()
+    boite = saisir(depart)
+    demande = {"boite_calculee": boite, "calculs_lances": calculs}
+    deja_fait = boite == st.session_state["boite_calculee"] and calculs == st.session_state["calculs_lances"]
     if zone_bouton.button("Calculer", type="primary", icon=":material/play_arrow:", width="stretch",
-                          key="calculer", disabled=boite == st.session_state["boite_calculee"]):
-        st.session_state["boite_calculee"] = boite
+                          key="calculer", disabled=deja_fait):
+        st.session_state.update(demande)
         st.rerun()                                          # le bouton se grise aussitôt : la saisie est à jour
     st.caption(f"Version {lire_version()} · licence GPL 3 · [code source]({DEPOT})")
 
 boite_calculee = st.session_state["boite_calculee"]
-a_jour = boite == boite_calculee
+calculs_lances = st.session_state["calculs_lances"]
+a_jour = boite == boite_calculee and calculs == calculs_lances
 
 # ============================================================
 # 2. LA BOÎTE DESSINÉE ET SES CHIFFRES
@@ -98,25 +122,29 @@ with colonne_chiffres:
 # 3. CALCUL (les éléments rapides sont déjà affichés)
 # ============================================================
 try:
-    with st.spinner("Calcul du Bbio et du DH, heure par heure sur deux années…"):
-        resultats = _calculer(boite_calculee)
+    with st.spinner(f"Calcul {' et '.join(LIBELLES_CALCULS[nom] for nom in calculs_lances)}, heure par heure "
+                    "sur une année…"):
+        resultats = _calculer(boite_calculee, calculs_lances)
 except ValueError as erreur:                                # saisie incohérente : message du moteur, en clair
     st.error(str(erreur), title="Saisie à corriger", icon=":material/error:")
     st.stop()
 
 with zone_resultats:
-    cles = st.columns(2)
-    ecart_bbio = (resultats.bbio["bbio"] / resultats.bbio["bbio_max"] - 1.0) * 100.0
-    cles[0].metric("Bbio", nombre(resultats.bbio["bbio"], 1, "points"),
-                   f"{ecart_bbio:+.0f} % du max ({nombre(resultats.bbio['bbio_max'], 1)})", delta_color="inverse")
-    cles[1].metric("DH", nombre(resultats.dh["dh"], 0, "°C.h"),
-                   f"{resultats.dh['ecart_pct']:+.0f} % du max ({nombre(resultats.dh['dh_max'], 0)})",
-                   delta_color="inverse")
+    cles = st.columns(2)                                    # un chiffre clé par calcul lancé
+    if resultats.bbio is not None:
+        ecart_bbio = (resultats.bbio["bbio"] / resultats.bbio["bbio_max"] - 1.0) * 100.0
+        cles[0].metric("Bbio (points)", nombre(resultats.bbio["bbio"], 1),      # unité au libellé : 114,7 tient
+                       f"{ecart_bbio:+.0f} % du max ({nombre(resultats.bbio['bbio_max'], 1)})",
+                       delta_color="inverse")
+    if resultats.dh is not None:
+        cles[len(resultats.calculs()) - 1].metric(
+            "DH", nombre(resultats.dh["dh"], 0, "°C.h"),
+            f"{resultats.dh['ecart_pct']:+.0f} % du max ({nombre(resultats.dh['dh_max'], 0)})", delta_color="inverse")
     if not a_jour:
         st.warning("La saisie a changé : ces résultats sont ceux du calcul précédent.", icon=":material/update:")
         # Second bouton, sous les yeux : celui du menu de gauche disparaît quand on fait défiler les volets
         st.button("Calculer", type="primary", icon=":material/play_arrow:", key="calculer_ici",
-                  on_click=st.session_state.update, kwargs={"boite_calculee": boite})
+                  on_click=st.session_state.update, kwargs=demande)
     reference = st.session_state.get("reference")
     st.button("Garder comme référence", icon=":material/bookmark:", key="garder_reference",
               disabled=reference == boite_calculee, on_click=st.session_state.update,
@@ -136,15 +164,19 @@ elif reference is not None:
         titre_comparaison.subheader("Variante face à la référence")
         oublier.button("Oublier la référence", icon=":material/bookmark_remove:", key="oublier_reference",
                        on_click=st.session_state.pop, args=("reference", None), width="stretch")
-        with st.spinner("Calcul de la référence…"):         # immédiat tant que la référence est en mémoire
-            resultats_reference = _calculer(reference)
+        # La référence passe par les mêmes calculs que la variante : immédiat s'ils sont en mémoire
+        with st.spinner("Calcul de la référence…"):
+            resultats_reference = _calculer(reference, calculs_lances)
         comparaison.afficher(reference, resultats_reference, boite_calculee, resultats)
 
 # ============================================================
-# 5. BRIQUES : une seule est affichée à la fois
+# 5. BRIQUES : une seule est affichée à la fois, parmi celles des calculs lancés
 # ============================================================
 st.divider()
-titres = {brique.cle: f"{brique.icone} {brique.titre}" for brique in BRIQUES}
-choix = st.segmented_control("Comprendre", list(titres), default=BRIQUES[0].cle, format_func=titres.get,
+briques = [brique for brique in BRIQUES if brique.besoin in calculs_lances]
+titres = {brique.cle: f"{brique.icone} {brique.titre}" for brique in briques}
+if st.session_state.get("brique") not in titres:            # brique d'un calcul qui n'est plus lancé
+    st.session_state.pop("brique", None)
+choix = st.segmented_control("Comprendre", list(titres), default=briques[0].cle, format_func=titres.get,
                              required=True, key="brique")
-montrer(next(brique for brique in BRIQUES if brique.cle == choix), resultats, boite_calculee)
+montrer(next(brique for brique in briques if brique.cle == choix), resultats, boite_calculee)

@@ -3,6 +3,34 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.1 — évolution (15/11/2026), choix du calcul et bâtiment de départ
+
+Numéro impair pour une évolution, à la demande : 0.9.2 reste réservé à « Pédagogie ».
+
+- **Choix du calcul** (`interface/formulaire.py`, `interface/calcul.py`, `app.py`) : « DH » (par défaut),
+  « Bbio » ou « Bbio et DH », en haut du menu de gauche, au-dessus du bouton « Calculer ». Seul le calcul demandé
+  est lancé. Le Bbio et le DH sont gardés en mémoire séparément : passer du DH seul aux deux ne lance que le
+  Bbio. `calculer()` devient `resultats_bbio()` et `resultats_dh()`, et les champs de `Resultats` d'un calcul
+  non lancé valent `None`.
+- **Briques et comparaison selon le calcul** : chaque brique déclare le calcul dont elle lit les résultats
+  (`Brique.besoin`). La page ne montre que les chiffres clés, les briques et les lignes de comparaison des calculs
+  lancés.
+- **Bâtiment de départ** (`interface/saisie.py`, `BATIMENTS_DE_DEPART`) : « Logement de 70 m² » (par défaut ;
+  10 m × 7 m, un niveau, un logement, 100 % habitable) ou « Immeuble de 9 logements » (la boîte de la 0.9.0).
+  Choisir un bâtiment donne à chaque saisie la valeur de ce bâtiment (`valeurs_des_widgets`). Le logement est un
+  petit bâtiment isolé, calculé comme du logement collectif (hypothèse 87 de `docs/audit.md`).
+- Chiffre clé du Bbio : l'unité passe dans le libellé (« Bbio (points) »), sans quoi « 114,7 points » était coupé.
+
+Vérification
+
+- Immeuble de 9 logements : Bbio 62,3 et DH 1 777 °C.h, comme en 0.9.0.
+- Logement de 70 m² : Bbio 114,7 pour un maximum de 78,0 ; DH 1 964 °C.h pour 1 250.
+- Temps de calcul (poste peu chargé) : Bbio et DH 4,0 s avant ; Bbio seul 1,8 à 2,0 s, DH seul 1,9 à 2,0 s.
+- Page vue dans Chrome : DH seul, Bbio seul, les deux ; aller-retour entre les deux bâtiments après une saisie
+  modifiée à la main.
+- Tests : 1 nouveau (bâtiments de départ) ; page entière, écarts et briques étendus. Suite complète : 346 réussis,
+  2 sautés.
+
 ## 0.9.0 — évolution (15/11/2026), outil fonctionnel
 
 L'outil s'emploie de bout en bout : décrire une boîte, la calculer, comprendre le résultat, comparer deux

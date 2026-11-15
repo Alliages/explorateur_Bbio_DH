@@ -886,3 +886,38 @@ Le reste du temps (protections mobiles, ouvertures, modèle du groupe) reste au 
     les murs ; le dernier niveau est supposé couvert comme les autres (casquette en toiture).
 86. **Recherche de Pib** : la tolérance de 1e-12 Pa et la méthode sont des choix numériques de l'outil ; la fiche
     5.6 ne prescrit que l'équation à résoudre.
+
+## 0.9.1 — choix du calcul et bâtiment de départ
+
+L'interface ne lance que le calcul demandé (DH, Bbio ou les deux) et part d'un logement de 70 m². Le moteur ne
+change pas.
+
+### Temps de calcul
+
+| Cas (poste peu chargé, avec infiltrations) | Bbio | DH | Les deux |
+|---|---|---|---|
+| Immeuble de 9 logements, 0.9.0 | — | — | 4,0 s |
+| Immeuble de 9 logements, 0.9.1 | 1,8 s | 2,0 s | — |
+| Logement de 70 m², 0.9.1 | 2,0 s | 1,9 s | — |
+
+Les deux calculs pèsent autant : n'en lancer qu'un divise le temps par deux.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Bbio et DH de l'immeuble de 9 logements | 0.9.0 : 62,3 et 1 777 °C.h | 62,3 et 1 777 °C.h |
+| Logement de 70 m² | — | Bbio 114,7 (max 78,0) ; DH 1 964 °C.h (max 1 250) |
+| Page entière (`AppTest`) : DH seul, puis les deux sans recalcul du DH, retour au DH seul, changement de bâtiment | Appels comptés | un calcul par demande nouvelle, aucune erreur |
+| Page dans Chrome : DH seul, Bbio seul, les deux ; saisie modifiée puis changement de bâtiment, aller et retour | — | conforme |
+
+Constat du contrôle visuel : effacer les clés des widgets au changement de bâtiment laissait les curseurs sur
+l'ancienne valeur à l'écran (l'`AppTest` ne le voyait pas). Chaque widget reçoit maintenant la valeur du bâtiment
+choisi. Le chiffre clé « 114,7 points » était coupé : l'unité passe dans le libellé.
+
+### Lectures du texte et hypothèses de l'outil
+
+87. **Logement de 70 m²** : un petit bâtiment isolé à un niveau (quatre façades, toiture et plancher bas sur le
+    sol), calculé avec les scénarios, le Bbio max et le DH max du logement collectif, faute de l'usage maison
+    individuelle (0.9.10). Son Bbio élevé (114,7) vient de sa forme : beaucoup de paroi par m² habitable. Un
+    appartement au milieu d'un immeuble est un autre cas, inscrit dans `ROADMAP.md`.

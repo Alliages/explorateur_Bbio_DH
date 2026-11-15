@@ -99,4 +99,5 @@ BRIQUE = Brique(
              "brasseurs d'air. La somme porte sur les heures occupées de la période de confort adaptatif."),
     reference=("arrêté du 4 août 2021, annexe III, fiche 13.5, éq. 2542 à 2551 ; DH max : code de la "
                "construction et de l'habitation, annexe à l'article R. 172-4, chapitres II et III."),
-    code=(degres_heures, dh_max))
+    code=(degres_heures, dh_max),
+    besoin="dh")
