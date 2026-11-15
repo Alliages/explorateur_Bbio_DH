@@ -51,6 +51,8 @@ COLONNES_METEO = ("h", "te0", "we0", "dirN", "diff", "Teciel", "Vent", "Teau", "
 NB_HEURES_ANNEE = 8760
 HEURES_PAR_JOUR = 24
 JOURS_PAR_SEMAINE = 7
+SECONDES_PAR_HEURE = 3600.0
+KELVIN = 273.0                      # écart entre °C et K retenu par l'annexe III (fiches 5.6 et 5.13)
 # Nombre de semaines de chaque mois (janvier → décembre) : 52 semaines, 364 jours
 SEMAINES_PAR_MOIS = (4, 4, 5, 4, 5, 4, 4, 5, 4, 4, 5, 4)
 

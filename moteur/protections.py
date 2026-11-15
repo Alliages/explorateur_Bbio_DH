@@ -46,6 +46,18 @@ r"""
  absence de journée les protections gardent leur position de
  jour, pendant les vacances celle de nuit (fiche 4.1, éq. 52).
 
+ Mode Th-D (§ 5.9.3.6, tableau 34, colonne résidentiel) : en
+ période de confort adaptatif, après une journée où la
+ température opérative a dépassé 26,5 °C, les occupants ferment
+ davantage. Seul Rprot0 change, les seuils d'éclairement restent :
+
+   de jour    Rprot0 = MAX(80 % ; valeur Th-BC) en gestion
+              manuelle motorisée, MAX(70 % ; valeur Th-BC) sinon,
+              locaux occupés ou non ;
+   de nuit    MIN(70 % ; valeur Th-BC) pour les volets (ils
+              restent entrouverts pour ventiler), 50 % pour les
+              stores enroulables.
+
  Hypothèses de l'outil (docs/audit.md, 0.8.12) : les trois seuils
  de la gestion automatique ne figurent ni dans l'annexe ni dans
  les fichiers d'étude ; stores vénitiens et seconde protection
@@ -146,19 +158,41 @@ def ligne_saison(saison_gpm, theta_op_max_veille):
 
 
 def rprot_selon_eclairement(etp, rprot0, ecl1):
-    """Ratio de fermeture en occupation, de jour : croît de Rprot0 (éclairement nul) à 1 (éclairement Ecl1) (éq. 177)."""
+    """Ratio de fermeture en occupation, de jour (éq. 177) : croît de Rprot0 (éclairement nul) à 1 (éclairement
+    Ecl1)."""
     return np.where(etp >= ecl1, 1.0, rprot0 + (1.0 - rprot0) * etp / ecl1)
 
 
-def rprot_manuel_occupe(protection, gestion, ligne, etp, jour):
-    """Rprot des locaux occupés, gestion manuelle ou dérogation manuelle (éq. 188) ; etp et jour par baie."""
+def valeurs_th_d(protection, gestion, de_jour, de_nuit):
+    """(valeur de jour, valeur de nuit) du mode Th-D après une journée chaude (tableau 34, colonne résidentiel).
+
+    de_jour et de_nuit sont les valeurs Th-BC de la ligne de saison en cours. Le détecteur de présence ne joue pas :
+    les deux dérogations manuelles suivent la règle des gestions non motorisées (Type_GPM ≠ 3).
+    """
+    plancher = hyp("gpm_thd_rprot0_motorise") if gestion == "manuelle_motorisee" else hyp("gpm_thd_rprot0_autre")
+    if protection == "volet":
+        nuit = min(hyp("gpm_thd_nuit_volet_max"), de_nuit)
+    else:
+        nuit = hyp("gpm_thd_nuit_store")
+    return max(plancher, de_jour), nuit
+
+
+def rprot_manuel_occupe(protection, gestion, ligne, etp, jour, th_d_chaud=False):
+    """Rprot des locaux occupés, gestion manuelle ou dérogation manuelle (éq. 188) ; etp et jour par baie.
+
+    th_d_chaud : mode Th-D, en période de confort adaptatif, après une journée chaude (éq. 203-204).
+    """
     rprot0, ecl1, nuit = matrices_manuelles()[(protection, gestion, "occupation", ligne)]
+    if th_d_chaud:
+        rprot0, nuit = valeurs_th_d(protection, gestion, rprot0, nuit)
     return np.where(jour, rprot_selon_eclairement(etp, rprot0, ecl1), nuit)
 
 
-def rprot_manuel_inoccupe(protection, gestion, ligne, jour):
+def rprot_manuel_inoccupe(protection, gestion, ligne, jour, th_d_chaud=False):
     """Rprot des locaux inoccupés, gestion manuelle : une valeur de jour, une de nuit (éq. 189)."""
     de_jour, _, de_nuit = matrices_manuelles()[(protection, gestion, "inoccupation", ligne)]
+    if th_d_chaud:
+        de_jour, de_nuit = valeurs_th_d(protection, gestion, de_jour, de_nuit)
     return np.where(jour, de_jour, de_nuit)
 
 
@@ -232,7 +266,7 @@ class ProtectionsGroupe:
         self.chaud = False              # gestion automatique : ambiance chaude (hystérésis entre deux seuils)
         self.nb = nb
 
-    def ratios(self, h, saison, occupe, indice_gpm, theta_op_prec, theta_op_max_veille):
+    def ratios(self, h, saison, occupe, indice_gpm, theta_op_prec, theta_op_max_veille, confort_adaptatif=False):
         """Ratios de fermeture des baies à l'heure h.
 
         saison                 saison propre du groupe (1 à 4, fiche 4.6)
@@ -240,12 +274,16 @@ class ProtectionsGroupe:
         indice_gpm             occupation au sens des protections (1, 0 ou −1)
         theta_op_prec          température opérative en fin d'heure précédente (°C)
         theta_op_max_veille    maximum de cette température la veille (°C)
+        confort_adaptatif      mode Th-D et période de confort adaptatif : après une journée chaude, les valeurs
+                               du tableau 34 remplacent celles des matrices (gestion manuelle et dérogation)
         Sortie : (rprot, rprot_u), par baie. rprot pèse les flux solaires (éq. 209) ; rprot_u pèse le U : il n'en
         diffère qu'en gestion automatique, où la part automatique ne compte que si elle est fermée (éq. 211).
         """
         rprot, rprot_u = np.zeros(self.nb), np.zeros(self.nb)
         saison_gpm = SAISON_GPM[saison]
         ligne = ligne_saison(saison_gpm, theta_op_max_veille)
+        # Mode Th-D : journée chaude la veille, en période de confort adaptatif (éq. 202 à 204)
+        th_d_chaud = bool(confort_adaptatif) and theta_op_max_veille >= hyp("gpm_temperature_limite_manuelle")
         # Ambiance chaude ou fraîche de la gestion automatique, avec hystérésis (fiche 5.9, figure 31)
         if theta_op_prec > hyp("gpm_auto_temperature_haute"):
             self.chaud = True
@@ -262,7 +300,8 @@ class ProtectionsGroupe:
                 auto = rprot_automatique(occupe, saison_gpm, etp, jour, self.chaud)
                 part = self.part_occupee * self.part_derogation if occupe else 0.0      # éq. 179
                 derogation = "derogation_avec_detecteur" if detecteur else "derogation_sans_detecteur"
-                manuel = rprot_manuel_occupe(protection, derogation, ligne, etp, jour) if occupe else 0.0
+                manuel = (rprot_manuel_occupe(protection, derogation, ligne, etp, jour, th_d_chaud)
+                          if occupe else 0.0)
                 r = part * manuel + (1.0 - part) * auto                                 # éq. 209
                 r_u = part * manuel + (1.0 - part) * (auto >= 1.0)                      # éq. 211
             else:
@@ -271,9 +310,9 @@ class ProtectionsGroupe:
                     jour = eclairee
                 else:
                     jour = np.full(len(indices), indice_gpm == ABSENCE_DE_JOUR)
-                inoccupe = rprot_manuel_inoccupe(protection, gestion, ligne, jour)
+                inoccupe = rprot_manuel_inoccupe(protection, gestion, ligne, jour, th_d_chaud)
                 if occupe:
-                    occupes = rprot_manuel_occupe(protection, gestion, ligne, etp, jour)
+                    occupes = rprot_manuel_occupe(protection, gestion, ligne, etp, jour, th_d_chaud)
                     r = self.part_occupee * occupes + (1.0 - self.part_occupee) * inoccupe     # éq. 178, 209
                 else:
                     r = inoccupe
@@ -295,7 +334,8 @@ class ProtectionsGroupe:
                 "hg_es": float(self.surface @ ((1.0 - rprot_u) * self.u_nu + rprot_u * self.u_pro)),
                 "rprot_moyen": float(self.surface @ rprot / self.surface.sum()) if self.nb else 0.0}
 
-    def pas(self, h, saison, occupe, indice_gpm, theta_op_prec, theta_op_max_veille):
+    def pas(self, h, saison, occupe, indice_gpm, theta_op_prec, theta_op_max_veille, confort_adaptatif=False):
         """Ratios puis flux de l'heure h : dictionnaire fs1, fs2, fs3, ftvc, hg_es et rprot_moyen (pondéré par les
         surfaces de baie)."""
-        return self.flux(h, *self.ratios(h, saison, occupe, indice_gpm, theta_op_prec, theta_op_max_veille))
+        return self.flux(h, *self.ratios(h, saison, occupe, indice_gpm, theta_op_prec, theta_op_max_veille,
+                                         confort_adaptatif))

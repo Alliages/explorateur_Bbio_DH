@@ -679,3 +679,210 @@ les compte pas (hypothèse 67) ; la question reste ouverte et figure dans `ROADM
     plancher bas exclues ; les parois sur un espace tampon comptent, comme dans l'indicateur `A_T_perm` des études.
 74. **Perméabilité lue telle quelle** : pas de majoration pour une mesure par échantillonnage ou des travaux restant
     à faire (fiche 5.6) ; les études donnent déjà la valeur de calcul.
+
+## 0.8.16 — DH
+
+`moteur/confort.py` (annexe III, fiche 3.1, éq. 1 et 2 ; fiche 13.5, éq. 2543 à 2546), `moteur/dh.py` (fiche 13.5,
+éq. 2547 à 2551 ; annexe à l'article R. 172-4, chapitre II, IV et chapitre III, IV), mode Th-D de
+`moteur/besoins.py` (fiche 4.6, éq. 76 à 90), de `moteur/protections.py` (fiche 5.9, § 5.9.3.6 et tableau 34) et
+de `moteur/ouvertures.py` (fiche 5.13, § 5.13.3.1). Textes relus sur l'extraction du PDF ; le tableau 34 (page
+218) n'a pu être relu qu'en texte, cellule par cellule.
+
+### Vérifications
+
+Les classeurs horaires de Paris, Sète et Nice (onglet `re2020`) donnent, pour cinq groupes, la température
+extérieure, l'occupation, la température opérative, θrm, le seuil de confort, le seuil corrigé et les
+degrés-heures d'un moteur Th-BCE.
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| θrm : jours de 24 pas depuis l'heure 0 (UTC), nul le premier jour | Colonne θrm des classeurs, cinq groupes | écart maximal 2e-14 °C |
+| Période de confort adaptatif : heures de début et de fin | Dix groupes de cinq RSET : 3 480 à 6 167 (H1a), 2 952 à 7 199 (H3) | identique |
+| Seuil de confort chaud, heure par heure (jour : hlég de 7 à 22) | Colonne du moteur, en occupation, cinq groupes | écart nul |
+| DH à partir de la température opérative et de la correction des brasseurs du moteur | Somme des degrés-heures des classeurs : 345,52 ; 137,38 ; 321,24 ; 454,31 ; 399,25 °C.h | identique à 1e-6 °C.h (1e-14 par heure) |
+| DH max | Dix groupes de cinq RSET (1 250 ; 2 100 ; 2 228,4 ; 2 330,5) | identique |
+| Effet d'un brasseur (éq. 1656 à 1660), débit « justifié » × 0,9, régime intermédiaire | Correction du seuil des classeurs de Paris et de Sète | écart médian 0,007 à 0,02 °C ; 0,17 à 1 °C avec les coefficients 1 ou 0,8 |
+| Chaque heure du calcul Th-D, brasseurs compris : chaleur prise par la masse = somme des flux | Bilan d'énergie | écart < 1e-6 W |
+| Mode Th-B après les modifications | Besoins de l'étude de Paris en 0.8.14 (16,9 ; 27,7 ; 1,5 ; 0,6 kWh/m²) et tests de la 0.8.14 | inchangés |
+| DH d'une étude de 800 composants (deux groupes) | Temps de calcul | 10 à 45 s selon la charge du poste |
+
+Les classeurs horaires ne viennent pas du même calcul que les RSET présents : leur DH diffère (Paris : 345,5 et
+137,4 °C.h dans le classeur, 372,7 et 145,2 dans le RSET). Ils valident donc les formules, pas les températures
+de l'outil.
+
+### Effet sur les cinq études
+
+DH en °C.h, heures d'inconfort en heures. « Sans brasseurs » : le même calcul de l'outil, brasseurs retirés.
+
+| Groupe | Brasseurs | DH étude | DH outil | Écart | DH outil sans brasseurs | Heures étude | Heures outil | DH max |
+|---|---|---|---|---|---|---|---|---|
+| Paris, non traversant | 23 | 372,7 | 435,0 | + 17 % | 610,9 | 160 | 183 | 1 250 |
+| Paris, traversant | 113 | 145,2 | 171,4 | + 18 % | 302,7 | 88 | 111 | 1 250 |
+| Sète, traversant | 90 | 353,6 | 207,0 | − 41 % | 448,3 | 273 | 189 | 1 250 |
+| Sète, non traversant | 56 | 529,7 | 343,8 | − 35 % | 736,4 | 435 | 346 | 1 250 |
+| Nice A climatisée, traversant | 0 | 1 076,6 | 1 160,9 | + 8 % | — | 663 | 755 | 2 100 |
+| Nice A climatisée, non traversant | 0 | 1 979,2 | 1 938,5 | − 2 % | — | 988 | 1 020 | 2 330,5 |
+| Nice A non climatisée, traversant | 74 | 444,4 | 506,1 | + 14 % | 982,8 | 362 | 469 | 1 250 |
+| Nice A non climatisée, non traversant | 15 | 486,2 | 624,2 | + 28 % | 1 480,9 | 393 | 564 | 1 250 |
+| Nice B, traversant | 0 | 1 069,0 | 1 203,6 | + 13 % | — | 664 | 757 | 2 100 |
+| Nice B, non traversant | 0 | 1 919,9 | 2 029,4 | + 6 % | — | 983 | 1 043 | 2 228,4 |
+
+Lecture :
+
+- **Sans brasseurs (quatre groupes de Nice)** : de − 2 à + 13 %. La température de l'année caniculaire est donc
+  proche de celle des études, alors que le besoin de froid du Bbio reste 1,7 à 4 fois trop fort.
+- **Avec brasseurs** : + 14 à + 28 % à Paris et à Nice, − 35 à − 41 % à Sète. Les brasseurs divisent le DH par
+  1,4 à 2,4 : leur régulation pèse autant que le bâtiment. À Sète ils ne servent que la nuit, en gestion par
+  thermostat (écarts 0, 2 et 0 °C) : c'est le premier point à examiner.
+- **Tous les groupes respectent le DH max**, comme dans les études.
+
+### Lectures du texte et hypothèses de l'outil
+
+10. **(revue) Brasseurs d'air : hlég = heure légale de début de pas**, comme partout ailleurs (hypothèse 42). Le
+    jour va du pas de 7h-8h au pas de 22h-23h ; le blocage manuel « hlég > 23 ou hlég ≤ 6 » couvre les pas de 0h
+    à 7h, le pas de 23h-24h étant encore régulé.
+75. **Ventilation du calcul Th-D : débit du Bbio, sans échangeur.** L'outil ne décrit pas le système de
+    ventilation du projet ; l'air neuf entre à la température extérieure (`ventilation_th_d_efficacite` = 0), au
+    débit moyen du groupe. Les infiltrations gardent le modèle du Bbio (soufflage et reprise à volumes égaux).
+76. **Catégorie de contraintes extérieures : règle observée.** Le chapitre V de l'annexe à l'article R. 172-4
+    manque aux sources. Sur dix groupes : catégorie 2 quand le groupe est climatisé et en BR2 ou BR3 (six
+    groupes, DH max de 2 100 à 2 330,5), catégorie 1 sinon, y compris un groupe non climatisé en BR2 (1 250).
+    Aucune étude ne montre un groupe climatisé en BR1 : la colonne « catégorie 1 climatisée en H2d ou H3 » est
+    codée d'après le texte, sans recoupement.
+77. **Saison de refroidissement en Th-D pour tous les groupes.** La fiche 4.6 annule l'autorisation de refroidir
+    d'un groupe sans système de froid, et la fiche 13.5 désactive la climatisation en Th-D ; mais la même fiche
+    4.6 fait démarrer cette saison au premier jour de confort adaptatif « en mode Th-D ». L'outil retient cette
+    seconde lecture : la saison existe (elle choisit la ligne « été » des protections mobiles), sans aucune
+    puissance de froid.
+78. **Chauffage du calcul Th-D** : émetteur conventionnel du Bbio, faute du système du projet ; interdit en
+    période de confort adaptatif (éq. 76, 77 et 80). Pas de relance avant le retour des occupants.
+79. **Tableau 34, lecture.** Type_GPM = 3 est la gestion manuelle motorisée (éq. 180) : plancher de 80 %, 70 %
+    pour les autres, dérogations manuelles de la gestion automatique comprises (« pas d'impact du détecteur de
+    présence »). Les lignes « (jour=nuit) » sont lues comme les valeurs de nuit. La « valeur Th-BC » est celle de
+    la ligne de saison en cours. La part automatique d'une gestion automatique garde ses valeurs.
+80. **Ouverture des baies en Th-D.** Hors occupation les baies sont fermées (éq. 240) et le réglage Rouv_θop des
+    occupants est gardé tel quel, alors qu'il est remis à zéro en Th-B (éq. 245). L'écart de confort adaptatif
+    est celui de la fiche 13.5 (éq. 2546) : nul la nuit, 2 °C au plus.
+81. **Seuil de confort hors occupation** : calculé avec la consigne d'occupation (26 °C), alors qu'un moteur
+    affiche MAX(30 ; 0,33 × θrm + 20,8) ; sans effet, le DH ne comptant que l'occupation. L'écart de confort
+    adaptatif n'est pas forcé à zéro hors période (il y vaut au plus 0,08 °C).
+82. **Brasseurs lus dans les RSET** : codes décalés d'un cran par rapport à la fiche 8.32 (Us 0 nuit, 1 jour,
+    2 jour et nuit ; mode de gestion 0 manuelle, 1 thermostat, 2 automatique ; caractère 0 certifié, 1 justifié,
+    2 déclaré). Seul le code 1 du caractère est recoupé (tableau des vérifications). `Rat_surf` est le ratio de
+    surface brassée ; `Rat_Us` du fichier n'est pas repris (valeurs du tableau 257).
+83. **DH par groupe**, sans moyenne par zone ni par bâtiment : le texte n'en prévoit pas. La surface moyenne des
+    logements du DH max est celle de la zone, comme pour le Bbio max.
+84. **Éclairage et apports internes du calcul Th-D** : ceux du mode Th-B, éclairage calculé baies nues.
+
+## 0.8.17 — relecture de la 0.8.16
+
+Relecture du dépôt entier sur cinq axes (sécurité, simplicité, rapidité, efficacité, lisibilité), sans toucher au
+calcul. Aucune hypothèse nouvelle.
+
+### Constats et suites données
+
+| N° | Constat | Suite |
+|---|---|---|
+| 1 | Le README ne montrait aucun appel en Python : il fallait un RSET pour essayer l'outil | Section « Premier calcul » : un projet d'un groupe, `calculer_bbio`, `calculer_dh` |
+| 2 | L'annexe R. 172-4 n'était citée que pour le Bbio max ; les hypothèses à valider n'apparaissaient pas | Sources complétées, renvoi aux hypothèses 75 et 76 |
+| 3 | En-têtes périmés (`bbio.py`, `solaire.py`, `groupe.py`) | Remis au présent |
+| 4 | Le DH importait une fonction privée du Bbio, dont le message ne parlait que du Bbio max | `controler_projet` public, message commun |
+| 5 | `est_jour` écrite deux fois (brasseurs, confort) | Une seule, dans `moteur/confort.py` |
+| 6 | `theta_rm` désignait deux grandeurs : moyenne glissante extérieure et température radiante moyenne | `theta_rm_ext` pour la première |
+| 7 | DH des études apparié par rang dans le fichier | Apparié par nom de groupe |
+| 8 | Un groupe sans protection mobile ni baie ouvrable sortait 50 °C et un DH de 38 fois le maximum, sans rien signaler | Colonne `avertissement` |
+| 9 | `calculer_besoins` : 230 lignes pour deux modes | `preparer_confort` et `brasseurs_de_l_heure` sortis de la boucle |
+| 10 | `KELVIN`, `SECONDES_PAR_HEURE`, `HEURES_PAR_JOUR` définis dans plusieurs modules | Regroupés dans `config/reglages.py` (unités, pas des constantes réglementaires) |
+| 11 | `FLUX_DU_BILAN` recopié dans cinq fichiers de tests | Défini dans `moteur/groupe.py` |
+| 12 | Deux constantes `JEU` de valeurs différentes (`besoins.py`, `dh.py`) | `dh.py` lit `JEUX_DES_MODES` |
+| 13 | Le modèle du groupe est appelé trois à quatre fois par heure | Calcul d'une heure en deux temps (`preparer_pas`, `resoudre_pas`, `temperatures_sonde`) ; gain modeste, voir ci-dessous |
+| 14 | Lignes de plus de 120 caractères | Une vingtaine de lignes coupées, code et tests |
+
+Sans suite nécessaire : aucun secret ni fichier d'étude suivi par git (`.gitignore` et `tests/test_depot.py`) ;
+toutes les clés de `donnees/hypotheses.csv` sont utilisées et sourcées, aucune clé appelée n'est absente ; `moteur/`
+ne dépend ni de `outils/` ni d'une interface. Pas d'interface ni de base de données à ce stade : les axes
+correspondants seront à reprendre avec la 0.8.18.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Bbio des dix groupes des cinq études : Bch, Bfr, Becl, Bbio, Bbio max | Même calcul avec le code de la 0.8.16 | écart nul |
+| DH des mêmes groupes : DH, trois compteurs d'heures, température maximale, DH max | Même calcul avec le code de la 0.8.16 | écart nul |
+| Somme de toutes les colonnes horaires, modes Th-B et Th-D | Même calcul avec le code de la 0.8.16 | écart nul |
+| Exemple du README | Exécuté tel quel | Bbio 34,3 points (max 73,5), DH 1 978 °C.h (max 1 250) |
+| Groupe d'une baie nue, sans protection ni ouverture | `avertissements_confort` | « aucune protection mobile, aucune baie ouvrable » |
+| Groupe inconnu de l'étude dans `comparer_dh` | Test | colonnes de l'étude vides, pas d'erreur |
+| `resoudre_pas` après `preparer_pas`, quatre puissances | `pas_groupe` sur les mêmes entrées | égalité stricte |
+
+### Temps de calcul
+
+Le constat 13 visait le modèle du groupe. Mesuré avant de le modifier, il ne pèse lourd que sur un groupe simple :
+
+| Cas | Avant | Après | Part du modèle du groupe avant |
+|---|---|---|---|
+| Groupe simple (exemple du README), Bbio | 1,0 s | 0,9 s | 45 % |
+| Groupe simple, DH | 1,7 s | 1,4 s | 45 % |
+| Étude de Paris (800 composants, deux groupes), Bbio ou DH | 10 à 20 s selon la charge du poste | inchangé | 4 % |
+
+Temps processeur, meilleur de cinq essais, ancien et nouveau code alternés. Sur l'étude, le profil donne :
+équilibre de pression des infiltrations 35 %, rayonnement reçu par chaque paroi 30 % (calculé plusieurs fois par
+composant), protections mobiles 8 %. C'est là qu'est le gain pour les études ; ces deux points sont dans
+`ROADMAP.md`, non traités ici.
+
+## 0.9.0 — outil fonctionnel
+
+Interface vue dans un navigateur et complétée (balcons, comparaison de deux variantes) ; recherche de la pression
+d'équilibre des infiltrations accélérée. Le calcul des études ne change pas.
+
+### Constats du contrôle visuel et suites données
+
+| N° | Constat | Suite |
+|---|---|---|
+| 1 | Barre annuelle du Bbio : axe écrasé sous la barre, trait du Bbio max invisible | La hauteur donnée à Streamlit est celle du graphique entier, légende et axes compris : hauteurs revues (`interface/briques/graphiques.py`) |
+| 2 | Semaine chaude : graphique des protections et des fenêtres réduit à un trait | Même cause, même suite |
+| 3 | Axonométrie : étiquettes des façades écrites à l'horizontale, par-dessus les baies du bas | Étiquettes couchées le long du pied de chaque façade |
+| 4 | Bouton « Calculer » hors de vue dès qu'on fait défiler les volets de saisie | Second bouton à côté de l'avertissement « la saisie a changé » |
+| 5 | Premier calcul de la boîte : 25 à 35 s sur le poste chargé (navigateur et serveur ouverts), pour 8 s annoncés | Voir « Temps de calcul » |
+
+Vu sans défaut : thème, chiffres clés, brique DH, températures de la semaine chaude, volet « équation, référence et
+code », changement de point de vue. Console du navigateur : aucune erreur de la page.
+
+### Temps de calcul
+
+Profil de la boîte de départ (Bbio et DH, 17 520 heures) : 62 % du temps dans le bilan aéraulique des
+infiltrations, évalué 62 fois par heure par la dichotomie (1,1 million d'évaluations). La dichotomie est remplacée
+par une fausse position bornée (variante « Illinois »), avec un pas de dichotomie quand l'encadrement se resserre
+mal : même équation (éq. 167), même encadrement de départ, arrêt quand deux essais successifs diffèrent de moins
+de 1e-12 Pa. Le bilan est évalué 12 fois par heure en moyenne, au lieu de 62.
+
+| Cas (poste chargé) | Avant | Après |
+|---|---|---|
+| Boîte de départ, Bbio et DH, avec infiltrations | 25 s | 15 s |
+| Même boîte, enveloppe étanche (pas d'infiltrations) | 10 s | inchangé |
+| Bbio de la boîte de départ | 62,328 731 621 906 | 62,328 731 621 907 |
+| DH de la boîte de départ (°C.h) | 1 777,122 607 884 7 | 1 777,122 607 885 7 |
+
+Le reste du temps (protections mobiles, ouvertures, modèle du groupe) reste au point « temps de calcul » de
+`ROADMAP.md`.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Bilan aéraulique à la pression trouvée, 14 cas (vent nul à 12 m/s, − 8 à 35 °C, ventilation jusqu'à 5 000 m³/h, traversant ou non) | Zéro (éq. 167) | écart < 1e-9 kg/s |
+| Bbio et DH de la boîte de départ | Valeurs de la 0.8.18 | égaux à 12 chiffres |
+| Étude de Paris (`outils.comparer_reference --dh`) | Mêmes besoins mensuels et même DH qu'avant | DH 435,0 et 171,4 °C.h (études : 372,7 et 145,2) |
+| Balcons de 1,2 m sur la façade sud de la boîte de départ | Sens attendu : moins de soleil en été, un peu moins en hiver, moins de lumière | froid 15,6 → 12,3 kWh/m², chauffage 11,6 → 12,5, éclairage 1,6 → 1,7, DH 1 777 → 1 477 °C.h |
+| Page entière (`AppTest`) : référence gardée, balcon saisi, second bouton « Calculer », tableau des écarts, référence oubliée | — | aucune erreur |
+| Page dans un navigateur (Chrome, 1 440 × 900) : les trois briques, un balcon, la comparaison | — | conforme, capture dans `docs/capture_interface.jpg` |
+
+### Lectures du texte et hypothèses de l'outil
+
+85. **Balcons et casquettes de la boîte** : un débord horizontal de longueur infinie (fiche 3.2, éq. 20 et 21),
+    placé au nu du plancher haut de chaque niveau, donc à la hauteur d'un linteau au-dessus de la baie. La hauteur
+    de la baie et celle du linteau viennent du gabarit du dessin (`interface.saisie.gabarit_baie` : la baie occupe
+    45 à 92 % de la hauteur d'étage, 45 % du vide restant est au-dessus). Le débord ne masque que les baies, pas
+    les murs ; le dernier niveau est supposé couvert comme les autres (casquette en toiture).
+86. **Recherche de Pib** : la tolérance de 1e-12 Pa et la méthode sont des choix numériques de l'outil ; la fiche
+    5.6 ne prescrit que l'équation à résoudre.

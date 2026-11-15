@@ -40,6 +40,11 @@ r"""
                  fiche 5.19, éq. 304 ; l'indicateur H_Th_PT des
                  sorties, lui, est la somme des Ll × Psil sans b)
    Permeabilite  Q4PaSurf → perméabilité à l'air du groupe
+   Brasseur_Air  Nb, Rat_surf (× SHAB → surface desservie), Us
+                 (0 nuit, 1 jour, 2 jour et nuit),
+                 Mode_gestion_brasseur (0 manuelle, 1 thermostat,
+                 2 automatique) et ses écarts, Qv_air_max, P_elec_max
+                 et leur caractère (0 certifié, 1 justifié, 2 déclaré)
    Zone          Hauteur_Zone → hauteur ; Hauteur + Hauteur_Zone / 2
                  → hauteur moyenne (prise au vent des infiltrations)
    Inertie       classe quotidienne 1 à 5 (très légère à très lourde),
@@ -69,7 +74,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from config.reglages import ZONES_CLIMATIQUES
-from moteur.structures import (Baie, Batiment, Groupe, MasqueProcheHorizontal, MasqueProcheVertical,
+from moteur.structures import (Baie, Batiment, Brasseur, Groupe, MasqueProcheHorizontal, MasqueProcheVertical,
                                MasqueTranches, Paroi, PontThermique, Projet, Zone)
 
 # ============================================================
@@ -89,6 +94,13 @@ PROTECTIONS = {"1": ("volet", "automatique"), "2": ("volet", "manuelle_non_motor
                "5": ("store_enroulable", "manuelle_non_motorisee"), "6": ("store_enroulable", "manuelle_motorisee")}
 SANS_PROTECTION = "0"
 HORLOGE_CREPUSCULAIRE = "1"                         # Type_Horl
+# Brasseurs d'air (fiche 8.32). Les codes du fichier sont décalés d'un cran par rapport à la fiche (qui compte de
+# 1 à 3) : Us 0 nuit, 1 jour, 2 jour et nuit ; Mode_gestion_brasseur 0 manuelle, 1 thermostat, 2 automatique ;
+# Type_Qv_air_max et Type_P_elec_max 0 certifiée, 1 justifiée, 2 déclarée (le code 1 = « justifiée » est recoupé
+# avec l'effet horaire des brasseurs d'une étude, voir docs/audit.md, 0.8.16)
+USAGES_BRASSEUR = {"0": "nuit", "1": "jour", "2": "jour_et_nuit"}
+GESTIONS_BRASSEUR = {"0": "manuelle", "1": "thermostat", "2": "automatique"}
+CARACTERES_VALEUR = {"0": "certifiee", "1": "justifiee", "2": "declaree"}
 MOIS = range(1, 13)
 BESOINS = {"b_ch": "O_B_Ch", "b_fr": "O_B_Fr", "b_ecl": "O_B_Ecl", "bbio": "O_Bbio_pts"}
 MODULATIONS = {"mb_geo": "O_Mbgeo", "mb_combles": "O_Mbcombles", "mb_surf_moy": "O_Mbsurf_moy",
@@ -302,6 +314,49 @@ def _lire_inertie(element):
     return {"inertie_quotidienne": INERTIES_QUOTIDIENNES[code]}
 
 
+def _code(element, balise, table, objet):
+    """Valeur de « table » pour le code lu dans la balise ; erreur claire si le code est inconnu."""
+    code = _texte(element, balise)
+    if code not in table:
+        raise ValueError(f"RSET : {balise} « {code} » inconnu pour {objet}")
+    return table[code]
+
+
+def _lire_brasseurs(element, surface_groupe_m2):
+    """Brasseurs d'air d'un groupe (Brasseur_Air_Collection) → liste de Brasseur de l'outil.
+
+    Rat_surf est le ratio de surface brassée Ratbr_p : la surface desservie est Rat_surf × surface du groupe.
+    Les trois écarts de l'hystérésis (arrêt, vitesse maximale, déclenchement) sont lus dans
+    Delta_theta_op_auto_thermostat (thermostat) ou Delta_theta_op_auto (automatique) ; la gestion manuelle est
+    conventionnelle.
+    """
+    collection = element.find("Brasseur_Air_Collection")
+    elements = list(collection.iter("Brasseur_Air")) if collection is not None else []
+    noms = _noms_uniques([_texte(b, "Name", "Brasseur") for b in elements])
+    brasseurs = []
+    for b, nom in zip(elements, noms):
+        objet = f"le brasseur « {nom} »"
+        gestion = _code(b, "Mode_gestion_brasseur", GESTIONS_BRASSEUR, objet)
+        reglages = {}
+        if gestion != "manuelle":
+            balise = "Delta_theta_op_auto_thermostat" if gestion == "thermostat" else "Delta_theta_op_auto"
+            ecarts = [float(v) for v in _texte(b, balise, "").split()]
+            if len(ecarts) != 3:
+                raise ValueError(f"RSET : {balise} de {objet} : trois valeurs attendues")
+            reglages = dict(ecart_arret=ecarts[0], ecart_max=ecarts[1], ecart_declenchement=ecarts[2])
+            if gestion == "automatique":
+                reglages["temperature_declenchement"] = _exiger(b, "Theta_op_dec_auto", objet)
+        brasseurs.append(Brasseur(nom, nombre=int(_exiger(b, "Nb", objet)),
+                                  surface_desservie_m2=_exiger(b, "Rat_surf", objet) * surface_groupe_m2,
+                                  debit_max_m3h=_exiger(b, "Qv_air_max", objet),
+                                  puissance_max_w=_exiger(b, "P_elec_max", objet),
+                                  usage=_code(b, "Us", USAGES_BRASSEUR, objet), gestion=gestion,
+                                  caractere_debit=_code(b, "Type_Qv_air_max", CARACTERES_VALEUR, objet),
+                                  caractere_puissance=_code(b, "Type_P_elec_max", CARACTERES_VALEUR, objet),
+                                  **reglages))
+    return brasseurs
+
+
 def _lire_groupe(element, nom, zone, nb_logements, coefficients_b, non_repris, cle, lignes_baies):
     """Groupe du moteur → Groupe de l'outil."""
     def enfants(collection, balise):
@@ -328,7 +383,8 @@ def _lire_groupe(element, nom, zone, nb_logements, coefficients_b, non_repris, c
                         ("groupes : entrées d'air (absentes du calcul du Bbio)", 1)):
         non_repris[cle] = non_repris.get(cle, 0) + nombre
 
-    return Groupe(nom, _exiger(element, "SHAB", f"le groupe « {nom} »"),
+    surface = _exiger(element, "SHAB", f"le groupe « {nom} »")
+    return Groupe(nom, surface, brasseurs=_lire_brasseurs(element, surface),
                   traversant=_texte(element, "Delta_trav_surv", _texte(zone, "Is_Traversant", "0")) == "1",
                   hauteur_tirage_m=_nombre(element, "Httf") if _texte(element, "Def_Httf", "1") == "0" else None,
                   parois=[_lire_paroi(p, n, coefficients_b, non_repris) for p, n in zip(parois, noms_parois)],
@@ -404,7 +460,8 @@ def _mensuel(element, prefixe):
 
 
 def _sorties(element, cle, niveau, mensuels):
-    """Besoins annuels, Bbio et Bbio max d'un groupe, d'une zone ou d'un bâtiment ; les mois vont dans « mensuels »."""
+    """Besoins annuels, Bbio et Bbio max d'un groupe, d'une zone ou d'un bâtiment ; les mois vont dans
+    « mensuels »."""
     ligne = dict(cle, sref_m2=_nombre(element, "O_SREF"), bbio_max=_nombre(element, "O_Bbio_Max"))
     par_mois = {}
     for nom, prefixe in BESOINS.items():
@@ -449,7 +506,8 @@ def _lire_reference(racine, projet, non_repris, lignes_baies):
              "altitude_corrigee_m": _nombre(sortie, "Altitude") if sortie is not None else None,
              "non_repris": dict(non_repris)}
     return Reference(groupes=pd.DataFrame(groupes), zones=pd.DataFrame(zones), batiments=pd.DataFrame(batiments),
-                     mensuel=pd.DataFrame(mensuels), baies=pd.DataFrame(lignes_baies), confort=pd.DataFrame(confort), infos=infos)
+                     mensuel=pd.DataFrame(mensuels), baies=pd.DataFrame(lignes_baies),
+                     confort=pd.DataFrame(confort), infos=infos)
 
 
 # ============================================================

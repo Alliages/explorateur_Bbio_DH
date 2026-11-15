@@ -22,6 +22,11 @@ r"""
  Usage (PowerShell) :
      python -m outils.comparer_reference "_sources\mon_etude.xml"
      python -m outils.comparer_reference "_sources\mon_etude.xml" --variantes
+     python -m outils.comparer_reference "_sources\mon_etude.xml" --dh
+
+ Confort d'été (comparer_dh, option --dh) : degrés-heures, DH max,
+ heures d'inconfort et période de confort adaptatif de chaque
+ groupe, face à ceux de l'étude (calcul Th-D, moteur/dh.py).
 
  Les RSET restent hors du dépôt (dossiers commençant par « _ »).
 ============================================================
@@ -37,6 +42,7 @@ import pandas as pd
 from moteur.bbio import calculer_bbio
 from moteur.besoins import JEU, bilan_besoins, calculer_besoins
 from moteur.calendrier import construire_calendrier
+from moteur.dh import calculer_dh
 from moteur.enveloppe import transmission_baies, transmission_parois, transmission_ponts
 from moteur.hypotheses import hyp
 from moteur.meteo import charger_meteo
@@ -55,6 +61,9 @@ VARIANTES = (("outil", True, True, True),
              ("sans protections mobiles", True, False, True),
              ("sans aucun des trois", False, False, False))
 TOLERANCE_VERTICALE_DEG = 1.0       # une paroi à ±1° de l'inclinaison de son type est comptée dans ce type
+# Confort d'été : grandeurs comparées groupe par groupe (colonnes de moteur.dh.ResultatDH.groupes)
+CONFORT = ["dh", "dh_max", "nb_h_inconfort", "nb_h_inconfort_1", "nb_h_inconfort_2", "debut_confort_adaptatif",
+           "fin_confort_adaptatif"]
 
 
 @dataclass
@@ -197,7 +206,32 @@ def variantes_besoins(projet, reference):
 
 
 # ============================================================
-# 4. LIGNE DE COMMANDE
+# 4. CONFORT D'ÉTÉ : DEGRÉS-HEURES
+# ============================================================
+def comparer_dh(projet, reference):
+    """Degrés-heures de l'outil et de l'étude, groupe par groupe (calcul Th-D : environ 20 s par groupe).
+
+    Sortie : une ligne par groupe (batiment, zone, groupe, climatise, exposition_bruit, nb_brasseurs), chaque
+    grandeur de CONFORT en deux colonnes « _outil » et « _etude », dh_ecart_pct et avertissement.
+    Les groupes de l'étude sont appariés par leur nom (le seul repère que donnent les sorties de confort d'un
+    RSET) ; un groupe absent de l'étude garde des colonnes « _etude » vides.
+    """
+    outil = calculer_dh(projet).groupes
+    brasseurs = [sum(b.nombre for b in groupe.brasseurs) for batiment in projet.batiments
+                 for groupe in batiment.groupes]
+    table = outil[["batiment", "zone", "groupe", "climatise", "exposition_bruit"]].copy()
+    table["nb_brasseurs"] = brasseurs
+    etude = reference.confort.set_index("groupe") if len(reference.confort) else pd.DataFrame(columns=CONFORT)
+    for grandeur in CONFORT:
+        table[f"{grandeur}_outil"] = outil[grandeur].to_numpy()
+        table[f"{grandeur}_etude"] = table["groupe"].map(etude[grandeur]).astype(float)
+    table["dh_ecart_pct"] = (table["dh_outil"] / table["dh_etude"] - 1.0) * 100.0
+    table["avertissement"] = outil["avertissement"].to_numpy()
+    return table
+
+
+# ============================================================
+# 5. LIGNE DE COMMANDE
 # ============================================================
 def _afficher(titre, table, decimales=1):
     print(f"\n--- {titre} ---")
@@ -209,6 +243,8 @@ def main(arguments=None):
     analyseur.add_argument("rset", help="chemin du RSET (XML) de l'étude")
     analyseur.add_argument("--variantes", action="store_true",
                            help="ajoute les variantes des besoins (cinq calculs par groupe)")
+    analyseur.add_argument("--dh", action="store_true",
+                           help="ajoute le confort d'été : degrés-heures et DH max (un calcul Th-D par groupe)")
     options = analyseur.parse_args(arguments)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")        # console Windows : accents et symboles
@@ -230,6 +266,9 @@ def main(arguments=None):
     if options.variantes:
         _afficher("Variantes (kWh/m²) : l'outil privé d'un module à la fois",
                   variantes_besoins(c.projet, c.reference))
+    if options.dh:
+        _afficher("Confort d'été (°C.h, heures, heures de simulation) : outil et étude",
+                  comparer_dh(c.projet, c.reference).drop(columns=["batiment", "zone"]))
 
 
 if __name__ == "__main__":

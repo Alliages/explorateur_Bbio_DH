@@ -94,7 +94,8 @@ def extraire_meteo():
     classeur = openpyxl.load_workbook(CLASSEUR_METEO, read_only=True, data_only=True)
     for zone in ZONES_CLIMATIQUES:
         for jeu, suffixe in JEUX_METEO.items():
-            lignes = [l[:len(COLONNES_METEO)] for l in classeur[f"{zone}_{suffixe}"].iter_rows(min_row=2, values_only=True)
+            onglet = classeur[f"{zone}_{suffixe}"]
+            lignes = [l[:len(COLONNES_METEO)] for l in onglet.iter_rows(min_row=2, values_only=True)
                       if l[0] is not None]
             # Contrôle : 8 760 heures dans l'ordre, aucune cellule vide
             if [int(l[0]) for l in lignes] != list(range(NB_HEURES_ANNEE)):

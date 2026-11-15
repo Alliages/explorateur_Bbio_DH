@@ -26,9 +26,9 @@ def groupe(*brasseurs, surface=60.0, volume=150.0):
     return Groupe("Logements", surface, volume_m3=volume, brasseurs=list(brasseurs))
 
 
-def regime(b, theta_op_prec, regime_prec=ARRET, case=12, actif=True, occupe=True, habitation=True,
+def regime(b, theta_op_prec, regime_prec=ARRET, hleg=12, actif=True, occupe=True, habitation=True,
            theta_ifr=26.0, ecart_conf_adapt=0.0):
-    return regime_suivant(b, regime_prec, theta_op_prec, case, actif, occupe, theta_ifr, ecart_conf_adapt,
+    return regime_suivant(b, regime_prec, theta_op_prec, hleg, actif, occupe, theta_ifr, ecart_conf_adapt,
                           habitation)
 
 
@@ -109,28 +109,32 @@ def test_arret_hors_periode_occupation_ou_plage():
     jour, nuit = brasseur(), brasseur(usage="nuit")
     assert regime(jour, 35.0, actif=False) == ARRET
     assert regime(jour, 35.0, occupe=False) == ARRET
-    assert regime(jour, 35.0, case=23) == ARRET        # 22h-23h : nuit
-    assert regime(jour, 35.0, case=7) == MAXIMAL       # 6h-7h : jour
-    assert regime(nuit, 35.0, case=12) == ARRET
+    assert regime(jour, 35.0, hleg=23) == ARRET        # 23h-24h : nuit
+    assert regime(jour, 35.0, hleg=6) == ARRET         # 6h-7h : encore la nuit
+    assert regime(jour, 35.0, hleg=7) == MAXIMAL       # 7h-8h : jour
+    assert regime(jour, 35.0, hleg=22) == MAXIMAL      # 22h-23h : dernier pas du jour
+    assert regime(nuit, 35.0, hleg=12) == ARRET
 
 
 def test_nuit_en_habitation_bridee():
     nuit = brasseur(usage="nuit")
-    assert regime(nuit, 35.0, case=23) == INTERMEDIAIRE
-    assert regime(nuit, 35.0, case=23, habitation=False) == MAXIMAL
+    assert regime(nuit, 35.0, hleg=23) == INTERMEDIAIRE
+    assert regime(nuit, 35.0, hleg=23, habitation=False) == MAXIMAL
 
 
 def test_blocage_manuel_apres_23h():
-    """Gestion manuelle, de 23h à 6h : position de l'heure précédente gardée ; pas en gestion par thermostat."""
+    """Gestion manuelle, pas de 0h à 7h : position de l'heure précédente gardée ; pas en gestion par thermostat."""
     nuit = brasseur(usage="nuit")
-    assert regime(nuit, 20.0, INTERMEDIAIRE, case=24) == INTERMEDIAIRE
-    assert regime(nuit, 35.0, ARRET, case=3) == ARRET
+    assert regime(nuit, 20.0, INTERMEDIAIRE, hleg=0) == INTERMEDIAIRE
+    assert regime(nuit, 35.0, ARRET, hleg=3) == ARRET
+    assert regime(nuit, 35.0, ARRET, hleg=6) == ARRET
+    assert regime(nuit, 20.0, INTERMEDIAIRE, hleg=23) == ARRET     # pas de 23h-24h : encore régulé
     thermo = brasseur(usage="nuit", gestion="thermostat", ecart_arret=2.0, ecart_max=4.0, ecart_declenchement=1.0)
-    assert regime(thermo, 20.0, INTERMEDIAIRE, case=24) == ARRET
+    assert regime(thermo, 20.0, INTERMEDIAIRE, hleg=0) == ARRET
 
 
 def test_est_jour():
-    assert [c for c in range(1, 25) if est_jour(c)] == list(range(7, 23))
+    assert [h for h in range(24) if est_jour(h)] == list(range(7, 23))      # hlég de 7 à 22
 
 
 # ============================================================
@@ -141,7 +145,7 @@ def test_vitesse_et_effet_du_groupe():
     Δθ_p = 1,8322 ln 0,4267 + 3,0498 = 1,489 °C ; groupe, jour : 0,25 / 0,54 × 1,489 = 0,689 °C."""
     types = preparer_brasseurs(groupe(brasseur()))
     assert vitesse_air(types[0], MAXIMAL, 150.0) == pytest.approx(0.0032 * 5000 / (150 * 0.25), rel=ANALYTIQUE)
-    res = pas_brasseurs(types, [MAXIMAL], 150.0, case=12, actif=True, occupe=True, theta_op_prec=35.0,
+    res = pas_brasseurs(types, [MAXIMAL], 150.0, hleg=12, actif=True, occupe=True, theta_op_prec=35.0,
                         theta_i_prec=30.0, theta_rm_prec=30.0, theta_ifr=26.0, ecart_conf_adapt=0.0)
     ecart_p = 1.8322 * math.log(0.0032 * 5000 / 37.5) + 3.0498
     assert res["ecarts_types"][0] == pytest.approx(ecart_p, rel=ANALYTIQUE)
@@ -154,7 +158,7 @@ def test_jour_et_nuit_et_consommation_par_nombre():
     """Brasseur « jour et nuit » (RatUs = 1), 2 unités déclarées de 40 W au régime intermédiaire, la nuit."""
     b = brasseur(usage="jour_et_nuit", nombre=2, caractere_puissance="declaree", puissance_max_w=40.0)
     types = preparer_brasseurs(groupe(b))
-    res = pas_brasseurs(types, [INTERMEDIAIRE], 150.0, case=2, actif=True, occupe=True, theta_op_prec=35.0,
+    res = pas_brasseurs(types, [INTERMEDIAIRE], 150.0, hleg=2, actif=True, occupe=True, theta_op_prec=35.0,
                         theta_i_prec=30.0, theta_rm_prec=30.0, theta_ifr=26.0, ecart_conf_adapt=0.0)
     assert res["regimes"] == [INTERMEDIAIRE]
     assert res["ecart"] == res["ecart_nuit"] == res["ecart_jour"] == pytest.approx(
@@ -165,8 +169,8 @@ def test_jour_et_nuit_et_consommation_par_nombre():
 # ============================================================
 # DÉROULÉ HORAIRE
 # ============================================================
-def entrees(n=4, theta_op=32.0, case=12):
-    return pd.DataFrame({"case": np.full(n, case), "actif": True, "occupe": True, "theta_op": theta_op,
+def entrees(n=4, theta_op=32.0, hleg=12):
+    return pd.DataFrame({"hleg": np.full(n, hleg), "actif": True, "occupe": True, "theta_op": theta_op,
                          "theta_i": 30.0, "theta_rm": 30.0, "theta_ifr": 26.0, "ecart_conf_adapt": 0.0})
 
 

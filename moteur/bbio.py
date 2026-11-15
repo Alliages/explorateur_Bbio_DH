@@ -46,10 +46,10 @@ r"""
    (chapitre II, V).
 
  L'outil est pédagogique : la comparaison au Bbio max situe le
- projet, elle n'a aucune valeur réglementaire. Tant que les
- protections mobiles et l'ouverture des baies ne sont pas
- modélisées (0.9.4), le besoin de froid, donc le Bbio, est
- surestimé (voir docs/audit.md).
+ projet, elle n'a aucune valeur réglementaire. Même avec les
+ protections mobiles et l'ouverture des baies (0.8.12), le
+ besoin de froid reste au-dessus de celui des études : le Bbio
+ est surestimé en climat chaud (voir docs/audit.md, 0.8.14).
 ============================================================
 """
 
@@ -194,8 +194,9 @@ def ponderer(table, cles, colonnes):
     return sommes[["sref_m2"] + colonnes].reset_index()
 
 
-def _controler_projet(projet):
-    """Erreurs claires avant un calcul long : projet vide, noms en double, nombre de logements manquant."""
+def controler_projet(projet):
+    """Erreurs claires avant un calcul long (Bbio ou DH) : projet vide, noms en double, nombre de logements
+    manquant."""
     cles = [(batiment.nom, zone.nom, groupe.nom)
             for batiment in projet.batiments for zone in batiment.zones for groupe in zone.groupes]
     if not cles:
@@ -207,11 +208,12 @@ def _controler_projet(projet):
         for zone in batiment.zones:
             if zone.groupes and zone.nb_logements is None:
                 raise ValueError(f"Zone « {zone.nom} » : nombre de logements à renseigner sur chaque groupe "
-                                 "(apports internes et Bbio max)")
+                                 "(apports internes, Bbio max et DH max)")
 
 
 def hauteur_sous_plafond_moyenne(batiment, usage):
-    """HSPmoy des zones d'un usage du bâtiment : moyenne des hauteurs saisies, pondérée par la surface de référence.
+    """HSPmoy des zones d'un usage du bâtiment : moyenne des hauteurs saisies, pondérée par la surface de
+    référence.
 
     Les zones sans hauteur saisie ne comptent pas ; None si aucune n'en a. Les études appliquent bien la même
     hauteur moyenne à toutes les zones de logements d'un bâtiment (voir docs/audit.md, 0.8.10).
@@ -231,7 +233,7 @@ def calculer_bbio(projet, scenarios=None, calendrier=None, refroidissement=True)
     refroidissement  False pour ne pas compter de besoin de froid (voir moteur.besoins.calculer_besoins)
     Sortie : ResultatBbio. Durée : environ une seconde par groupe.
     """
-    _controler_projet(projet)
+    controler_projet(projet)
     calendrier = calendrier if calendrier is not None else construire_calendrier()
     meteo = charger_meteo(projet.zone_climatique, JEU, projet.altitude_m)
 

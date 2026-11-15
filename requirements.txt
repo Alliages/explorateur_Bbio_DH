@@ -2,6 +2,9 @@
 numpy>=1.26
 pandas>=2.1
 
+# Interface (app.py) ; Altair, qui trace les graphiques, est installé avec Streamlit
+streamlit>=1.57
+
 # Tests
 pytest>=8.0
 

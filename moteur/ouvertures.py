@@ -35,6 +35,11 @@ r"""
     occupation, et jamais quand l'air extérieur approche la
     consigne de refroidissement (à 1 °C près).
 
+    En mode Th-D (confort d'été), la règle générale s'applique :
+    ni condition de saison de refroidissement, ni plafond lié à
+    la consigne. Les occupants ouvrent dès qu'ils sont là, qu'il
+    fait assez chaud dedans et pas trop chaud dehors.
+
  2. DÉBIT D'AIR du groupe, à partir de la surface ouverte :
       non traversant : tirage thermique ou vent (éq. 251) ;
       traversant     : vent entre façades d'orientations
@@ -50,11 +55,10 @@ r"""
 
 import numpy as np
 
+from config.reglages import KELVIN, SECONDES_PAR_HEURE
 from moteur.hypotheses import hyp
 
 SAISON_CHAUFFAGE = 3            # saison propre du groupe : chauffage sans refroidissement (fiche 4.6)
-SECONDES_PAR_HEURE = 3600.0
-KELVIN = 273.0
 INCLINAISON_FACADE_DEG = 60.0   # en dessous, la baie est en toiture : hors du calcul traversant (éq. 252)
 SECTEURS = 4                    # quatre orientations globales, pour deux roses décalées de 45° (éq. 253)
 
@@ -62,14 +66,15 @@ SECTEURS = 4                    # quatre orientations globales, pour deux roses 
 # ============================================================
 # 1. RATIO D'OUVERTURE (fiche 5.13, éq. 240 à 245)
 # ============================================================
-def moderation_exterieure(te, theta_op_prec, consigne_fr):
-    """Mod_ext_man en mode Th-B : part d'ouverture admise par la température extérieure (figure 61, éq. 244).
+def moderation_exterieure(te, theta_op_prec, consigne_fr=None):
+    """Mod_ext_man : part d'ouverture admise par la température extérieure (figure 61, éq. 241 et 244).
 
-    Nul sous 10 °C, croissant jusqu'à 18 °C, plein jusqu'à la température opérative + 3 °C, nul au-delà ; en Th-B
-    ces deux bornes sont plafonnées à la consigne de refroidissement − 1 °C.
+    Nul sous 10 °C, croissant jusqu'à 18 °C, plein jusqu'à la température opérative + 3 °C, nul au-delà.
+    consigne_fr : en mode Th-B seulement, consigne de refroidissement de l'heure ; ces deux bornes sont alors
+    plafonnées à la consigne − 1 °C. Sans consigne (mode Th-D), la règle générale s'applique.
     """
     bas = hyp("ouv_seuil_exterieur_bas")
-    plafond = consigne_fr - hyp("ouv_thb_marge_consigne")
+    plafond = consigne_fr - hyp("ouv_thb_marge_consigne") if consigne_fr is not None else float("inf")
     haut = min(plafond, hyp("ouv_seuil_exterieur_haut"))
     limite = min(plafond, theta_op_prec - hyp("ouv_ecart_exterieur_interieur_manuel"))
     if te < bas or te > limite:
@@ -154,7 +159,7 @@ def groupe_ouvrable(groupe):
 
 
 class OuverturesGroupe:
-    """Ouverture des baies d'un groupe en mode Th-B : ratio d'ouverture puis débit de chaque heure.
+    """Ouverture des baies d'un groupe, en mode Th-B ou Th-D : ratio d'ouverture puis débit de chaque heure.
 
     Usage : pas(h, ...) à chaque heure, dans l'ordre (le ratio dépend de celui de l'heure précédente).
     """
@@ -176,11 +181,13 @@ class OuverturesGroupe:
         self.ratio_temperature = 0.0        # Rouv_op de l'heure précédente (hystérésis)
 
     def pas(self, h, saison, froid_autorise, occupe, hleg, consigne_fr, consigne_fr_confort,
-            ecart_confort_adaptatif, theta_op_prec, theta_i_prec, rprot=None):
-        """Ouverture et débit de l'heure h en mode Th-B.
+            ecart_confort_adaptatif, theta_op_prec, theta_i_prec, rprot=None, th_b=True):
+        """Ouverture et débit de l'heure h.
 
+        th_b                    mode Th-B (défaut) : restrictions du § 5.13.3.1.2 ; False : règle générale (Th-D)
         saison                  saison propre du groupe (1 à 4)
-        froid_autorise          le groupe est en saison de refroidissement (sinon aucune ouverture, éq. 244)
+        froid_autorise          le groupe est en saison de refroidissement (en Th-B, sinon aucune ouverture :
+                                éq. 244 ; sans effet en Th-D)
         occupe, hleg            occupation de la zone ; heure légale de début de pas
         consigne_fr             consigne de refroidissement de l'heure (°C) ; consigne_fr_confort : en occupation
         ecart_confort_adaptatif écart entre le seuil d'inconfort chaud et la consigne de confort (°C)
@@ -189,15 +196,17 @@ class OuverturesGroupe:
         Sortie : debit_m3h, hg (W/K, air entrant à la température extérieure), aouv_m2 et rouv_moyen.
         """
         te = self.te[h]
-        # Rouv_op : nul hors occupation (éq. 245) ; le jour, hystérésis ; la nuit, position du soir conservée
+        # Rouv_op : le jour et en occupation, hystérésis ; la nuit, position du soir conservée. Hors occupation, il
+        # est remis à zéro en Th-B (éq. 245) ; en Th-D il garde sa valeur, mais les baies sont fermées (éq. 240)
         if not occupe:
-            self.ratio_temperature = 0.0
+            if th_b:
+                self.ratio_temperature = 0.0
         elif hyp("ouv_heure_debut_journee") < hleg < hyp("ouv_heure_fin_journee"):
             seuils = seuils_ouverture(saison, consigne_fr_confort, ecart_confort_adaptatif)
             self.ratio_temperature = ratio_selon_temperature(self.ratio_temperature, theta_op_prec, seuils)
         commun = 0.0
-        if occupe and froid_autorise:
-            commun = (self.part_occupee * moderation_exterieure(te, theta_op_prec, consigne_fr)
+        if occupe and (froid_autorise or not th_b):
+            commun = (self.part_occupee * moderation_exterieure(te, theta_op_prec, consigne_fr if th_b else None)
                       * self.ratio_temperature)
         if commun <= 0:
             return {"debit_m3h": 0.0, "hg": 0.0, "aouv_m2": 0.0, "rouv_moyen": 0.0}

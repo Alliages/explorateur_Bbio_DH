@@ -7,11 +7,13 @@ Le RSET d'essai est fabriqué ici, à la main : aucune étude réelle n'entre da
 import glob
 import os
 
+import pandas as pd
 import pytest
 
 from config.reglages import RACINE
 from moteur.enveloppe import transmission_baies, transmission_parois, transmission_ponts
-from outils.comparer_reference import comparer, comparer_enveloppe, enveloppe_zone, variantes_besoins
+from outils.comparer_reference import (comparer, comparer_dh, comparer_enveloppe, enveloppe_zone,
+                                       variantes_besoins)
 from outils.lire_rset import _repartir_logements, lire_rset
 
 
@@ -53,6 +55,13 @@ def _paroi(nom, type_paroi, beta, surface, u, id_et=0):
                                        Sf_ck=0.004, Sf_ek=0.007, Is_Vegetalise=0, Id_Et=id_et) + "</Paroi_Opaque>"
 
 
+def _brasseur(nom, us, mode, rat_surf):
+    return "<Brasseur_Air>" + _balises(Name=nom, Nb=4, Rat_surf=rat_surf, Rat_Us=0, Us=us, Mode_gestion_brasseur=mode,
+                                       Delta_theta_op_auto_thermostat="1 3 0.5", Delta_theta_op_auto="2 4 1",
+                                       Theta_op_dec_auto=27, Type_Qv_air_max=1, Qv_air_max=11000, Type_P_elec_max=2,
+                                       P_elec_max=40) + "</Brasseur_Air>"
+
+
 def rset_essai(usage_seconde_zone=3):
     """RSET minimal : un bâtiment, une zone de logements (un groupe) et une zone d'un autre usage."""
     groupe = ("<Groupe>" + _balises(Name="Groupe A", SU=0, SHAB=300, V=780, Is_Climatise=0, Exp_BR_Groupe=2,
@@ -67,12 +76,16 @@ def rset_essai(usage_seconde_zone=3):
               + "<Inertie>" + _balises(Type_Inertie_Quotidienne=4, Amq_surf=4, Cmq_surf=100) + "</Inertie>"
               + "<Permeabilite>" + _balises(Q4PaSurf=0.8) + "</Permeabilite>"
               + "<Baie_Collection>" + _baie("Baie sud", 0) + _baie("Baie nord", 180) + "</Baie_Collection>"
+              + "<Brasseur_Air_Collection>"
+              + _brasseur("Séjours", us=1, mode=1, rat_surf=0.2) + _brasseur("Chambres", us=0, mode=0, rat_surf=0.3)
+              + "</Brasseur_Air_Collection>"
               + "</Groupe>")
     zone = ("<Zone>" + _balises(Name="Logements", Usage=2, NB_logement=5, Is_Traversant=1, HSP_moy=2.7, Hauteur=3,
                                 Hauteur_Zone=9)
             + f"<Groupe_Collection>{groupe}</Groupe_Collection></Zone>")
     autre = ("<Zone>" + _balises(Name="Commerce", Usage=usage_seconde_zone, NB_logement=1)
-             + "<Groupe_Collection><Groupe>" + _balises(Name="G", SHAB=0, SU=80) + "</Groupe></Groupe_Collection></Zone>")
+             + "<Groupe_Collection><Groupe>" + _balises(Name="G", SHAB=0, SU=80)
+             + "</Groupe></Groupe_Collection></Zone>")
     sortie_groupe = ("<Sortie_Groupe_B>" + _sorties("Groupe A", 300)
                      + _balises(Is_Climatise=0, O_Mbgeo=-0.1, O_Mbcombles=0, O_Mbsurf_moy=0, O_Mbsurf_tot=0.23,
                                 O_Mbbruit=0.1) + "</Sortie_Groupe_B>")
@@ -255,7 +268,8 @@ def test_protections_et_ouvertures_lues(lecture):
     baie = groupe.baies[0]
     # Choix_PM_GPM = 1 : volet en gestion automatique ; valeurs « ap » de la baie
     assert (baie.protection, baie.gestion_protection, baie.protection_exterieure) == ("volet", "automatique", True)
-    assert (baie.uw_protege, baie.sw_protege, baie.sw2_protege, baie.tl_protege) == (1.1, pytest.approx(0.08), 0.03, 0.1)
+    assert (baie.uw_protege, baie.sw_protege) == (1.1, pytest.approx(0.08))
+    assert (baie.sw2_protege, baie.tl_protege) == (0.03, 0.1)
     assert (baie.ouvrable, baie.ratio_ouverture_max, baie.exposition_bruit) == (True, 0.64, None)
     assert groupe.traversant and groupe.hauteur_tirage_m is None
     # Perméabilité du groupe ; hauteur de la zone et hauteur moyenne au-dessus du sol (3 + 9 / 2)
@@ -281,3 +295,40 @@ def test_etudes_locales_enveloppe_identique():
         assert len(identiques) and identiques["ecart_pct"].abs().max() < 0.5, os.path.basename(chemin)
         proches = table[table["grandeur"].isin(["h_baies", "h_ponts"])]
         assert proches["ecart_pct"].abs().max() < 25.0, os.path.basename(chemin)
+
+
+# ------------------------------------------------------------------
+# Confort d'été : brasseurs d'air lus, degrés-heures comparés
+# ------------------------------------------------------------------
+def test_brasseurs_lus(lecture):
+    sejours, chambres = lecture[0].batiments[0].zones[0].groupes[0].brasseurs
+    # Rat_surf × SHAB = surface desservie ; codes du fichier décalés d'un cran par rapport à la fiche 8.32
+    assert (sejours.nom, sejours.nombre, sejours.surface_desservie_m2) == ("Séjours", 4, pytest.approx(60.0))
+    assert (sejours.usage, sejours.gestion) == ("jour", "thermostat")
+    assert (sejours.ecart_arret, sejours.ecart_max, sejours.ecart_declenchement) == (1.0, 3.0, 0.5)
+    assert (sejours.caractere_debit, sejours.caractere_puissance) == ("justifiee", "declaree")
+    assert (sejours.debit_max_m3h, sejours.puissance_max_w) == (11000.0, 40.0)
+    # Gestion manuelle : entièrement conventionnelle, aucun réglage lu
+    assert (chambres.usage, chambres.gestion, chambres.ecart_arret) == ("nuit", "manuelle", None)
+    assert chambres.surface_desservie_m2 == pytest.approx(90.0)
+
+
+def test_degres_heures_compares(lecture):
+    projet, reference = lecture
+    table = comparer_dh(projet, reference)
+    ligne = table.iloc[0]
+    assert (ligne["groupe"], ligne["nb_brasseurs"], ligne["exposition_bruit"]) == ("Groupe A", 8, "BR2")
+    # Période de confort adaptatif du jeu Th-D de la zone H2c, DH max de la catégorie 1 (groupe non climatisé)
+    assert ligne["dh_outil"] >= 0 and ligne["dh_max_outil"] == 1250.0
+    assert ligne["debut_confort_adaptatif_outil"] < ligne["fin_confort_adaptatif_outil"]
+    # Valeurs de l'étude à côté de celles de l'outil, et écart du DH en pourcentage
+    assert (ligne["dh_etude"], ligne["dh_max_etude"], ligne["debut_confort_adaptatif_etude"]) == (850.5, 1250.0, 2952.0)
+    assert ligne["dh_ecart_pct"] == pytest.approx((ligne["dh_outil"] / 850.5 - 1.0) * 100.0)
+    assert ligne["avertissement"] == ""         # volets et baies ouvrables : rien à signaler
+    # Appariement par nom : un groupe que l'étude ne connaît pas garde des colonnes d'étude vides
+    projet.batiments[0].zones[0].groupes[0].nom = "Autre nom"
+    try:
+        inconnu = comparer_dh(projet, reference).iloc[0]
+    finally:
+        projet.batiments[0].zones[0].groupes[0].nom = "Groupe A"
+    assert pd.isna(inconnu["dh_etude"]) and pd.isna(inconnu["dh_ecart_pct"]) and inconnu["dh_outil"] >= 0

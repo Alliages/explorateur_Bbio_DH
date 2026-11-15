@@ -7,12 +7,11 @@ import pandas as pd
 import pytest
 
 from moteur.calendrier import construire_calendrier
-from moteur.groupe import (TEMPERATURES, avancer_etat, etat_initial, inertie_groupe, matrice_groupe, pas_groupe,
-                           preparer_modele, simuler_groupe, sollicitations_groupe)
+from moteur.groupe import (FLUX_DU_BILAN, TEMPERATURES, avancer_etat, etat_initial, inertie_groupe, matrice_groupe,
+                           pas_groupe, preparer_modele, simuler_groupe, sollicitations_groupe)
 from moteur.meteo import charger_meteo
 from moteur.structures import Baie, Brasseur, Groupe, Paroi, PontThermique
 
-FLUX_DU_BILAN = ["flux_ventilation", "flux_baies", "flux_parois", "flux_apports", "flux_inerties_longues"]
 
 
 # ------------------------------------------------------------------
@@ -297,7 +296,7 @@ def test_brasseurs_dans_le_groupe():
     avec, sans = groupe_test(brasseurs=[brasseur]), groupe_test()
     meteo = charger_meteo("H2d", "th_d", 100.0)
     n = len(meteo)
-    entrees = pd.DataFrame({"case": construire_calendrier()["case"], "actif": True, "occupe": True,
+    entrees = pd.DataFrame({"hleg": construire_calendrier()["hleg"], "actif": True, "occupe": True,
                             "theta_ifr": 26.0, "ecart_conf_adapt": 0.0})
     options = {"confort_adaptatif": np.zeros(n)}
     r_avec = simuler_groupe(avec, meteo, "th_d", entrees_brasseurs=entrees, **options)
@@ -320,3 +319,18 @@ def test_debit_de_ventilation_moyen():
     assert debit_ventilation(Groupe("G", 50.0, debit_ventilation_m3h=75.0)) == 75.0
     avec_pointe = Groupe("G", 650.0, debit_ventilation_m3h=600.0, debit_ventilation_pointe_m3h=1350.0)
     assert debit_ventilation(avec_pointe) == pytest.approx(600.0 + 750.0 * 14 / 168)
+
+
+def test_preparer_puis_resoudre():
+    """Une heure préparée une fois se résout pour plusieurs puissances : mêmes résultats que pas_groupe()."""
+    from moteur.groupe import preparer_pas, resoudre_pas, temperatures_sonde
+    modele, etat = preparer_modele(groupe_test(), "th_d"), etat_initial()
+    entrees = dict(te=5.0, hg_ei=40.0, theta_eieq=12.0, fs1=600.0, fs3=50.0, phi_sl=-30.0, phi_sh=80.0,
+                   phi_conv=300.0, phi_rad=200.0, hg_es=45.0)
+    prepare = preparer_pas(modele, etat, **entrees)
+    for conv, rad in ((0.0, 0.0), (500.0, 0.0), (0.0, 500.0), (-300.0, -200.0)):
+        direct = pas_groupe(modele, etat, phi_sys_conv=conv, phi_sys_rad=rad, **entrees)
+        assert resoudre_pas(modele, etat, prepare, conv, rad) == direct
+        # Les deux températures lues par la sonde de l'émetteur, sans le reste du calcul
+        assert temperatures_sonde(modele, etat, prepare, conv, rad) == (direct["theta_i_moy"], direct["theta_rm_moy"])
+    assert etat.theta_mq == 18.0                            # ni la préparation ni la résolution ne modifient l'état

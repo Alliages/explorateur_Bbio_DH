@@ -5,10 +5,10 @@ import pytest
 
 from moteur.besoins import SAISONS, Saisons, bilan_besoins, calculer_besoins, puissance_requise
 from moteur.calendrier import construire_calendrier
+from moteur.groupe import FLUX_DU_BILAN
 from moteur.meteo import charger_meteo
 from moteur.structures import Baie, Groupe, Paroi, PontThermique
 
-FLUX_DU_BILAN = ["flux_ventilation", "flux_baies", "flux_parois", "flux_apports", "flux_inerties_longues"]
 SURFACE = 650.0
 
 

@@ -3,6 +3,168 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.0 — évolution (15/11/2026), outil fonctionnel
+
+L'outil s'emploie de bout en bout : décrire une boîte, la calculer, comprendre le résultat, comparer deux
+variantes. La page a été vue dans un navigateur et corrigée. **Non mis en ligne** : la mise en ligne attend un
+accord explicite et le lien Streamlit.
+
+- **Comparaison de deux variantes** (`interface/comparaison.py`, `app.py`) : « Garder comme référence » retient
+  le calcul affiché ; après une nouvelle saisie et un nouveau calcul, un cadre montre ce qui a changé dans la
+  saisie et l'écart sur sept indicateurs (Bbio, chauffage, refroidissement, éclairage, DH, heures d'inconfort,
+  température la plus haute). « Oublier la référence » referme le cadre.
+- **Balcons et casquettes** (`interface/saisie.py`, `interface/formulaire.py`) : profondeur du débord et façades
+  équipées, dans le volet « Baies ». Le moteur reçoit un masque proche horizontal au-dessus des baies (fiche 3.2,
+  éq. 20 et 21) ; l'axonométrie dessine une dalle par niveau. Le gabarit d'une baie (hauteur, allège, linteau)
+  est désormais commun au dessin et au calcul (`gabarit_baie`).
+- **Corrections après contrôle visuel** : barre annuelle du Bbio et graphique des protections de la semaine
+  chaude, écrasés (la hauteur donnée à Streamlit comprend la légende et les axes) ; étiquettes des façades
+  couchées le long de leur pied, sans chevaucher les baies ; second bouton « Calculer » près de l'avertissement
+  « la saisie a changé ».
+- **Temps de calcul** (`moteur/infiltrations.py`) : la pression d'équilibre des infiltrations est cherchée par
+  fausse position bornée au lieu d'une dichotomie seule (12 au lieu de 62 évaluations du bilan par heure). Boîte de
+  départ, poste chargé : 25 s → 15 s. Même équation, mêmes résultats.
+- **Documentation** : `README.md` (les quatre gestes de la page, une capture, la mise en ligne), `docs/audit.md`
+  (constats du contrôle visuel, hypothèses 85 et 86).
+
+Vérification
+
+- Boîte de départ : Bbio 62,3 points et DH 1 777 °C.h, égaux à 12 chiffres à ceux de la 0.8.18.
+- Bilan aéraulique nul à la pression trouvée, sur 14 cas (écart < 1e-9 kg/s).
+- Balcons de 1,2 m au sud : froid 15,6 → 12,3 kWh/m², chauffage 11,6 → 12,5, DH 1 777 → 1 477 °C.h.
+- Page vue dans Chrome (1 440 × 900) : trois briques, balcon, comparaison ; capture `docs/capture_interface.jpg`.
+- Tests : 18 nouveaux (balcons, dessin, comparaison, bilan aéraulique ; page entière étendue). Suite complète :
+  345 réussis, 2 sautés.
+
+## 0.8.18 — évolution (14/11/2026), interface
+
+Première interface (Streamlit), volontairement simple et construite par briques. Le moteur ne change pas.
+
+```powershell
+streamlit run app.py
+```
+
+- **Saisie d'une boîte** (`interface/saisie.py`) : longueur, profondeur, niveaux, orientation, part vitrée de
+  chacune des quatre façades, baies (Uw, Sw, transmission lumineuse, protection mobile et sa gestion, ouverture),
+  parois (U, teinte, plancher sur le sol ou sur l'extérieur, ponts thermiques des planchers, inertie), air
+  (ventilation, perméabilité), confort d'été (climatisation, brasseurs d'air), site (zone climatique, altitude,
+  bruit). `construire_projet(boite)` en fait un projet du moteur d'un seul groupe. Sans Streamlit : se teste seul.
+- **Axonométrie** (`interface/axonometrie.py`) : la boîte dessinée en SVG, à l'échelle, tournée selon son
+  orientation sur un sol aux points cardinaux fixes ; baies de la surface saisie, protection mobile, course du
+  soleil ; quatre points de vue. Le dessin suit la saisie sans attendre le calcul.
+- **Calcul au bouton** (`interface/calcul.py`, `app.py`) : le Bbio et le DH prennent 3 à 8 s ; ils partent au
+  bouton « Calculer » et restent en mémoire pour les 24 dernières saisies. Tant que le calcul n'est pas relancé,
+  la page signale que les résultats sont ceux de la saisie précédente.
+- **Briques pédagogiques** (`interface/briques/`) : chaque brique explique un phénomène sur deux niveaux — le
+  phénomène, un graphique et des ordres de grandeur par défaut ; l'équation, sa référence et le code du moteur
+  (lu à la source) dans un volet. Trois briques : « Bbio : les trois besoins » (besoins pondérés face au Bbio
+  max, répartition par mois), « DH : l'inconfort d'été » (maximums du jour dehors et dedans face au seuil,
+  degrés-heures par jour), « Une semaine chaude » (heure par heure : températures, seuil, degrés-heures comptés,
+  protections baissées et fenêtres ouvertes). Ajouter une brique : un fichier et une ligne dans
+  `interface/briques/__init__.py`.
+- **Formulaire** (`interface/formulaire.py`) : un volet par thème dans le menu de gauche ; les valeurs de départ
+  sont celles de `Boite()`.
+- **Charte** : palette du HUB (`interface/charte.py`, `.streamlit/config.toml`), une couleur par rôle.
+- **Hypothèses** : absorption solaire par teinte (claire 0,4, moyenne 0,6, sombre 0,8, noire 1,0 ; règles
+  Th-Bât, tableau 66) dans `donnees/hypotheses.csv`.
+- **Dépendance** : `streamlit>=1.57` (Altair vient avec).
+
+Vérification
+
+- Boîte de départ (H3, 20 m × 12 m, 3 niveaux, façade principale au sud) : Bbio 62,3 points pour un maximum de
+  69,8 ; DH 1 777 °C.h pour un maximum de 1 250.
+- Page conduite sans navigateur (API d'agent de Streamlit) : les trois briques, une saisie modifiée, le bouton
+  « Calculer », l'avertissement d'un bâtiment sans protection ; aucune erreur ni avertissement dans la console.
+- Tests : 19 nouveaux (`tests/test_interface.py`) : surfaces et orientations de la boîte, saisies refusées,
+  projection, baies dessinées à l'échelle, SVG valide dans les quatre vues, briques complètes, moteur indépendant
+  de l'interface, page entière (`AppTest`). Suite complète : 327 réussis, 2 sautés.
+- **Non fait** : contrôle visuel dans un navigateur (dessin, graphiques, mise en page) et capture d'écran ; le
+  serveur d'essai a été arrêté par le poste, faute de mémoire.
+
+## 0.8.17 — correction (14/11/2026), relecture de la 0.8.16
+
+Relecture du dépôt après la 0.8.16 : documentation, clarté du code, doublons. **Aucun résultat ne change** : le
+Bbio et le DH des dix groupes des cinq études sont identiques avant et après, à l'unité près du dernier chiffre.
+
+Documentation
+
+- **`README.md`** : un premier calcul en Python (un projet d'un groupe, son Bbio et son DH), la table des modules
+  du moteur, le DH max dans les sources et un renvoi aux hypothèses de l'outil.
+- **En-têtes périmés** de `moteur/bbio.py`, `moteur/solaire.py` et `moteur/groupe.py` remis au présent (ils
+  annonçaient encore les protections mobiles et le calcul des besoins comme à venir).
+
+Usage
+
+- **Avertissement du DH** : `calculer_dh` ajoute une colonne `avertissement` qui signale un groupe sans protection
+  mobile ou sans baie ouvrable (`moteur.dh.avertissements_confort`). Sans elles, la température de l'année
+  caniculaire dépasse 40 °C et le DH n'a plus de sens ; rien ne le disait.
+- **Comparaison du DH à une étude** (`outils.comparer_reference.comparer_dh`) : les groupes sont appariés par
+  leur nom et non plus par leur rang dans le fichier ; un groupe inconnu de l'étude garde des colonnes vides.
+- **Contrôle du projet** : `moteur.bbio.controler_projet` devient public (le DH s'en sert aussi) ; son message
+  cite le DH max.
+
+Code
+
+- **Moyenne glissante extérieure** nommée `theta_rm_ext` partout (`moteur/confort.py`, `moteur/besoins.py`) :
+  `theta_rm` reste la température radiante moyenne du groupe.
+- **`calculer_besoins` allégé** : la préparation du confort adaptatif (`preparer_confort`, classe `ConfortAnnee`)
+  et le pas des brasseurs d'air (`brasseurs_de_l_heure`) sont sortis de la boucle horaire.
+- **Doublons supprimés** : une seule fonction `est_jour` (`moteur/confort.py`, reprise par les brasseurs) ;
+  `KELVIN` et `SECONDES_PAR_HEURE` dans `config/reglages.py`, avec `HEURES_PAR_JOUR` qui y était déjà ;
+  `FLUX_DU_BILAN` défini dans `moteur/groupe.py` au lieu de cinq fichiers de tests ; un seul repère pour le jeu
+  météo du DH (`JEUX_DES_MODES`).
+- **Lignes de plus de 120 caractères** coupées dans le code et les tests (une vingtaine).
+- **Modèle du groupe, calcul d'une heure en deux temps** (`moteur/groupe.py`) : `preparer_pas` fait une fois ce
+  qui ne dépend pas de la puissance émise par le système, `resoudre_pas` donne les températures pour une
+  puissance, `temperatures_sonde` les deux seules que lit l'émetteur. Le calcul des besoins ne refait plus le
+  travail commun pour ses trois ou quatre cas par heure ; `pas_groupe` reste disponible et enchaîne les deux.
+  Mêmes opérations dans le même ordre : résultats identiques au dernier chiffre.
+- **Gain mesuré** (temps processeur) : 10 à 15 % sur un groupe simple (Bbio de 1,0 à 0,9 s, DH de 1,7 à 1,4 s) ;
+  rien de mesurable sur une étude de 800 composants, où le modèle du groupe ne pesait que 4 % du temps.
+
+Vérification
+
+- Bbio et DH des cinq études recalculés avec le code de la 0.8.16 puis avec celui-ci : besoins, Bbio, Bbio max,
+  DH, heures d'inconfort, DH max et sommes de toutes les colonnes horaires identiques (écart nul).
+- Tests : 310 (deux nouveaux : avertissements du DH, préparation puis résolution d'une heure ; l'appariement par
+  nom est ajouté à un test existant).
+- Reste à faire, noté dans `ROADMAP.md` : sur une étude, le temps part pour un tiers dans l'équilibre de pression
+  des infiltrations et pour près d'un tiers dans le rayonnement reçu par chaque paroi, calculé plusieurs fois.
+
+## 0.8.16 — évolution (14/11/2026), DH
+
+Degrés-heures d'inconfort d'été (DH) sur l'année caniculaire, et comparaison au DH max.
+
+- **Confort adaptatif** (`moteur/confort.py`, annexe III, fiches 3.1 et 13.5) : moyenne glissante de la
+  température extérieure, période de confort adaptatif (du premier au dernier jour où cette moyenne atteint
+  16 °C) et température limite de confort chaud (26 °C la nuit, 26 à 28 °C le jour).
+- **Calcul Th-D** : `calculer_besoins(mode="th_d")` déroule le groupe sur le jeu météo Th-D, sans
+  refroidissement, avec les inerties séquentielle et annuelle. En période de confort adaptatif, le chauffage est
+  interdit et le groupe est en saison de refroidissement (fiche 4.6).
+- **DH** (`moteur/dh.py`, fiche 13.5) : somme des dépassements du seuil de confort par la température opérative,
+  en occupation et en période de confort adaptatif ; trois compteurs d'heures d'inconfort ; `calculer_dh(projet)`
+  donne le DH de chaque groupe.
+- **DH max** du logement collectif (annexe à l'article R. 172-4) : 1 250 °C.h en catégorie 1, valeurs selon la
+  surface moyenne des logements pour les parties climatisées en H2d et H3 et pour la catégorie 2.
+- **Protections mobiles en Th-D** (fiche 5.9, tableau 34) : après une journée à plus de 26,5 °C, fermeture de
+  jour portée à 70 ou 80 %, volets limités à 70 % la nuit, stores enroulables à 50 %.
+- **Ouverture des baies en Th-D** (fiche 5.13) : règle générale, sans condition de saison de refroidissement ni
+  plafond lié à la consigne.
+- **Brasseurs d'air** : branchés dans le calcul Th-D (régime piloté heure par heure, chaleur dégagée dans le
+  groupe, seuil de confort relevé). Ils lisent désormais l'heure légale de début de pas : le jour va du pas de
+  7h-8h au pas de 22h-23h (une heure plus tard qu'avant). `COLONNES_ENTREES` et `COLONNES_BRASSEURS` portent
+  `hleg` au lieu de `case`.
+- **Lecture des études** : brasseurs d'air lus dans les RSET ; `python -m outils.comparer_reference … --dh`
+  compare le DH, le DH max, les heures d'inconfort et la période de confort adaptatif à ceux de l'étude.
+- **Vérifié sur les sorties horaires d'un moteur Th-BCE** : moyenne glissante, période, seuil et DH identiques
+  (écart inférieur à 1e-6 °C.h) quand on part de la température opérative du moteur.
+- **Résultat** sur dix groupes de cinq études : période de confort adaptatif et DH max identiques ; DH de − 2 à
+  + 28 % à Paris et à Nice, 35 à 41 % trop bas à Sète. Détail dans `docs/audit.md`.
+- **Hypothèses de l'outil** : ventilation du calcul Th-D sans échangeur ; catégorie 2 du DH max pour un groupe
+  climatisé exposé au bruit (BR2 ou BR3). 18 constantes ajoutées, chacune sourcée.
+- Le mode Th-B est inchangé : mêmes besoins et même Bbio qu'en 0.8.14.
+- Tests : 308. Le DH d'une étude de 800 composants se calcule en 10 à 45 s.
+
 ## 0.8.14 — évolution (14/11/2026), infiltrations
 
 Air entrant par les défauts d'étanchéité de l'enveloppe.

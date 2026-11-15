@@ -38,8 +38,9 @@
  appliquées telles quelles, y compris aux quelques heures où le
  direct est non nul alors que le soleil est à l'horizon.
 
- Simplifications de cette version :
-   - pas de protection mobile (Rprot = 0) : module 0.9.4 ;
+ Simplifications de ce module :
+   - baies sans protection mobile (Rprot = 0) : les protections
+     sont traitées dans moteur/protections.py ;
    - pas d'espace tampon (bsolaire = bvoute = 1) ;
    - Sw = Sw1 + Sw2 + Sw3 (règles Th-Bât, formules 173 à 176) :
      Sw2 est saisi (sw2_e, sw2_c) ou pris par défaut comme une
@@ -260,7 +261,7 @@ def flux_solaires_paroi(paroi, meteo, jeu, confort_adaptatif=None):
       phi_vc = A . Qer* . U / he              (éq. 297, bvoute = 1 ; U selon l'inclinaison)
 
     Sf (éq. 290 à 292) : Sf-c en Th-BC ; en Th-D, Sf-e pendant la période de confort adaptatif et Sf-c
-    en dehors. Cette période (fiche 3.1) est calculée avec les DH (0.8.10) : en Th-D, la passer dans
+    en dehors. Cette période (fiche 3.1) vient de moteur/confort.py : en Th-D, la passer dans
     confort_adaptatif (1 ou True pour les heures concernées, une valeur par heure).
 
     Une paroi sur le sol ou sur un local non chauffé ne reçoit pas de soleil : flux nuls.

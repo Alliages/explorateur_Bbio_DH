@@ -1,0 +1,17 @@
+# Thème de l'interface : palette du HUB (voir interface/charte.py, à tenir d'accord avec ce fichier)
+[theme]
+base = "light"
+primaryColor = "#FA9600"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FFF6E3"
+textColor = "#000000"
+linkColor = "#6D2E46"
+borderColor = "#E6D9BC"
+baseRadius = "large"
+chartCategoricalColors = ["#283246", "#00B0F0", "#FABD4A", "#6D2E46", "#FA9600", "#FFB5C2"]
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

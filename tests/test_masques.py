@@ -41,7 +41,8 @@ def test_debord_moitie_a_l_ombre():
 
 
 def test_debord_angle_de_profil():
-    """Soleil à 60° de la normale : ombre = dhm.tan(gamma)/cos(phi) = 1 × 1 / 0,5 = 2 m : baie entière à l'ombre."""
+    """Soleil à 60° de la normale : ombre = dhm.tan(gamma)/cos(phi) = 1 × 1 / 0,5 = 2 m ; baie entière à
+    l'ombre."""
     f_dir, _ = facteurs(baie_sud(MasqueProcheHorizontal(debord_m=1.0)), 45.0, 60.0)
     assert f_dir[0] == pytest.approx(0.0, abs=1e-9)
 

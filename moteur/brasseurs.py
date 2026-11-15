@@ -10,8 +10,8 @@
  Rôle dans le DH : les brasseurs créent une vitesse d'air qui
  relève le seuil d'inconfort chaud du groupe :
      θop_conf_ch_corr(h) = θop_conf_ch(h) + ΔθopBA(h)  (éq. 2547)
- Ce module calcule ΔθopBA(h) ; l'addition se fera dans le
- module DH. Sans brasseur, ΔθopBA = 0.
+ Ce module calcule ΔθopBA(h) ; l'addition se fait dans le
+ calcul Th-D (moteur/besoins.py). Sans brasseur, ΔθopBA = 0.
 
  Chaîne de calcul, pour chaque type p de brasseurs :
    1. paramètres corrigés : débit maximal × 1 / 0,9 / 0,8 et
@@ -36,14 +36,18 @@
    6. consommation et chaleur dégagée dans le groupe
       (éq. 1662 à 1666).
 
- Convention d'heure : « hlég » est lu comme la case des
- scénarios (heure légale de FIN de pas, 1 à 24) ; « jour » =
- 6 < case ≤ 22, soit le pas de 6h-7h au pas de 21h-22h.
+ Convention d'heure : « hlég » est l'heure légale de DÉBUT de
+ pas (Hleg = IHJ + EHLO, 0 à 23 : colonne hleg du calendrier) ;
+ « jour » = 6 < hlég ≤ 22, soit du pas de 7h-8h au pas de
+ 22h-23h, comme sur les sorties horaires d'un moteur Th-BCE.
+ Blocage manuel de la nuit : hlég > 23 ou hlég ≤ 6, soit les
+ pas de 0h à 7h ; le pas de 23h-24h est encore régulé.
 
  Couplage avec le modèle du groupe : le régime à l'heure h ne
  dépend que des températures de l'heure h−1, et la chaleur des
  brasseurs entre dans le bilan de l'heure h. Le modèle du groupe
- appellera donc pas_brasseurs() heure par heure. La fonction
+ et le calcul Th-D (moteur/besoins.py) appellent donc
+ pas_brasseurs() heure par heure. La fonction
  simuler_brasseurs() déroule l'année sur des températures déjà
  connues (tests, évolution libre sans retour de la chaleur).
 
@@ -60,6 +64,7 @@ import numpy as np
 import pandas as pd
 
 from config.reglages import USAGES_HABITATION
+from moteur.confort import est_jour     # 6 < hlég ≤ 22, hlég étant l'heure légale de début de pas (0 à 23)
 from moteur.hypotheses import hyp
 
 # Régimes d'un type de brasseurs : le débit ne prend que ces trois valeurs (fiche 8.32, § 8.32.1)
@@ -67,7 +72,7 @@ ARRET, INTERMEDIAIRE, MAXIMAL = 0, 1, 2
 
 # Colonnes attendues par simuler_brasseurs(), une ligne par heure
 COLONNES_ENTREES = (
-    "case",                # heure légale de fin de pas (1-24), voir moteur/calendrier.py
+    "hleg",                # heure légale de début de pas (0-23), voir moteur/calendrier.py
     "actif",               # Is_confort_adaptatif(h) en Th-D (période d'utilisation possible), booléen
     "occupe",              # iocc_zone(h), booléen
     "theta_op",            # θop,fin(h) : température opérative du groupe en fin de pas (°C)
@@ -151,11 +156,6 @@ def preparer_brasseurs(groupe, usage_zone="logement_collectif"):
 # ============================================================
 # 3. GESTION — RÉGULATION (fiche 8.32, éq. 1646 à 1654)
 # ============================================================
-def est_jour(case):
-    """Vrai si 6 < hlég ≤ 22, hlég étant l'heure légale de fin de pas (case des scénarios)."""
-    return hyp("heure_debut_jour") < case <= hyp("heure_fin_jour")
-
-
 def consignes(brasseur, theta_ifr, ecart_conf_adapt):
     """Seuils de l'hystérésis (arr, V1, V2) en °C, à l'heure h (éq. 1646 à 1650).
 
@@ -177,14 +177,14 @@ def consignes(brasseur, theta_ifr, ecart_conf_adapt):
     return v1 - ecart_arret, v1, v1 + ecart_max
 
 
-def regime_suivant(brasseur, regime_prec, theta_op_prec, case, actif, occupe, theta_ifr, ecart_conf_adapt,
+def regime_suivant(brasseur, regime_prec, theta_op_prec, hleg, actif, occupe, theta_ifr, ecart_conf_adapt,
                    habitation):
     """Régime (ARRET, INTERMEDIAIRE, MAXIMAL) d'un type de brasseurs à l'heure h.
 
-    regime_prec et theta_op_prec sont ceux de l'heure h−1.
+    regime_prec et theta_op_prec sont ceux de l'heure h−1 ; hleg est l'heure légale de début du pas h.
     """
     # Hors période d'utilisation, hors occupation ou hors de la plage jour / nuit : arrêt (éq. 1651 à 1653)
-    jour = est_jour(case)
+    jour = est_jour(hleg)
     if not (actif and occupe):
         return ARRET
     if (brasseur.usage == "jour" and not jour) or (brasseur.usage == "nuit" and jour):
@@ -201,11 +201,12 @@ def regime_suivant(brasseur, regime_prec, theta_op_prec, case, actif, occupe, th
     else:
         regime = MAXIMAL
 
-    # Nuit en habitation : pas de vitesse maximale (acoustique) ; en gestion manuelle, position de 23h gardée
+    # Nuit en habitation : pas de vitesse maximale (acoustique) ; en gestion manuelle, la position réglée
+    # pendant le pas de 23h-24h est gardée jusqu'au matin (hlég > 23 ou hlég ≤ 6 : pas de 0h à 7h)
     if habitation and brasseur.usage in ("nuit", "jour_et_nuit") and not jour:
         regime = min(regime, INTERMEDIAIRE)
-        if brasseur.gestion == "manuelle" and (case > hyp("brasseur_heure_blocage")
-                                               or case <= hyp("heure_debut_jour")):
+        if brasseur.gestion == "manuelle" and (hleg > hyp("brasseur_heure_blocage")
+                                               or hleg <= hyp("heure_debut_jour")):
             regime = regime_prec
     return regime
 
@@ -232,7 +233,7 @@ def vitesse_air(type_brasseur, regime, volume_m3):
 # ============================================================
 # 5-6. PAS DE TEMPS : effet du groupe et consommation (éq. 1660 à 1666)
 # ============================================================
-def pas_brasseurs(types, regimes_prec, volume_m3, *, case, actif, occupe, theta_op_prec, theta_i_prec,
+def pas_brasseurs(types, regimes_prec, volume_m3, *, hleg, actif, occupe, theta_op_prec, theta_i_prec,
                   theta_rm_prec, theta_ifr, ecart_conf_adapt, habitation=True):
     """Calcul d'une heure h pour tous les types de brasseurs d'un groupe.
 
@@ -249,7 +250,7 @@ def pas_brasseurs(types, regimes_prec, volume_m3, *, case, actif, occupe, theta_
     regimes, ecarts = [], []
     ecart_jour = ecart_nuit = energie = 0.0
     for t, regime_prec in zip(types, regimes_prec):
-        regime = regime_suivant(t.brasseur, regime_prec, theta_op_prec, case, actif, occupe, theta_ifr,
+        regime = regime_suivant(t.brasseur, regime_prec, theta_op_prec, hleg, actif, occupe, theta_ifr,
                                 ecart_conf_adapt, habitation)
         ecart = ecart_operatif(vitesse_air(t, regime, volume_m3), theta_rm_prec, theta_i_prec)
         # Moyenne pondérée par les surfaces : Ratbr_p / RatUs (éq. 1660)
@@ -263,7 +264,7 @@ def pas_brasseurs(types, regimes_prec, volume_m3, *, case, actif, occupe, theta_
         regimes.append(regime)
         ecarts.append(ecart)
     return {"regimes": regimes, "ecarts_types": ecarts, "ecart_jour": ecart_jour, "ecart_nuit": ecart_nuit,
-            "ecart": ecart_jour if est_jour(case) else ecart_nuit,                         # éq. 1661
+            "ecart": ecart_jour if est_jour(hleg) else ecart_nuit,                        # éq. 1661
             "energie_wh": energie, "chaleur_wh": energie}                                   # éq. 1664-1666
 
 
@@ -290,7 +291,7 @@ def simuler_brasseurs(groupe, entrees, usage_zone="logement_collectif"):
     e = {c: entrees[c].to_numpy() for c in COLONNES_ENTREES}
     regimes = [ARRET] * len(types)
     for h in range(1, n):
-        res = pas_brasseurs(types, regimes, groupe.volume_m3, case=int(e["case"][h]), actif=bool(e["actif"][h]),
+        res = pas_brasseurs(types, regimes, groupe.volume_m3, hleg=int(e["hleg"][h]), actif=bool(e["actif"][h]),
                             occupe=bool(e["occupe"][h]), theta_op_prec=e["theta_op"][h - 1],
                             theta_i_prec=e["theta_i"][h - 1], theta_rm_prec=e["theta_rm"][h - 1],
                             theta_ifr=e["theta_ifr"][h], ecart_conf_adapt=e["ecart_conf_adapt"][h],

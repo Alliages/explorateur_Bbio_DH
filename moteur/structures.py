@@ -252,7 +252,7 @@ class Paroi:
     orientation_deg: float = None
     inclinaison_deg: float = None   # par défaut celle du type : mur 90, toiture 0, plancher bas 180
     contact: str = "exterieur"
-    b_therm: float = 1.0        # coefficient de réduction des déperditions (fiche 5.17, éq. 295) : local non chauffé
+    b_therm: float = 1.0        # réduction des déperditions vers un local non chauffé (fiche 5.17, éq. 295)
     alpha: float = None         # coefficient d'absorption solaire (Th-Bât : 0,4 clair à 1,0 noir)
     sf_c: float = None          # facteur solaire saisi, conditions C ; sinon calculé (alpha, u)
     sf_e: float = None          # facteur solaire saisi, conditions E ; sinon calculé (alpha, u)
@@ -265,7 +265,8 @@ class Paroi:
         if self.type not in TYPES_PAROI:
             raise ValueError(f"Paroi « {self.nom} » : type « {self.type} » inconnu ({', '.join(TYPES_PAROI)})")
         if self.contact not in CONTACTS_PAROI:
-            raise ValueError(f"Paroi « {self.nom} » : contact « {self.contact} » inconnu ({', '.join(CONTACTS_PAROI)})")
+            raise ValueError(f"Paroi « {self.nom} » : contact « {self.contact} » inconnu "
+                             f"({', '.join(CONTACTS_PAROI)})")
         _exiger_entre(self.alpha, 0.0, 1.0, f"Absorption de la paroi « {self.nom} »")
         _exiger_entre(self.sf_c, 0.0, 1.0, f"Sf-c de la paroi « {self.nom} »")
         _exiger_entre(self.sf_e, 0.0, 1.0, f"Sf-e de la paroi « {self.nom} »")
@@ -314,7 +315,8 @@ class Brasseur:
 
     def __post_init__(self):
         if not self.nombre >= 1 or int(self.nombre) != self.nombre:
-            raise ValueError(f"Brasseur « {self.nom} » : le nombre doit être un entier ≥ 1 (reçu : {self.nombre})")
+            raise ValueError(f"Brasseur « {self.nom} » : le nombre doit être un entier ≥ 1 "
+                             f"(reçu : {self.nombre})")
         _exiger_positif(self.surface_desservie_m2, f"Surface desservie du brasseur « {self.nom} »")
         _exiger_positif(self.debit_max_m3h, f"Débit maximal du brasseur « {self.nom} »")
         _exiger_positif(self.puissance_max_w, f"Puissance maximale du brasseur « {self.nom} »")
@@ -339,7 +341,8 @@ class Brasseur:
         for nom_champ in ("ecart_arret", "ecart_max", "ecart_declenchement"):
             valeur = getattr(self, nom_champ)
             if valeur is not None and valeur < 0:
-                raise ValueError(f"Brasseur « {self.nom} » : {nom_champ} doit être positif ou nul (reçu : {valeur})")
+                raise ValueError(f"Brasseur « {self.nom} » : {nom_champ} doit être positif ou nul "
+                                 f"(reçu : {valeur})")
 
 
 @dataclass

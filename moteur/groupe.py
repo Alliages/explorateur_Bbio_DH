@@ -27,6 +27,11 @@
    θem    température extérieure vue par les parois opaques,
           soleil absorbé et rayonnement froid compris
 
+ Le calcul d'une heure est coupé en deux : preparer_pas() fait
+ une fois tout ce qui ne dépend pas de la puissance émise par
+ le système, resoudre_pas() donne les températures pour une
+ puissance. pas_groupe() enchaîne les deux.
+
  Calcul d'une heure (fiche 5.21, § 5.21.3.1) :
    1. coefficients Hg_ei, Hg_es, Hg_em, Hg_is, Hg_ms (éq. 323 à 341) ;
    2. températures extérieures équivalentes (éq. 342 à 345) ;
@@ -45,8 +50,8 @@
  Matrice du groupe (éq. 373) : les mêmes températures pour
  trois puissances émises — nulle, 10 W/m² convectifs, 10 W/m²
  radiatifs. Le modèle étant linéaire, elle donne la « droite
- du groupe », que le calcul des besoins (0.8.6) croisera avec
- l'émetteur.
+ du groupe », que le calcul des besoins (moteur/besoins.py)
+ croise avec l'émetteur.
 
  Unités : flux en W, coefficients en W/K, capacités en Wh/K
  (kJ/K divisés par 3,6), pas de temps d'une heure.
@@ -72,24 +77,25 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from config.reglages import JOURS_PAR_SEMAINE, USAGES_HABITATION
+from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE, USAGES_HABITATION
 from moteur.brasseurs import ARRET, pas_brasseurs, preparer_brasseurs
 from moteur.enveloppe import transmission_baies, transmission_parois, transmission_ponts
 from moteur.hypotheses import hyp
 from moteur.solaire import _controler_jeu, flux_solaires_baie, flux_solaires_paroi
 
 KJ_PAR_WH = 3.6     # 1 Wh = 3,6 kJ : les capacités saisies en kJ/K sont converties en Wh/K
-HEURES_PAR_JOUR = 24
 
 # Températures calculées à chaque heure, dans l'ordre des lignes de la matrice (éq. 373)
 TEMPERATURES = ("theta_i", "theta_s", "theta_mq", "theta_rm", "theta_op")
+# Flux du bilan d'énergie d'une heure (W) : leur somme est la chaleur prise par la masse (colonne « stockage »)
+FLUX_DU_BILAN = ["flux_ventilation", "flux_baies", "flux_parois", "flux_apports", "flux_inerties_longues"]
 # Colonnes facultatives du tableau « apports » de simuler_groupe() (W)
 COLONNES_APPORTS = ("phi_conv",         # apports internes convectifs (occupants, usages, éclairage…)
                     "phi_rad",          # apports internes radiatifs
                     "phi_sys_conv",     # puissance convective émise par le système (négative en refroidissement)
                     "phi_sys_rad")      # puissance radiative émise par le système
 # Colonnes exigées dans « entrees_brasseurs » quand le groupe a des brasseurs d'air (voir moteur/brasseurs.py)
-COLONNES_BRASSEURS = ("case", "actif", "occupe", "theta_ifr", "ecart_conf_adapt")
+COLONNES_BRASSEURS = ("hleg", "actif", "occupe", "theta_ifr", "ecart_conf_adapt")
 
 
 # ============================================================
@@ -301,8 +307,123 @@ def _inerties_longues(modele, etat):
     return phi_seq, phi_ann, theta_ms, theta_ma
 
 
-def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0, phi_sl=0.0, phi_sh=0.0,
-               phi_conv=0.0, phi_rad=0.0, phi_sys_conv=0.0, phi_sys_rad=0.0, hg_es=None):
+class PasPrepare:
+    """Calcul d'une heure du groupe, pour tout ce qui ne dépend pas de la puissance émise par le système.
+
+    Créé par preparer_pas() ; resoudre_pas() et temperatures_sonde() s'en servent ensuite pour autant de puissances
+    qu'on veut. Le calcul des besoins résout ainsi trois ou quatre cas par heure sans refaire le travail commun.
+    """
+    __slots__ = ("te", "hg_ei", "theta_eieq", "hg_es", "phi_sl", "garde_baies", "apports_air", "phi_rad",
+                 "soleil_masse", "soleil_surfaces", "part_air", "u2", "part_masse", "hg_es_te", "u1_eieq",
+                 "hg_ei_eieq", "hg_em_te", "gain_parois", "phi_seq", "phi_ann", "theta_ms", "theta_ma", "pertes",
+                 "masse_precedente")
+
+
+def preparer_pas(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0, phi_sl=0.0, phi_sh=0.0,
+                 phi_conv=0.0, phi_rad=0.0, hg_es=None):
+    """Prépare le calcul d'une heure : coefficients de résolution, flux indépendants du système, inerties longues.
+
+    Entrées : celles de pas_groupe(), sans les puissances du système. Sortie : PasPrepare.
+    """
+    if theta_eieq is None:
+        theta_eieq = te
+    m = modele
+    if hg_es is None:
+        hg_es, perte_baies = m.hg_es, m.perte_baies
+    else:
+        perte_baies = hg_es / (m.a_baies * m.h_is) if m.a_baies > 0 else 0.0            # éq. 361
+    p = PasPrepare()
+    p.te, p.hg_ei, p.theta_eieq, p.hg_es, p.phi_sl, p.phi_rad = te, hg_ei, theta_eieq, hg_es, phi_sl, phi_rad
+
+    # --- Étape 3 : flux injectés aux nœuds, hors système (éq. 346 à 352, 361) ---
+    soleil_restant = (1.0 - m.fsa) * fs1
+    p.apports_air = m.fsa * fs1 + fs3 + phi_conv            # φi sans le système (éq. 346)
+    p.soleil_masse = m.fr_md * soleil_restant               # part du soleil dans φm (éq. 348)
+    p.soleil_surfaces = m.fr_sd * soleil_restant            # part du soleil dans φs (éq. 361)
+    p.garde_baies = 1.0 - perte_baies                       # part d'un flux radiatif reçu par les baies qui reste
+
+    # --- Étape 5 : coefficients de résolution (éq. 362 à 364), écrits pour rester définis sans ventilation
+    #     (Hg_ei = 0) et sans baie ni ventilation (U2 = 0) ---
+    p.part_air = m.hg_is / (m.hg_is + hg_ei)        # = U1 / Hg_ei : part d'un flux injecté à l'air qui atteint θs
+    u1 = hg_ei * p.part_air                         # éq. 362
+    p.u2 = u1 + hg_es                               # éq. 363
+    p.part_masse = m.hg_ms / (p.u2 + m.hg_ms)       # = U3 / U2 : part d'un flux injecté en θs qui atteint la masse
+    u3 = p.u2 * p.part_masse                        # éq. 364
+
+    # Températures extérieures vues par les nœuds : Hg_es.θes = Hg_es.te + φsl (éq. 342)
+    p.hg_es_te, p.u1_eieq, p.hg_ei_eieq, p.hg_em_te = hg_es * te, u1 * theta_eieq, hg_ei * theta_eieq, m.hg_em * te
+    # Hg_em.θem = Hg_em.te + φsh.Hg_em / H_TH (éq. 344, avec 1/Hg_em + 1/Hg_ms = 1/H_TH)
+    p.gain_parois = phi_sh * m.hg_em / m.h_th if m.h_th > 0 else 0.0
+    p.phi_seq, p.phi_ann, p.theta_ms, p.theta_ma = _inerties_longues(m, etat)       # étape 4
+
+    # Bilan de la masse sur l'heure, Crank-Nicolson (éq. 365, Δh = 1 h, capacité en Wh/K)
+    p.pertes = 0.5 * (u3 + m.hg_em)
+    p.masse_precedente = etat.theta_mq * (m.c_mq - p.pertes)
+    return p
+
+
+def _masse_et_noeuds(modele, p, phi_sys_conv, phi_sys_rad):
+    """Avec une puissance émise : (φi, φs, φm, tout ce qui arrive au nœud θs, θmq de fin d'heure)."""
+    m = modele
+    radiatif = p.phi_rad + phi_sys_rad
+    phi_i = p.apports_air + phi_sys_conv                                            # éq. 346 (+ système)
+    phi_l = m.fr_l_baies * radiatif                                                 # éq. 347
+    phi_m = p.soleil_masse + m.fr_m * radiatif                                      # éq. 348
+    phi_s = p.garde_baies * phi_l + p.soleil_surfaces + m.fr_s * radiatif           # éq. 361 complétée
+    # Tout ce qui arrive au nœud θs, températures extérieures comprises
+    arrive_s = phi_s + p.hg_es_te + p.phi_sl + p.u1_eieq + p.part_air * phi_i
+    phi_mtot = phi_m + p.hg_em_te + p.gain_parois + p.part_masse * arrive_s         # éq. 366
+    theta_mq = (p.masse_precedente + phi_mtot + p.phi_seq + p.phi_ann) / (m.c_mq + p.pertes)    # éq. 365
+    return phi_i, phi_s, phi_m, arrive_s, theta_mq
+
+
+def _autres_temperatures(modele, p, theta_m, arrive_s, phi_i):
+    """θi, θs, θrm et θop déduites d'une température de masse (éq. 367 à 371)."""
+    m = modele
+    theta_s = (m.hg_ms * theta_m + arrive_s) / (m.hg_ms + p.u2)                             # éq. 367
+    theta_i = (m.hg_is * theta_s + p.hg_ei_eieq + phi_i) / (m.hg_is + p.hg_ei)              # éq. 368
+    theta_rm = m.p_trm * theta_s + (1.0 - m.p_trm) * theta_i                                # éq. 369
+    theta_op = m.p_top * theta_rm + (1.0 - m.p_top) * theta_i                               # éq. 371
+    return theta_i, theta_s, theta_rm, theta_op
+
+
+def temperatures_sonde(modele, etat, p, phi_sys_conv=0.0, phi_sys_rad=0.0):
+    """(θi, θrm) en moyenne sur l'heure pour une puissance émise : ce que lit la sonde de l'émetteur (fiche 8.1).
+
+    Même calcul que resoudre_pas(), réduit aux deux températures utiles à la « droite du groupe ».
+    """
+    phi_i, _, _, arrive_s, theta_mq = _masse_et_noeuds(modele, p, phi_sys_conv, phi_sys_rad)
+    theta_i, _, theta_rm, _ = _autres_temperatures(modele, p, 0.5 * (theta_mq + etat.theta_mq), arrive_s, phi_i)
+    return theta_i, theta_rm
+
+
+def resoudre_pas(modele, etat, p, phi_sys_conv=0.0, phi_sys_rad=0.0):
+    """Résout l'heure préparée « p » pour une puissance émise par le système (W, convective et radiative).
+
+    L'état n'est pas modifié : appeler avancer_etat() ensuite. Sortie : le dictionnaire décrit dans pas_groupe().
+    """
+    m = modele
+    phi_i, phi_s, phi_m, arrive_s, theta_mq = _masse_et_noeuds(m, p, phi_sys_conv, phi_sys_rad)
+    theta_mq_moy = 0.5 * (theta_mq + etat.theta_mq)
+    theta_i, theta_s, theta_rm, theta_op = _autres_temperatures(m, p, theta_mq, arrive_s, phi_i)
+    theta_i_moy, theta_s_moy, theta_rm_moy, theta_op_moy = _autres_temperatures(m, p, theta_mq_moy, arrive_s, phi_i)
+
+    return {
+        "theta_i": theta_i, "theta_s": theta_s, "theta_mq": theta_mq, "theta_rm": theta_rm, "theta_op": theta_op,
+        "theta_i_moy": theta_i_moy, "theta_s_moy": theta_s_moy, "theta_mq_moy": theta_mq_moy,
+        "theta_rm_moy": theta_rm_moy, "theta_op_moy": theta_op_moy,
+        "theta_ms": p.theta_ms, "theta_ma": p.theta_ma, "phi_mq_seq": p.phi_seq, "phi_mq_ann": p.phi_ann,
+        # Bilan de l'heure, avec les températures moyennes
+        "flux_ventilation": p.hg_ei * (p.theta_eieq - theta_i_moy),
+        "flux_baies": p.hg_es * (p.te - theta_s_moy) + p.phi_sl,
+        "flux_parois": m.hg_em * (p.te - theta_mq_moy) + p.gain_parois,
+        "flux_apports": phi_i + phi_s + phi_m,
+        "flux_inerties_longues": p.phi_seq + p.phi_ann,
+        "stockage": m.c_mq * (theta_mq - etat.theta_mq),
+    }
+
+
+def pas_groupe(modele, etat, *, phi_sys_conv=0.0, phi_sys_rad=0.0, **sollicitations):
     """Calcul d'une heure du groupe. L'état n'est pas modifié : appeler avancer_etat() ensuite.
 
     Entrées de l'heure :
@@ -326,67 +447,10 @@ def pas_groupe(modele, etat, *, te, hg_ei=0.0, theta_eieq=None, fs1=0.0, fs3=0.0
             bilan de l'heure (W) : stockage = somme des cinq flux, le stockage étant la chaleur prise par
             la masse quotidienne. flux_apports compte tout ce qui est injecté à l'intérieur (soleil de courte
             longueur d'onde, apports internes, système), net de la part radiative repartie par les baies.
+
+    Pour plusieurs puissances sur la même heure, appeler preparer_pas() une fois puis resoudre_pas() pour chacune.
     """
-    if theta_eieq is None:
-        theta_eieq = te
-    m = modele
-    if hg_es is None:
-        hg_es, perte_baies = m.hg_es, m.perte_baies
-    else:
-        perte_baies = hg_es / (m.a_baies * m.h_is) if m.a_baies > 0 else 0.0            # éq. 361
-
-    # --- Étape 3 : flux injectés aux nœuds (éq. 346 à 352, 361, 372) ---
-    radiatif = phi_rad + phi_sys_rad
-    soleil_restant = (1.0 - m.fsa) * fs1
-    phi_i = m.fsa * fs1 + fs3 + phi_conv + phi_sys_conv                             # éq. 346 (+ système)
-    phi_l = m.fr_l_baies * radiatif                                                 # éq. 347
-    phi_m = m.fr_md * soleil_restant + m.fr_m * radiatif                            # éq. 348
-    phi_s = (1.0 - perte_baies) * phi_l + m.fr_sd * soleil_restant + m.fr_s * radiatif     # éq. 361 complétée
-
-    # --- Étape 5 : coefficients de résolution (éq. 362 à 364), écrits pour rester définis sans ventilation
-    #     (Hg_ei = 0) et sans baie ni ventilation (U2 = 0) ---
-    part_air = m.hg_is / (m.hg_is + hg_ei)          # = U1 / Hg_ei : part d'un flux injecté à l'air qui atteint θs
-    u1 = hg_ei * part_air                           # éq. 362
-    u2 = u1 + hg_es                                 # éq. 363
-    part_masse = m.hg_ms / (u2 + m.hg_ms)           # = U3 / U2 : part d'un flux injecté en θs qui atteint la masse
-    u3 = u2 * part_masse                            # éq. 364
-
-    # Tout ce qui arrive au nœud θs, températures extérieures comprises : Hg_es.θes = Hg_es.te + φsl (éq. 342)
-    arrive_s = phi_s + hg_es * te + phi_sl + u1 * theta_eieq + part_air * phi_i
-    # Hg_em.θem = Hg_em.te + φsh.Hg_em / H_TH (éq. 344, avec 1/Hg_em + 1/Hg_ms = 1/H_TH)
-    gain_parois = phi_sh * m.hg_em / m.h_th if m.h_th > 0 else 0.0
-    phi_seq, phi_ann, theta_ms, theta_ma = _inerties_longues(m, etat)               # étape 4
-    phi_mtot = phi_m + m.hg_em * te + gain_parois + part_masse * arrive_s           # éq. 366
-
-    # Bilan de la masse sur l'heure, Crank-Nicolson (éq. 365, Δh = 1 h, capacité en Wh/K)
-    pertes = 0.5 * (u3 + m.hg_em)
-    theta_mq = ((etat.theta_mq * (m.c_mq - pertes) + phi_mtot + phi_seq + phi_ann) / (m.c_mq + pertes))
-    theta_mq_moy = 0.5 * (theta_mq + etat.theta_mq)
-
-    def autres_temperatures(theta_m):
-        """θs, θi, θrm et θop déduites d'une température de masse (éq. 367 à 371)."""
-        theta_s = (m.hg_ms * theta_m + arrive_s) / (m.hg_ms + u2)                               # éq. 367
-        theta_i = (m.hg_is * theta_s + hg_ei * theta_eieq + phi_i) / (m.hg_is + hg_ei)          # éq. 368
-        theta_rm = m.p_trm * theta_s + (1.0 - m.p_trm) * theta_i                                # éq. 369
-        theta_op = m.p_top * theta_rm + (1.0 - m.p_top) * theta_i                               # éq. 371
-        return theta_i, theta_s, theta_rm, theta_op
-
-    theta_i, theta_s, theta_rm, theta_op = autres_temperatures(theta_mq)
-    theta_i_moy, theta_s_moy, theta_rm_moy, theta_op_moy = autres_temperatures(theta_mq_moy)
-
-    return {
-        "theta_i": theta_i, "theta_s": theta_s, "theta_mq": theta_mq, "theta_rm": theta_rm, "theta_op": theta_op,
-        "theta_i_moy": theta_i_moy, "theta_s_moy": theta_s_moy, "theta_mq_moy": theta_mq_moy,
-        "theta_rm_moy": theta_rm_moy, "theta_op_moy": theta_op_moy,
-        "theta_ms": theta_ms, "theta_ma": theta_ma, "phi_mq_seq": phi_seq, "phi_mq_ann": phi_ann,
-        # Bilan de l'heure, avec les températures moyennes
-        "flux_ventilation": hg_ei * (theta_eieq - theta_i_moy),
-        "flux_baies": hg_es * (te - theta_s_moy) + phi_sl,
-        "flux_parois": m.hg_em * (te - theta_mq_moy) + gain_parois,
-        "flux_apports": phi_i + phi_s + phi_m,
-        "flux_inerties_longues": phi_seq + phi_ann,
-        "stockage": m.c_mq * (theta_mq - etat.theta_mq),
-    }
+    return resoudre_pas(modele, etat, preparer_pas(modele, etat, **sollicitations), phi_sys_conv, phi_sys_rad)
 
 
 def matrice_groupe(modele, etat, **sollicitations):
@@ -396,9 +460,10 @@ def matrice_groupe(modele, etat, **sollicitations):
     convectifs, puis avec 10 W/m² radiatifs. Les sollicitations sont celles de pas_groupe(), sans phi_sys_*.
     """
     puissance = hyp("puissance_matrice") * modele.surface_m2
+    prepare = preparer_pas(modele, etat, **sollicitations)
     colonnes = []
     for phi_sys_conv, phi_sys_rad in ((0.0, 0.0), (puissance, 0.0), (0.0, puissance)):
-        r = pas_groupe(modele, etat, phi_sys_conv=phi_sys_conv, phi_sys_rad=phi_sys_rad, **sollicitations)
+        r = resoudre_pas(modele, etat, prepare, phi_sys_conv, phi_sys_rad)
         colonnes.append([r[f"{nom}_moy"] for nom in TEMPERATURES])
         colonnes.append([r[nom] for nom in TEMPERATURES])
     return np.array(colonnes).T
@@ -506,7 +571,7 @@ def simuler_groupe(groupe, meteo, jeu, apports=None, confort_adaptatif=None, eff
         # Brasseurs : à l'arrêt à la première heure (pas d'heure précédente), puis pilotés par l'heure h−1
         chaleur = energie = ecart_ba = 0.0
         if types and h > 0:
-            res_b = pas_brasseurs(types, regimes, groupe.volume_m3, case=int(b["case"][h]),
+            res_b = pas_brasseurs(types, regimes, groupe.volume_m3, hleg=int(b["hleg"][h]),
                                   actif=bool(b["actif"][h]), occupe=bool(b["occupe"][h]),
                                   theta_op_prec=etat.theta_op, theta_i_prec=etat.theta_i,
                                   theta_rm_prec=etat.theta_rm, theta_ifr=b["theta_ifr"][h],

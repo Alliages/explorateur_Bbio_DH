@@ -32,7 +32,10 @@ r"""
 
  Pib est l'inconnue : c'est la pression pour laquelle il entre
  autant d'air qu'il en sort (éq. 167), ventilation comprise.
- On la cherche chaque heure par dichotomie.
+ On la cherche chaque heure entre deux pressions qui l'encadrent,
+ par fausse position (la corde entre les deux bornes), avec un
+ pas de dichotomie quand l'encadrement se resserre mal : plusieurs
+ fois moins d'évaluations du bilan qu'une dichotomie seule.
 
  Ventilation du Bbio : double flux à débits volumiques égaux ;
  l'air soufflé, plus froid que l'air repris en hiver, est plus
@@ -50,15 +53,16 @@ r"""
 
 import numpy as np
 
+from config.reglages import KELVIN, SECONDES_PAR_HEURE
 from moteur.hypotheses import hyp
 
-KELVIN = 273.0
-SECONDES_PAR_HEURE = 3600.0
 PESANTEUR = 9.81                    # m/s²
 EXPOSANT = 2.0 / 3.0                # loi de débit des défauts d'étanchéité (éq. 151)
 INCLINAISON_FACADE_MIN_DEG = 60.0   # façade : à moins de 30° de la verticale (§ 5.6.3.1.4)
 INCLINAISON_FACADE_MAX_DEG = 120.0  # au-delà : plancher bas, hors de la surface perméable
-ITERATIONS = 60                     # dichotomie sur Pib : précision bien meilleure que 1e-6 Pa
+ITERATIONS = 180                    # essais au plus ; jamais atteint : encadrement divisé par 2 tous les 3 essais
+PRECISION_PRESSION = 1e-12          # Pa : la recherche de Pib s'arrête quand deux essais successifs sont plus proches
+ESSAIS_PAR_CONTROLE = 3             # tous les 3 essais, l'encadrement doit avoir été divisé par 2 ; sinon dichotomie
 MARGE_PRESSION = 1.0                # Pa ajoutés de part et d'autre de l'encadrement de Pib
 
 
@@ -151,13 +155,52 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
         bas -= 10.0 * (haut - bas)
     while bilan(haut) > 0:
         haut += 10.0 * (haut - bas)
-    for _ in range(ITERATIONS):
-        milieu = 0.5 * (bas + haut)
-        if bilan(milieu) > 0:
-            bas = milieu
-        else:
-            haut = milieu
-    pib = 0.5 * (bas + haut)
+    # Recherche de Pib : le bilan décroît de bilan(bas) > 0 à bilan(haut) < 0.
+    #   1. fausse position : on essaie le point où la corde entre les deux bornes coupe zéro ; si la même borne
+    #      vient d'être déplacée deux fois de suite, le bilan de l'autre est divisé par deux (variante dite
+    #      « Illinois »), ce qui force les deux bornes à se rapprocher de la solution ;
+    #   2. garde-fou : si, en ESSAIS_PAR_CONTROLE essais, l'encadrement n'a pas été divisé par deux, l'essai
+    #      suivant est le milieu (dichotomie) ;
+    #   3. arrêt quand deux essais successifs sont à moins de PRECISION_PRESSION, ou sur un bilan nul.
+    bilan_bas, bilan_haut = bilan(bas), bilan(haut)
+    if bilan_bas == 0.0:
+        pib = bas
+    elif bilan_haut == 0.0:
+        pib = haut
+    else:
+        pib = None
+        dernier_cote = 0                # + 1 : borne basse déplacée à l'essai précédent ; − 1 : borne haute
+        largeur_controle, au_milieu = haut - bas, False
+        for essai_no in range(1, ITERATIONS + 1):
+            if au_milieu:
+                essai = 0.5 * (bas + haut)
+            else:
+                essai = (bas * bilan_haut - haut * bilan_bas) / (bilan_haut - bilan_bas)
+                if not bas < essai < haut:          # arrondis : la corde sort de l'encadrement
+                    essai = 0.5 * (bas + haut)
+            bilan_essai = bilan(essai)
+            if bilan_essai == 0.0 or (pib is not None and abs(essai - pib) <= PRECISION_PRESSION):
+                pib = essai
+                break
+            pib = essai
+            if bilan_essai > 0:
+                bas, bilan_bas = essai, bilan_essai
+                if dernier_cote == 1 and not au_milieu:
+                    bilan_haut *= 0.5
+                dernier_cote = 1
+            else:
+                haut, bilan_haut = essai, bilan_essai
+                if dernier_cote == -1 and not au_milieu:
+                    bilan_bas *= 0.5
+                dernier_cote = -1
+            if au_milieu:
+                dernier_cote, au_milieu = 0, False
+            if essai_no % ESSAIS_PAR_CONTROLE == 0:
+                au_milieu = haut - bas > 0.5 * largeur_controle
+                largeur_controle = haut - bas
+            if haut - bas <= PRECISION_PRESSION:
+                pib = 0.5 * (bas + haut)
+                break
 
     entrant = sortant = 0.0
     for c, motrice in zip(coefficients, motrices):

@@ -88,7 +88,8 @@ def test_bbio_max_a_la_main():
     detail = bbio_max("H1a", 50.0, 717.0 / 24, 4809.0)
     assert detail["bbio_max"] == pytest.approx(68.4875)
     assert detail["mb_combles"] == 0.0 and detail["mb_surf_tot"] == 0.0
-    # H3, 16 logements pour 1 468,5 m², bâtiment de 2 076,9 m², BR3 : 65 × (1 − 0,1 + 0,2) + (−2 + 4,589) = 74,09
+    # H3, 16 logements pour 1 468,5 m², bâtiment de 2 076,9 m², BR3 :
+    # 65 × (1 − 0,1 + 0,2) + (−2 + 4,589) = 74,09
     assert bbio_max("H3", 0.0, 1468.5 / 16, 2076.9, "BR3")["bbio_max"] == pytest.approx(74.089, abs=1e-3)
     # H2a, 3 logements pour 223 m², petit bâtiment de 410 m² : 65 × 0,9 + (−6 + 7,433) + (19,5 − 6,15) = 73,28
     assert bbio_max("H2a", 0.0, 223.0 / 3, 410.0, "BR2")["bbio_max"] == pytest.approx(73.283, abs=1e-3)

@@ -76,7 +76,8 @@ def test_consignes(scenarios, calendrier):
 
 
 def test_apports_internes(scenarios, calendrier):
-    """Apports hors occupants : 5,7 W/m², à 100 % de 6h à 9h et de 17h à 22h en semaine, 20 % sinon, 0 en vacances."""
+    """Apports hors occupants : 5,7 W/m², à 100 % de 6h à 9h et de 17h à 22h en semaine, 20 % sinon, 0 en
+    vacances."""
     ratio = scenarios.derouler("logements_apports_chaleur", calendrier)
     assert scenarios.parametres["logements_apports_chaleur"] == pytest.approx(5.7)
     assert scenarios.parametres["logements_chaleur_occupant"] == pytest.approx(90)

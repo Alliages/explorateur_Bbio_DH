@@ -3,12 +3,12 @@
 import pytest
 
 from moteur.besoins import bilan_besoins, calculer_besoins
+from moteur.groupe import FLUX_DU_BILAN
 from moteur.infiltrations import (InfiltrationsGroupe, coefficients_pression, defauts_groupe, equilibre,
                                   masse_volumique, surfaces_permeables)
 from moteur.meteo import charger_meteo
 from moteur.structures import Baie, Groupe, Paroi, Zone
 
-FLUX_DU_BILAN = ["flux_ventilation", "flux_baies", "flux_parois", "flux_apports", "flux_inerties_longues"]
 SURFACE = 300.0
 PAR_PASCAL = 1.0 / 4.0 ** (2.0 / 3.0)       # débit sous 1 Pa d'un défaut de 1 m³/h sous 4 Pa
 
@@ -52,8 +52,8 @@ def test_defauts_d_un_groupe():
 # ------------------------------------------------------------------
 def test_vent_seul():
     # Même température dedans et dehors (19 °C, 1,2 kg/m³) : pas de tirage. Vent de 4 m/s, Cp = ± 0,05 :
-    # pression motrice ± ½ × 0,05 × 1,2 × 16 = ± 0,48 Pa ; par symétrie Pib = 0 ; il entre par les deux défauts au
-    # vent : 2 × 25 × 0,48^(2/3) / 4^(2/3) m³/h
+    # pression motrice ± ½ × 0,05 × 1,2 × 16 = ± 0,48 Pa ; par symétrie Pib = 0 ; il entre par les deux
+    # défauts au vent : 2 × 25 × 0,48^(2/3) / 4^(2/3) m³/h
     defauts = defauts_groupe(groupe(toiture=False, permeabilite_q4pa=1.0))
     r = equilibre(defauts, 4.0, 19.0, 19.0)
     assert r["pib"] == pytest.approx(0.0, abs=1e-6)
@@ -61,6 +61,23 @@ def test_vent_seul():
     assert r["debit_entrant_kg_s"] == pytest.approx(-r["debit_sortant_kg_s"])
     # Sans vent ni écart de température : rien ne bouge
     assert equilibre(defauts, 0.0, 19.0, 19.0)["debit_entrant_m3h"] == pytest.approx(0.0, abs=1e-6)
+
+
+@pytest.mark.parametrize("vent, te, theta_i, debit, theta_souffle", [
+    (0.0, 19.0, 19.0, 0.0, None), (4.0, 19.0, 19.0, 0.0, None), (0.0, 0.0, 20.0, 0.0, None),
+    (3.0, 0.0, 20.0, 300.0, 10.0), (12.0, -8.0, 21.0, 800.0, 16.0), (0.3, 35.0, 26.0, 150.0, 35.0),
+    (7.0, 5.0, 19.0, 5000.0, -5.0)])
+@pytest.mark.parametrize("traversant", [True, False])
+def test_equilibre_bilan_nul(vent, te, theta_i, debit, theta_souffle, traversant):
+    """À la pression trouvée, il entre autant d'air qu'il en sort (éq. 167), ventilation comprise."""
+    from config.reglages import SECONDES_PAR_HEURE
+    from moteur.infiltrations import masse_volumique
+    defauts = defauts_groupe(groupe(traversant, permeabilite_q4pa=1.7), hauteur_zone_m=8.4, hauteur_moyenne_m=4.2)
+    r = equilibre(defauts, vent, te, theta_i, debit, theta_souffle)
+    souffle = masse_volumique(theta_souffle if theta_souffle is not None else te)
+    ventilation = (souffle - masse_volumique(theta_i)) * debit / SECONDES_PAR_HEURE
+    assert r["debit_entrant_kg_s"] + r["debit_sortant_kg_s"] + ventilation == pytest.approx(0.0, abs=1e-9)
+    assert r["debit_entrant_kg_s"] >= 0.0 >= r["debit_sortant_kg_s"]
 
 
 def test_tirage_thermique_seul():
