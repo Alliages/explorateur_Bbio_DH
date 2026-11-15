@@ -4,8 +4,18 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 15/11/2026
 
-- Dernière version publiée sur `travail` : **0.9.0** (commit f840dc7). **0.9.1** préparée et testée dans l'arbre
-  de travail, non publiée (attendre « Push »).
+- Dernière version publiée sur `travail` : **0.9.2**.
+- **0.9.2** : trois niveaux d'enveloppe, « Performant », « Moyen » (à l'ouverture) et « Faible », lus dans
+  `donnees/typologies_logements.csv` (`saisie.NIVEAUX_ENVELOPPE`, `CHAMPS_TYPOLOGIES` : colonne du CSV → champ de
+  `Boite`). Choix « Enveloppe » sous « Bâtiment de départ » (`formulaire.choisir_depart`) ; départ =
+  `boite_de_depart(bâtiment, niveau)`. Changer de niveau ne réécrit que les 13 saisies d'enveloppe ; changer de
+  bâtiment réécrit tout avec le niveau gardé. Scripts et méthode : `outils/typologies/` (source hors dépôt,
+  graphiques avec `matplotlib`, absent de `.venv`). Hypothèses 88 (ψ moyen sur les seules rives des planchers) et
+  89 (6 opérations). Logement 70 m² : Bbio 78,5 / 99,1 / 116,3, DH 858 / 1 308 / 1 756 ; immeuble : Bbio
+  46,6 / 54,9 / 63,1, DH 746 / 1 125 / 1 541 (performant / moyen / faible). Vu dans Chrome : passage à
+  « Performant », curseurs à jour à l'écran, DH 858. « Pédagogie » passe en 0.9.4.
+  `outils/typologies/valeurs_3_rset.py` : valeurs des 13 variables par groupe pour les 3 RSET « scénario 2 » de
+  `_sources` (Nice A = version retenue, Paris et Sète = versions écartées) → `_resultats/valeurs_typologies_3_rset.csv`.
 - **0.9.1** : choix du calcul, « DH » (par défaut), « Bbio » ou « Bbio et DH » (`formulaire.choisir_calculs`) ;
   seul le calcul demandé est lancé, chacun a son cache dans `app.py` (`_bbio`, `_dh`) ; `Brique.besoin` dit
   quel calcul une brique lit. Bâtiment de départ (`saisie.BATIMENTS_DE_DEPART`) : « Logement de 70 m² »
@@ -33,7 +43,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 - 0.8.17 : relecture sans effet sur le calcul. 0.8.16 : `moteur/confort.py`, `moteur/dh.py`,
   `calculer_besoins(mode="th_d")`, règles Th-D des protections et des ouvertures, brasseurs lus dans les RSET,
   `outils/comparer_reference.py --dh`.
-- Tests : `python -m pytest` → 346 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
+- Tests : `python -m pytest` → 347 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
   minute sur un poste peu chargé.
 - `docs/audit.md` : sections 0.8.16 (hypothèses 75 à 84), 0.8.17, 0.9.0 (constats du contrôle visuel, temps de
   calcul, hypothèses 85 et 86) et 0.9.1 (temps par calcul, hypothèse 87).
@@ -46,7 +56,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## Prochaine étape
 
-« Push » de la 0.9.1, puis mise en ligne sur accord. Ensuite la 0.9.2 (pédagogie) : page d'accueil,
+« Push » de la 0.9.2, puis mise en ligne sur accord. Ensuite la 0.9.4 (pédagogie) : page d'accueil,
 nouvelles briques (point « Interface, suites de la 0.9.0 » de `ROADMAP.md`). Écrire une brique : un fichier dans
 `interface/briques/` (voir `base.py`) et une ligne dans `__init__.py`. Deux points vus à l'écran et notés dans
 `ROADMAP.md` : protections baissées à 75 % jour et nuit pendant la semaine chaude ; dernier jour incomplet sur le

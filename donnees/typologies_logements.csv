@@ -1,0 +1,14 @@
+﻿variable;colonne_source;unite;sens;n_zones;n_operations;performant;moyen;faible;remarque
+Uw baie;uw;W/m².K;bas = performant;18;6;1,35;1,4;1,45;
+Sw baie été (menuiserie + vitrage, sans protection);sw_e;-;bas = performant;18;6;0,35;0,43;0,47;"bas = performant en été seulement ; en hiver, un Sw élevé est préférable"
+Transmission lumineuse;tl;-;haut = performant;18;6;0,54;0,5;0,49;
+Facteur solaire, protection baissée;sw_protege;-;bas = performant;18;6;0,03;0,07;0,1;"bas = performant en été seulement ; en hiver, un Sw élevé est préférable"
+Uw, protection baissée;uw_protege;W/m².K;bas = performant;18;6;1,05;1,1;1,25;
+U des murs;u_mur;W/m².K;bas = performant;18;6;0,2;0,25;0,3;
+U de la toiture;u_toiture;W/m².K;bas = performant;15;6;0,13;0,15;0,24;
+U du plancher bas;u_plancher_bas;W/m².K;bas = performant;16;6;0,18;0,23;0,24;
+Ponts thermiques (psi moyen, tous ponts);psi_moyen;W/m.K;bas = performant;18;6;0,12;0,22;0,27;tous ponts thermiques confondus (pas seulement les planchers)
+Ventilation (par m² habitable);ventilation_m3h_m2;m³/h.m²;haut = performant;18;6;1,5;1,4;1,2;
+Perméabilité à l'air Q4Pa-surf;permeabilite_q4pa;m³/h.m²;bas = performant;18;6;0,7;0,8;0,8;
+Part ouvrante de la baie (ratio d'ouverture max);ratio_ouverture_max;-;haut = performant;18;6;0,8;0,78;0,64;ratio d'ouverture maximale de la baie
+Inertie quotidienne;inertie_quotidienne (+cmq_surf, amq_surf);classe;haut = performant;18;6;très lourde;lourde;lourde;"classes Th-I ; « personnalisée » convertie via cmq_surf et amq_surf"

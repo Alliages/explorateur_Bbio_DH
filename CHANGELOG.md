@@ -3,6 +3,41 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.2 — évolution (15/11/2026), niveaux d'enveloppe
+
+« Pédagogie » passe en 0.9.4 (numéro libre depuis la révision de l'ordre des versions).
+
+- **Trois niveaux d'enveloppe** (`interface/saisie.py`, `NIVEAUX_ENVELOPPE`, `boite_de_depart`) : « Performant »,
+  « Moyen » (à l'ouverture) et « Faible », lus dans `donnees/typologies_logements.csv`. Ce sont les repères P25,
+  P50 et P75, pondérés par la surface habitable, de 18 zones de logements de 6 études RE2020. Ils fixent 13
+  saisies : Uw, Sw, TL, Sw et Uw protection baissée, part ouvrante, U des murs, de la toiture et du plancher bas,
+  ponts thermiques, inertie, ventilation, perméabilité. Le ψ moyen de tous les ponts est appliqué aux rives des
+  planchers (hypothèse 88 de `docs/audit.md`).
+- **Menu de gauche** (`interface/formulaire.py`, `choisir_depart`) : choix « Enveloppe » sous « Bâtiment de
+  départ ». Changer de niveau ne réécrit que les 13 saisies d'enveloppe et garde la forme ; changer de bâtiment
+  remet tout à ses valeurs, avec l'enveloppe du niveau choisi.
+- **Pas des curseurs** affinés pour accueillir les valeurs des niveaux : Uw et Uw protégé 0,05 ; Sw, TL, U du
+  plancher bas, ψ 0,01 ; part ouvrante 1 %. La comparaison écrit Uw avec deux décimales.
+- **Scripts** `outils/typologies/` (calcul du CSV, graphique pédagogique `docs/graphique_pedagogique_logements.png`,
+  boîtes à moustaches, valeurs par groupe de quelques RSET avec `valeurs_3_rset.py`) et leur `README.md`. Leur
+  source, tirée des RSEE, reste hors du dépôt.
+- `config/reglages.py` : `CHEMIN_TYPOLOGIES`.
+
+Vérification
+
+| Bâtiment | Niveau | Bbio (max) | DH °C.h (max 1 250) |
+|---|---|---|---|
+| Logement de 70 m² | Performant | 78,5 (78,0) | 858 |
+| Logement de 70 m² | Moyen | 99,1 (78,0) | 1 308 |
+| Logement de 70 m² | Faible | 116,3 (78,0) | 1 756 |
+| Immeuble de 9 logements | Performant | 46,6 (69,8) | 746 |
+| Immeuble de 9 logements | Moyen | 54,9 (69,8) | 1 125 |
+| Immeuble de 9 logements | Faible | 63,1 (69,8) | 1 541 |
+
+- `Boite()` (valeurs de la 0.9.1) inchangée : Bbio 114,7, DH 1 964 °C.h.
+- Tests : 1 nouveau (niveaux d'enveloppe) ; page entière étendue (niveau à l'ouverture, changement de niveau
+  après une forme modifiée, changement de bâtiment avec le niveau gardé).
+
 ## 0.9.1 — évolution (15/11/2026), choix du calcul et bâtiment de départ
 
 Numéro impair pour une évolution, à la demande : 0.9.2 reste réservé à « Pédagogie ».

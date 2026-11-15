@@ -30,9 +30,11 @@
 ============================================================
 """
 
+import csv
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from config.reglages import CHEMIN_TYPOLOGIES, DECIMALE_CSV, SEPARATEUR_CSV
 from moteur.hypotheses import hyp
 from moteur.structures import (Baie, Batiment, Brasseur, Groupe, MasqueProcheHorizontal, Paroi, PontThermique,
                                Projet, Zone, ramener_azimut)
@@ -61,6 +63,19 @@ PART_ALLEGE = 0.55          # part du vide restant placée sous la baie (allège
 DEBORD_MAX_M = 3.0          # profondeur maximale d'un balcon ou d'une casquette (saisie bornée)
 NOM_BATIMENT, NOM_ZONE, NOM_GROUPE = "Bâtiment", "Logements", "Boîte"
 CLE_GROUPE = (NOM_BATIMENT, NOM_ZONE, NOM_GROUPE)       # clé des résultats horaires du moteur
+# Niveaux d'enveloppe (donnees/typologies_logements.csv) : libellé affiché → colonne du CSV ; « Moyen » à l'ouverture
+NIVEAUX = {"Performant": "performant", "Moyen": "moyen", "Faible": "faible"}
+NIVEAU_D_OUVERTURE = "Moyen"
+# Colonne source du CSV (premier mot) → champ de Boite. psi_moyen couvre tous les ponts thermiques ; la boîte
+# l'applique aux seules rives des planchers (hypothèse 88 de docs/audit.md).
+CHAMPS_TYPOLOGIES = {"uw": "uw", "sw_e": "sw", "tl": "tl", "sw_protege": "sw_protege", "uw_protege": "uw_protege",
+                     "u_mur": "u_mur", "u_toiture": "u_toiture", "u_plancher_bas": "u_plancher",
+                     "psi_moyen": "psi_planchers", "ventilation_m3h_m2": "debit_ventilation_m3h_m2",
+                     "permeabilite_q4pa": "permeabilite_q4pa", "ratio_ouverture_max": "ratio_ouverture_max",
+                     "inertie_quotidienne": "inertie"}
+# Classes d'inertie écrites dans le CSV → classes du moteur
+CLASSES_INERTIE = {"très légère": "tres_legere", "légère": "legere", "moyenne": "moyenne", "lourde": "lourde",
+                   "très lourde": "tres_lourde"}
 
 
 # ============================================================
@@ -71,7 +86,9 @@ class Boite:
     """Description simple d'un bâtiment de logements : tout ce que l'interface fait saisir.
 
     Valeurs par défaut : le logement de 70 m² de BATIMENTS_DE_DEPART, un petit bâtiment isolé (quatre façades,
-    toiture et plancher bas sur l'extérieur ou le sol), calculé comme du logement collectif.
+    toiture et plancher bas sur l'extérieur ou le sol), calculé comme du logement collectif. La page, elle,
+    s'ouvre sur l'enveloppe du niveau « Moyen » (boite_de_depart) : seules la forme et les saisies hors enveloppe
+    viennent de ces valeurs.
     Figée (frozen) : deux boîtes égales donnent le même calcul, ce qui sert de clé au cache de l'interface.
     """
     # --- Site ---
@@ -162,7 +179,8 @@ class Boite:
 # ============================================================
 # BÂTIMENTS DE DÉPART (premier choix du menu de gauche)
 # ============================================================
-# Choisir l'un d'eux remet toutes les saisies à ses valeurs. Le premier est celui de la page à son ouverture.
+# Choisir l'un d'eux remet toutes les saisies à ses valeurs, l'enveloppe étant celle du niveau choisi
+# (boite_de_depart). Le premier est celui de la page à son ouverture.
 BATIMENTS_DE_DEPART = {
     # 10 m × 7 m, un niveau, un logement : 70 m² habitables
     "Logement de 70 m²": Boite(),
@@ -170,6 +188,45 @@ BATIMENTS_DE_DEPART = {
     "Immeuble de 9 logements": Boite(longueur_m=20.0, profondeur_m=12.0, nb_niveaux=3, part_habitable=0.8,
                                      nb_logements=9),
 }
+
+
+# ============================================================
+# NIVEAUX D'ENVELOPPE (second choix du menu de gauche)
+# ============================================================
+# Le bâtiment donne la forme, le niveau donne l'enveloppe (13 saisies : baies, parois, ponts thermiques, inertie,
+# ventilation, perméabilité). Les trois niveaux sont les repères P25, P50 et P75, pondérés par la surface
+# habitable, de 18 zones de logements tirées de 6 études RE2020 (outils/typologies/, graphique dans
+# docs/graphique_pedagogique_logements.png).
+def lire_niveaux_enveloppe(chemin=CHEMIN_TYPOLOGIES):
+    """Lit le CSV des typologies : {libellé du niveau: {champ de Boite: valeur}}.
+
+    Une colonne source inconnue ou un champ manquant lève une ValueError : le CSV et CHAMPS_TYPOLOGIES doivent
+    rester d'accord.
+    """
+    niveaux = {libelle: {} for libelle in NIVEAUX}
+    with open(chemin, encoding="utf-8-sig", newline="") as f:          # le CSV est écrit avec un BOM (Excel)
+        for ligne in csv.DictReader(f, delimiter=SEPARATEUR_CSV):
+            colonne = ligne["colonne_source"].split()[0]                # « inertie_quotidienne (+cmq_surf, …) »
+            if colonne not in CHAMPS_TYPOLOGIES:
+                raise ValueError(f"{chemin} : colonne source inconnue « {colonne} »")
+            champ = CHAMPS_TYPOLOGIES[colonne]
+            for libelle, colonne_niveau in NIVEAUX.items():
+                texte = ligne[colonne_niveau].strip()
+                niveaux[libelle][champ] = CLASSES_INERTIE[texte] if champ == "inertie" \
+                    else float(texte.replace(DECIMALE_CSV, "."))
+    for libelle, champs in niveaux.items():
+        manquants = set(CHAMPS_TYPOLOGIES.values()) - set(champs)
+        if manquants:
+            raise ValueError(f"{chemin} : niveau {libelle}, champs absents : {', '.join(sorted(manquants))}")
+    return niveaux
+
+
+NIVEAUX_ENVELOPPE = lire_niveaux_enveloppe()
+
+
+def boite_de_depart(batiment=None, niveau=NIVEAU_D_OUVERTURE):
+    """Boîte de départ : la forme du bâtiment choisi (le premier par défaut), l'enveloppe du niveau choisi."""
+    return replace(BATIMENTS_DE_DEPART[batiment or next(iter(BATIMENTS_DE_DEPART))], **NIVEAUX_ENVELOPPE[niveau])
 
 
 def gabarit_baie(part_vitree, hauteur_etage_m):

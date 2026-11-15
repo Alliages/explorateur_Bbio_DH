@@ -113,11 +113,11 @@ python -m pytest
 |---|---|
 | `moteur/` | Calcul, sans aucune dépendance à l'interface |
 | `app.py`, `interface/` | Interface Streamlit : saisie d'une boîte, axonométrie, briques pédagogiques (`interface/briques/`), comparaison de deux variantes |
-| `donnees/` | Météo, scénarios et hypothèses (CSV : séparateur `;`, virgule décimale, UTF-8) |
+| `donnees/` | Météo, scénarios, hypothèses et niveaux d'enveloppe des logements (CSV : séparateur `;`, virgule décimale, UTF-8) |
 | `config/` | Chemins, formats et listes |
-| `outils/` | Préparation des données, lecture d'une étude (RSET) et comparaison à ses résultats |
+| `outils/` | Préparation des données, lecture d'une étude (RSET) et comparaison à ses résultats ; `outils/typologies/` : niveaux d'enveloppe tirés des études |
 | `tests/` | Tests automatiques |
-| `docs/` | Journal d'audit, note de passation et capture de l'interface |
+| `docs/` | Journal d'audit, note de passation, capture de l'interface et graphique des niveaux d'enveloppe |
 
 Modules du moteur, dans l'ordre du calcul (chaque fichier commence par ses sources et un schéma) :
 

@@ -5,7 +5,8 @@
  Lancement local :  streamlit run app.py
 
  La page tient en quatre gestes :
-   1. partir d'un bâtiment (logement de 70 m² ou immeuble) et le
+   1. partir d'un bâtiment (logement de 70 m² ou immeuble) et
+      d'une enveloppe (performante, moyenne ou faible), puis les
       modifier dans le menu de gauche (interface/formulaire.py) ;
    2. le voir tourner et se vitrer aussitôt (interface/axonometrie.py) ;
    3. lancer le calcul (DH, Bbio ou les deux), puis lire les
@@ -33,8 +34,8 @@ from interface import axonometrie, calcul, comparaison
 from interface.briques import BRIQUES
 from interface.briques.base import montrer
 from interface.briques.graphiques import nombre
-from interface.formulaire import CHOIX_CALCULS, choisir_batiment, choisir_calculs, saisir
-from interface.saisie import BATIMENTS_DE_DEPART, point_cardinal
+from interface.formulaire import CHOIX_CALCULS, choisir_calculs, choisir_depart, saisir
+from interface.saisie import boite_de_depart, point_cardinal
 
 # ============================================================
 # RÉGLAGES
@@ -73,13 +74,13 @@ def _calculer(boite, calculs):
 # ============================================================
 # 1. SAISIE (menu de gauche)
 # ============================================================
-if "boite_calculee" not in st.session_state:                # premier affichage : le premier bâtiment, déjà calculé
-    st.session_state["boite_calculee"] = next(iter(BATIMENTS_DE_DEPART.values()))
+if "boite_calculee" not in st.session_state:    # premier affichage : premier bâtiment, enveloppe moyenne, déjà calculé
+    st.session_state["boite_calculee"] = boite_de_depart()
     st.session_state["calculs_lances"] = next(iter(CHOIX_CALCULS.values()))
 
 with st.sidebar:
     st.header("La boîte")
-    depart = choisir_batiment()
+    depart = choisir_depart()
     calculs = choisir_calculs()
     zone_bouton = st.container()                            # le bouton reste en haut, au-dessus des volets
     boite = saisir(depart)

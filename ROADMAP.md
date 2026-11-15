@@ -21,7 +21,8 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.8.18 | Interface | Streamlit : boîte en axonométrie (style cbsh_visuel), saisie, résultats ; briques pédagogiques à deux niveaux (Bbio, DH, semaine chaude) | fait |
 | 0.9.0 | Fonctionnel | Outil utilisable de bout en bout : contrôle visuel, balcons, comparaison de deux variantes, calcul plus rapide | fait, hors mise en ligne (accord et lien en attente) |
 | 0.9.1 | Choix du calcul | DH, Bbio ou les deux (seul le calcul demandé est lancé) ; bâtiment de départ : logement de 70 m² ou immeuble de 9 logements | fait |
-| 0.9.2 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées, explications | à faire |
+| 0.9.2 | Niveaux d'enveloppe | Trois enveloppes de départ (performante, moyenne, faible) tirées de 18 zones de logements de 6 études RE2020 (`donnees/typologies_logements.csv`, `outils/typologies/`) | fait |
+| 0.9.4 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées, explications | à faire |
 | 0.9.6 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) | à faire |
 | 0.9.8 | Validation | Calage sur plus de 10 RSEE de logements collectifs et sur OPEE ; cible Bbio à ± 10 % | à faire |
 | 0.9.10 | Maison individuelle | Second usage | à faire |
@@ -51,7 +52,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - saisies restantes : masque lointain (immeuble en face), joues et loggias, Sw2, gestion des brasseurs par
     thermostat (à attendre le calage du DH de Sète, voir plus bas), plusieurs groupes (traversant et non
     traversant). Le Uw horizontal ne concerne pas la boîte (pas de baie en toiture) ;
-  - briques à écrire (0.9.2) : bilan des flux d'une journée (baies, parois, ventilation, apports, inertie),
+  - briques à écrire (0.9.4) : bilan des flux d'une journée (baies, parois, ventilation, apports, inertie),
     effet des protections mobiles, rafraîchissement nocturne, Bbio max et ses modulations, brasseurs d'air,
     effet d'un balcon selon l'orientation ;
   - comparaison : superposer la référence sur les graphiques des briques (aujourd'hui : un tableau d'écarts) ;
@@ -63,10 +64,17 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
     le graphique ;
   - temps de calcul : 15 s avec les infiltrations et 10 s sans sur le poste chargé (25 s avant la 0.9.0) ; voir
     le point « temps de calcul » plus bas.
+- **Niveaux d'enveloppe, suites de la 0.9.2** :
+  - 6 opérations seulement : refaire `donnees/typologies_logements.csv` avec les RSEE du calage (0.9.8), et
+    séparer collectif et maison individuelle quand ce second usage arrivera (0.9.10) ;
+  - montrer le graphique `docs/graphique_pedagogique_logements.png` (ou son équivalent interactif) dans
+    l'interface, par exemple dans une brique ou la page d'accueil (0.9.4) ;
+  - ponts thermiques : le ψ moyen des études couvre tous les ponts, la boîte ne compte que les rives des
+    planchers (hypothèse 88) ; une longueur de ponts par m² habitable, tirée des mêmes études, serait plus juste.
 
 - **Ordre des versions revu le 14/11/2026** (deux fois) : « Cas de référence » intercalé en 0.8.10 ; « Protections
-  et ouvertures » passe de 0.9.4 à 0.8.12, avant le DH (0.8.16) et l'interface (0.8.18) ; le numéro 0.9.4 n'est
-  plus utilisé ; « Infiltrations » ajouté en 0.8.14. Raison : le besoin de froid de l'outil vaut plusieurs fois celui des études, si bien que ni le Bbio
+  et ouvertures » passe de 0.9.4 à 0.8.12, avant le DH (0.8.16) et l'interface (0.8.18) ; le numéro 0.9.4,
+  libéré, est repris le 15/11/2026 par « Pédagogie » ; « Infiltrations » ajouté en 0.8.14. Raison : le besoin de froid de l'outil vaut plusieurs fois celui des études, si bien que ni le Bbio
   ni le DH ne sont exploitables sans ces modules. `CHANGELOG.md` (0.8.8 et avant), `docs/audit.md` (0.8.8 et avant)
   et les commentaires du code citent encore les anciens numéros : 0.9.4 pour les protections, 0.8.10 pour le DH,
   0.8.12 pour l'interface. Depuis : DH en 0.8.16 (fait), interface en 0.8.18.

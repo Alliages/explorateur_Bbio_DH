@@ -2,12 +2,15 @@
 ============================================================
  FORMULAIRE — la saisie de la boîte, dans le menu de gauche
 ============================================================
- En tête, deux choix : le bâtiment de départ et le calcul à
- lancer (DH, Bbio ou les deux). Puis un volet par thème ; chaque
- volet lit ses widgets et rend les champs de Boite
+ En tête, trois choix : le bâtiment de départ (la forme), le
+ niveau de l'enveloppe (performant, moyen ou faible) et le calcul
+ à lancer (DH, Bbio ou les deux). Puis un volet par thème ;
+ chaque volet lit ses widgets et rend les champs de Boite
  (interface/saisie.py) qu'il renseigne. Les valeurs de départ
- sont celles du bâtiment choisi (BATIMENTS_DE_DEPART) : changer
- de bâtiment donne à chaque widget la valeur de ce bâtiment.
+ sont celles de boite_de_depart(bâtiment, niveau) :
+   - changer de bâtiment donne à chaque widget sa valeur de départ ;
+   - changer de niveau ne touche que les 13 widgets de
+     l'enveloppe : la forme saisie est gardée.
 
  Ajouter une saisie : un champ dans Boite, puis un widget dans
  le volet qui convient, avec pour clé le nom du champ ; si le
@@ -21,8 +24,9 @@ from dataclasses import fields, replace
 import streamlit as st
 
 from config.reglages import ZONES_CLIMATIQUES
-from interface.saisie import (BATIMENTS_DE_DEPART, DEBORD_MAX_M, FACADES, PART_VITREE_MAX, POINTS_CARDINAUX,
-                              SANS_PROTECTION, TEINTES, Boite, point_cardinal)
+from interface.saisie import (BATIMENTS_DE_DEPART, DEBORD_MAX_M, FACADES, NIVEAU_D_OUVERTURE, NIVEAUX_ENVELOPPE,
+                              PART_VITREE_MAX, POINTS_CARDINAUX, SANS_PROTECTION, TEINTES, Boite, boite_de_depart,
+                              point_cardinal)
 from moteur.structures import EXPOSITIONS_BRUIT, GESTIONS_PROTECTION, INERTIES_QUOTIDIENNES, PROTECTIONS_MOBILES
 
 # ============================================================
@@ -49,9 +53,9 @@ assert set(LIBELLES_GESTION) == set(GESTIONS_PROTECTION) and set(LIBELLES_BRUIT)
 assert set(LIBELLES_INERTIE) <= set(INERTIES_QUOTIDIENNES)
 
 
-def _pourcent(libelle, valeur, cle, maxi=1.0, aide=None):
+def _pourcent(libelle, valeur, cle, maxi=1.0, aide=None, pas=5):
     """Curseur en pour cent, rendu en part (0 à 1)."""
-    return st.slider(libelle, 0, round(maxi * 100), round(valeur * 100), step=5, format="%d %%", key=cle,
+    return st.slider(libelle, 0, round(maxi * 100), round(valeur * 100), step=pas, format="%d %%", key=cle,
                      help=aide) / 100.0
 
 
@@ -94,12 +98,13 @@ def _baies(defaut, orientation_deg):
         nom = f"{libelle} ({point_cardinal(orientation_deg + ecart)})"
         champs[f"part_vitree_{cle}"] = _pourcent(nom, getattr(defaut, f"part_vitree_{cle}"), f"part_vitree_{cle}",
                                                  PART_VITREE_MAX)
-    champs["uw"] = st.slider("Uw des baies (W/m².K)", 0.7, 3.0, defaut.uw, step=0.1, key="uw",
+    # Pas des curseurs : assez fins pour les valeurs des niveaux d'enveloppe (donnees/typologies_logements.csv)
+    champs["uw"] = st.slider("Uw des baies (W/m².K)", 0.7, 3.0, defaut.uw, step=0.05, key="uw",
                              help="Plus Uw est bas, moins la baie laisse passer de chaleur. Double vitrage "
                              "courant : 1,3 à 1,5.")
-    champs["sw"] = st.slider("Facteur solaire Sw", 0.1, 0.8, defaut.sw, step=0.05, key="sw",
+    champs["sw"] = st.slider("Facteur solaire Sw", 0.1, 0.8, defaut.sw, step=0.01, key="sw",
                              help="Part de l'énergie du soleil qui entre par la baie nue.")
-    champs["tl"] = st.slider("Transmission lumineuse", 0.1, 0.9, defaut.tl, step=0.05, key="tl")
+    champs["tl"] = st.slider("Transmission lumineuse", 0.1, 0.9, defaut.tl, step=0.01, key="tl")
     protection = st.segmented_control("Protection mobile", list(LIBELLES_PROTECTION), default=defaut.protection,
                                       format_func=LIBELLES_PROTECTION.get, required=True, key="protection")
     champs["protection"] = protection
@@ -110,7 +115,7 @@ def _baies(defaut, orientation_deg):
         champs["sw_protege"] = st.slider("Facteur solaire, protection baissée", 0.02, 0.5, defaut.sw_protege,
                                          step=0.01, key="sw_protege")
         champs["uw_protege"] = st.slider("Uw, protection baissée (W/m².K)", 0.5, 3.0,
-                                         min(defaut.uw_protege, champs["uw"]), step=0.1, key="uw_protege")
+                                         min(defaut.uw_protege, champs["uw"]), step=0.05, key="uw_protege")
     # Balcons ou casquettes : un débord au-dessus des baies, sur les façades choisies
     champs["debord_m"] = st.slider("Balcons ou casquettes : profondeur (m)", 0.0, DEBORD_MAX_M, defaut.debord_m,
                                    step=0.1, key="debord_m",
@@ -124,7 +129,7 @@ def _baies(defaut, orientation_deg):
     champs["ouvrable"] = st.toggle("Baies ouvrables", defaut.ouvrable, key="ouvrable")
     if champs["ouvrable"]:
         champs["ratio_ouverture_max"] = _pourcent("Part ouvrante de la baie", defaut.ratio_ouverture_max,
-                                                  "ratio_ouverture_max",
+                                                  "ratio_ouverture_max", pas=1,
                                                   aide="Une fenêtre à la française ouvre presque toute sa "
                                                   "surface, un coulissant la moitié.")
     return champs
@@ -133,15 +138,16 @@ def _baies(defaut, orientation_deg):
 def _parois(defaut):
     u_mur = st.slider("U des murs (W/m².K)", 0.10, 1.50, defaut.u_mur, step=0.05, key="u_mur")
     u_toiture = st.slider("U de la toiture (W/m².K)", 0.08, 1.00, defaut.u_toiture, step=0.01, key="u_toiture")
-    u_plancher = st.slider("U du plancher bas (W/m².K)", 0.10, 1.50, defaut.u_plancher, step=0.05, key="u_plancher")
+    u_plancher = st.slider("U du plancher bas (W/m².K)", 0.10, 1.50, defaut.u_plancher, step=0.01, key="u_plancher")
     sur_sol = st.toggle("Plancher bas sur le sol", defaut.plancher_sur_sol, key="plancher_sur_sol",
                         help="Sinon, le plancher bas donne sur l'extérieur (pilotis, porche).")
     teinte = st.segmented_control("Teinte des murs et de la toiture", list(TEINTES), default=defaut.teinte,
                                   format_func=str.capitalize, required=True, key="teinte",
                                   help="Une paroi sombre absorbe davantage le soleil.")
-    psi = st.slider("Ponts thermiques des planchers (W/m.K)", 0.0, 1.0, defaut.psi_planchers, step=0.05,
+    psi = st.slider("Ponts thermiques des planchers (W/m.K)", 0.0, 1.0, defaut.psi_planchers, step=0.01,
                     key="psi_planchers", help="Fuite de chaleur à la jonction de chaque plancher avec la façade, "
-                    "par mètre de façade. Avec rupteur ou isolation par l'extérieur : 0,1 à 0,3.")
+                    "par mètre de façade. Avec rupteur ou isolation par l'extérieur : 0,1 à 0,3. Les niveaux "
+                    "d'enveloppe y placent le ψ moyen de tous les ponts thermiques des études.")
     inertie = st.select_slider("Inertie", list(LIBELLES_INERTIE), value=defaut.inertie,
                                format_func=LIBELLES_INERTIE.get, key="inertie",
                                help="Capacité des planchers et des murs à stocker la chaleur du jour.")
@@ -198,20 +204,40 @@ def valeurs_des_widgets(boite):
     return valeurs
 
 
+def _depart_choisi():
+    """Boîte de départ des deux choix de tête, lus dans la session (appelée par leurs fonctions de rappel)."""
+    return boite_de_depart(st.session_state.get("batiment_depart"),
+                           st.session_state.get("niveau_enveloppe", NIVEAU_D_OUVERTURE))
+
+
 def _reprendre_batiment():
-    """Au changement de bâtiment : chaque widget prend la valeur du bâtiment choisi.
+    """Au changement de bâtiment : chaque widget prend sa valeur de départ (forme du bâtiment, enveloppe du niveau).
 
     Écrire la valeur, et non effacer la clé : un widget effacé garde à l'écran la valeur saisie.
     """
-    st.session_state.update(valeurs_des_widgets(BATIMENTS_DE_DEPART[st.session_state["batiment_depart"]]))
+    st.session_state.update(valeurs_des_widgets(_depart_choisi()))
 
 
-def choisir_batiment():
-    """Liste « Bâtiment de départ » ; rend la Boite du bâtiment choisi (valeurs de départ de la saisie)."""
-    nom = st.selectbox("Bâtiment de départ", list(BATIMENTS_DE_DEPART), key="batiment_depart",
-                       on_change=_reprendre_batiment,
-                       help="Choisir un bâtiment remet toutes les saisies à ses valeurs.")
-    return BATIMENTS_DE_DEPART[nom]
+def _reprendre_niveau():
+    """Au changement de niveau : seuls les widgets de l'enveloppe prennent les valeurs du niveau choisi."""
+    valeurs = valeurs_des_widgets(_depart_choisi())
+    st.session_state.update({cle: valeurs[cle] for cle in NIVEAUX_ENVELOPPE[st.session_state["niveau_enveloppe"]]})
+
+
+def choisir_depart():
+    """Listes « Bâtiment de départ » et « Enveloppe » ; rend la boîte de départ (valeurs initiales de la saisie)."""
+    batiment = st.selectbox("Bâtiment de départ", list(BATIMENTS_DE_DEPART), key="batiment_depart",
+                            on_change=_reprendre_batiment,
+                            help="Choisir un bâtiment remet toutes les saisies à ses valeurs, avec l'enveloppe "
+                            "du niveau choisi.")
+    niveau = st.segmented_control("Enveloppe", list(NIVEAUX_ENVELOPPE), default=NIVEAU_D_OUVERTURE, required=True,
+                                  key="niveau_enveloppe", on_change=_reprendre_niveau,
+                                  help="Valeurs observées sur 18 zones de logements de 6 études RE2020, pondérées "
+                                  "par la surface : « performant », le quart le mieux placé ; « moyen », la "
+                                  "médiane ; « faible », le quart le moins bien placé. Choisir un niveau remet "
+                                  "les 13 saisies d'enveloppe (baies, parois, ponts thermiques, inertie, "
+                                  "ventilation, perméabilité) à ses valeurs et garde la forme.")
+    return boite_de_depart(batiment, niveau)
 
 
 def choisir_calculs():
@@ -223,11 +249,11 @@ def choisir_calculs():
     return CHOIX_CALCULS[choix]
 
 
-def saisir(defaut=Boite()):
+def saisir(defaut=boite_de_depart()):
     """Affiche les volets de saisie (à appeler dans le menu de gauche) et rend la Boite décrite.
 
-    defaut : le bâtiment de départ, qui donne la valeur initiale de chaque widget et les champs non saisis
-    (part habitable).
+    defaut : la boîte de départ (choisir_depart), qui donne la valeur initiale de chaque widget et les champs non
+    saisis (part habitable).
     """
     champs = {}
     with st.expander("Site", icon=":material/location_on:"):

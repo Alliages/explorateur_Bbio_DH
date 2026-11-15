@@ -921,3 +921,34 @@ choisi. Le chiffre clé « 114,7 points » était coupé : l'unité passe dans l
     sol), calculé avec les scénarios, le Bbio max et le DH max du logement collectif, faute de l'usage maison
     individuelle (0.9.10). Son Bbio élevé (114,7) vient de sa forme : beaucoup de paroi par m² habitable. Un
     appartement au milieu d'un immeuble est un autre cas, inscrit dans `ROADMAP.md`.
+
+## 0.9.2 — niveaux d'enveloppe
+
+La page part d'un bâtiment (la forme) et d'un niveau d'enveloppe (performant, moyen, faible) tiré de
+`donnees/typologies_logements.csv` (méthode : `outils/typologies/README.md`). Le moteur ne change pas.
+
+### Vérifications
+
+| Bâtiment | Niveau | Bbio (max) | DH °C.h (max) |
+|---|---|---|---|
+| Logement de 70 m², `Boite()` (0.9.1) | — | 114,7 (78,0) | 1 964 (1 250) |
+| Logement de 70 m² | Performant | 78,5 (78,0) | 858 (1 250) |
+| Logement de 70 m² | Moyen | 99,1 (78,0) | 1 308 (1 250) |
+| Logement de 70 m² | Faible | 116,3 (78,0) | 1 756 (1 250) |
+| Immeuble de 9 logements | Performant | 46,6 (69,8) | 746 (1 250) |
+| Immeuble de 9 logements | Moyen | 54,9 (69,8) | 1 125 (1 250) |
+| Immeuble de 9 logements | Faible | 63,1 (69,8) | 1 541 (1 250) |
+
+Les deux indicateurs suivent le niveau dans le sens attendu. L'immeuble moyen respecte les deux seuils, le
+faible dépasse le DH max ; le logement isolé ne respecte le Bbio max qu'au niveau performant, à peine.
+Temps : 3 s par bâtiment et par niveau, Bbio et DH (poste chargé).
+
+### Lectures et hypothèses de l'outil
+
+88. **Ponts thermiques des niveaux d'enveloppe** : le CSV donne un ψ moyen sur tous les ponts thermiques des
+    études (planchers, refends, menuiseries…). La boîte le place sur ses seules liaisons linéiques, les rives des
+    planchers (périmètre × (niveaux + 1)). La longueur réelle des ponts d'une étude étant plus grande, la boîte
+    sous-estime probablement leur déperdition. Suite inscrite dans `ROADMAP.md`.
+89. **Niveaux tirés de 6 opérations** (18 zones, 17 305 m²) : repères indicatifs, non représentatifs du parc. Le
+    niveau « performant » d'une variable vient de quantiles calculés variable par variable : les 13 valeurs
+    ne décrivent aucune étude réelle prise en entier.

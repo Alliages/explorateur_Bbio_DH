@@ -22,6 +22,8 @@ CHEMIN_VERSION = os.path.join(RACINE, "VERSION")
 # Matrices conventionnelles de gestion des protections mobiles (annexe III, fiche 5.9)
 CHEMIN_PROTECTIONS_MANUELLES = os.path.join(DOSSIER_DONNEES, "protections_mobiles_manuelles.csv")
 CHEMIN_PROTECTIONS_AUTOMATIQUES = os.path.join(DOSSIER_DONNEES, "protections_mobiles_automatiques.csv")
+# Niveaux d'enveloppe des logements (performant, moyen, faible) observés sur des études : outils/typologies/
+CHEMIN_TYPOLOGIES = os.path.join(DOSSIER_DONNEES, "typologies_logements.csv")
 
 # Classeurs officiels : gardés en local, hors du dépôt (voir .gitignore)
 DOSSIER_REFERENCES = os.path.join(RACINE, "_references")

@@ -1,5 +1,5 @@
-"""Interface (0.8.18, 0.9.0, 0.9.1) : la boîte et son projet, les bâtiments de départ, l'axonométrie, les
-briques, la comparaison de deux variantes, le choix du calcul et la page entière.
+"""Interface (0.8.18, 0.9.0, 0.9.1, 0.9.2) : la boîte et son projet, les bâtiments de départ, les niveaux
+d'enveloppe, l'axonométrie, les briques, la comparaison de deux variantes, le choix du calcul et la page entière.
 
 Les chiffres de la 0.9.0 (576 m², Bbio 62,3, DH 1 777) sont ceux de l'immeuble de 9 logements."""
 
@@ -8,15 +8,16 @@ import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import pytest
 
 from config.reglages import RACINE
 from interface.axonometrie import VUES, Projection, decouper_baies, dessiner, direction
 from interface.comparaison import LIBELLES, differences, ecarts
-from interface.saisie import (BATIMENTS_DE_DEPART, CLE_GROUPE, PART_VITREE_MAX, Boite, construire_projet,
-                              gabarit_baie, largeur_travee, point_cardinal)
+from interface.saisie import (BATIMENTS_DE_DEPART, CHAMPS_TYPOLOGIES, CLE_GROUPE, NIVEAUX_ENVELOPPE,
+                              PART_VITREE_MAX, Boite, boite_de_depart, construire_projet, gabarit_baie,
+                              largeur_travee, lire_niveaux_enveloppe, point_cardinal)
 from moteur.hypotheses import hyp
 
 IMMEUBLE = BATIMENTS_DE_DEPART["Immeuble de 9 logements"]
@@ -57,6 +58,40 @@ def test_batiments_de_depart():
     from dataclasses import fields
     changes = {c.name for c in fields(Boite) if getattr(logement, c.name) != getattr(IMMEUBLE, c.name)}
     assert changes == {"longueur_m", "profondeur_m", "nb_niveaux", "part_habitable", "nb_logements"}
+
+
+def test_niveaux_d_enveloppe(tmp_path):
+    """Trois niveaux lus dans donnees/typologies_logements.csv, chacun pour les 13 saisies d'enveloppe."""
+    assert list(NIVEAUX_ENVELOPPE) == ["Performant", "Moyen", "Faible"]
+    performant, moyen, faible = NIVEAUX_ENVELOPPE.values()
+    assert all(set(n) == set(CHAMPS_TYPOLOGIES.values()) for n in NIVEAUX_ENVELOPPE.values())
+    assert len(moyen) == 13 and set(moyen) <= {champ.name for champ in fields(Boite)}
+    # Valeurs du CSV (virgule décimale, classes d'inertie traduites)
+    assert (performant["uw"], moyen["uw"], faible["uw"]) == (1.35, 1.4, 1.45)
+    assert moyen["sw"] == 0.43 and moyen["psi_planchers"] == 0.22 and moyen["ratio_ouverture_max"] == 0.78
+    assert (performant["inertie"], moyen["inertie"]) == ("tres_lourde", "lourde")
+    # Sens : U plus bas et ventilation plus forte du côté performant
+    for champ in ("uw", "u_mur", "u_toiture", "u_plancher", "psi_planchers"):
+        assert performant[champ] <= moyen[champ] <= faible[champ]
+    assert performant["debit_ventilation_m3h_m2"] >= faible["debit_ventilation_m3h_m2"]
+    # Boîte de départ : la forme du bâtiment, l'enveloppe du niveau ; le projet se construit
+    for nom in BATIMENTS_DE_DEPART:
+        for niveau, champs in NIVEAUX_ENVELOPPE.items():
+            boite = boite_de_depart(nom, niveau)
+            assert all(getattr(boite, c) == v for c, v in champs.items())
+            assert boite.longueur_m == BATIMENTS_DE_DEPART[nom].longueur_m
+            assert _groupe(boite).inertie_quotidienne == champs["inertie"]
+    assert boite_de_depart() == boite_de_depart("Logement de 70 m²", "Moyen")
+    # Un CSV qui ne correspond plus aux champs est refusé en clair
+    chemin = tmp_path / "typologies.csv"
+    chemin.write_text("variable;colonne_source;unite;sens;n_zones;n_operations;performant;moyen;faible;remarque\n"
+                      "X;inconnue;-;-;1;1;1;1;1;\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="inconnue"):
+        lire_niveaux_enveloppe(chemin)
+    chemin.write_text("variable;colonne_source;unite;sens;n_zones;n_operations;performant;moyen;faible;remarque\n"
+                      "Uw;uw;W/m².K;-;1;1;1,3;1,4;1,5;\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="champs absents"):
+        lire_niveaux_enveloppe(chemin)
 
 
 def test_orientation_tourne_toutes_les_facades():
@@ -183,7 +218,7 @@ def test_differences_de_saisie():
     variante = replace(IMMEUBLE, uw=1.1, orientation_deg=90.0, traversant=False, part_vitree_arriere=0.35)
     assert differences(IMMEUBLE, variante) == [
         ("Orientation de la façade principale", "sud", "ouest"), ("Logements traversants", "oui", "non"),
-        ("Part vitrée, façade arrière", "20 %", "35 %"), ("Uw des baies", "1,4 W/m².K", "1,1 W/m².K")]
+        ("Part vitrée, façade arrière", "20 %", "35 %"), ("Uw des baies", "1,40 W/m².K", "1,10 W/m².K")]
     # Un réglage sans effet des deux côtés n'est pas listé ; il l'est dès que son option est allumée
     assert differences(IMMEUBLE, replace(IMMEUBLE, brasseur_debit_m3h=9000.0)) == []
     assert len(differences(replace(IMMEUBLE, brasseurs=True),
@@ -290,10 +325,11 @@ def test_page_entiere(resultats, monkeypatch):
     page = AppTest.from_file(os.path.join(RACINE, "app.py"), default_timeout=60).run()
     assert not page.exception
 
-    # Ouverture : le logement de 70 m², le DH seul, sans brique Bbio
+    # Ouverture : le logement de 70 m², l'enveloppe moyenne, le DH seul, sans brique Bbio
     assert [m.label for m in page.metric][:3] == ["Surface habitable", "Baies / surface habitable", "DH"]
     assert "Bbio (points)" not in [m.label for m in page.metric] and page.metric[0].value.startswith("70")
-    assert [nom for nom, _ in appels] == ["dh"] and page.button(key="calculer").disabled and not page.warning
+    assert appels == [("dh", boite_de_depart())] and page.button(key="calculer").disabled and not page.warning
+    assert page.segmented_control(key="niveau_enveloppe").value == "Moyen" and page.slider(key="sw").value == 0.43
     assert page.segmented_control(key="brique").options == [b.titre for b in BRIQUES if b.besoin == "dh"]
 
     # Bbio et DH : seul le Bbio est calculé, le DH vient de la mémoire
@@ -321,16 +357,30 @@ def test_page_entiere(resultats, monkeypatch):
     page.button(key="calculer").click().run()
     assert not page.exception and page.button(key="calculer").disabled
 
-    # Changer de bâtiment remet toutes les saisies à ses valeurs, y compris celles modifiées à la main
+    # Changer de niveau ne touche que l'enveloppe : la forme modifiée à la main (5 niveaux) reste
     from interface.formulaire import valeurs_des_widgets
+    page.slider(key="u_mur").set_value(0.5).run()
+    page.segmented_control(key="niveau_enveloppe").set_value("Performant").run()
+    assert not page.exception and page.slider(key="nb_niveaux").value == 5
+    performant = valeurs_des_widgets(boite_de_depart(niveau="Performant"))
+    assert all(page.session_state[cle] == performant[cle] for cle in NIVEAUX_ENVELOPPE["Performant"])
+    assert page.slider(key="uw").value == 1.35 and page.slider(key="u_mur").value == 0.2
+    assert page.select_slider(key="inertie").value == "tres_lourde"
+    page.button(key="calculer").click().run()
+    assert appels[-1] == ("dh", replace(boite_de_depart(niveau="Performant"), nb_niveaux=5))
+
+    # Changer de bâtiment remet toutes les saisies à ses valeurs, avec l'enveloppe du niveau choisi
     page.selectbox(key="batiment_depart").set_value("Immeuble de 9 logements").run()
     assert not page.exception and page.slider(key="nb_niveaux").value == 3 and page.slider(key="longueur_m").value == 20
-    assert all(page.session_state[cle] == valeur for cle, valeur in valeurs_des_widgets(IMMEUBLE).items())
+    immeuble = boite_de_depart("Immeuble de 9 logements", "Performant")
+    assert all(page.session_state[cle] == valeur for cle, valeur in valeurs_des_widgets(immeuble).items())
     assert page.metric[0].value.startswith("576")
     page.button(key="calculer").click().run()
-    assert not page.exception and appels[-1] == ("dh", IMMEUBLE)
+    assert not page.exception and appels[-1] == ("dh", immeuble)
+    page.segmented_control(key="niveau_enveloppe").set_value("Moyen").run()
     page.selectbox(key="batiment_depart").set_value("Logement de 70 m²").run()
     assert page.slider(key="nb_niveaux").value == 1 and page.metric[0].value.startswith("70")
+    assert all(page.session_state[cle] == valeur for cle, valeur in valeurs_des_widgets(boite_de_depart()).items())
 
     # Référence : gardée, puis comparée à une variante avec balcons ; le second bouton « Calculer » sert aussi
     assert not page.dataframe
