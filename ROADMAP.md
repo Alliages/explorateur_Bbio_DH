@@ -23,8 +23,8 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.1 | Choix du calcul | DH, Bbio ou les deux (seul le calcul demandé est lancé) ; bâtiment de départ : logement de 70 m² ou immeuble de 9 logements | fait |
 | 0.9.2 | Niveaux d'enveloppe | Trois enveloppes de départ (performante, moyenne, faible) tirées de 18 zones de logements de 6 études RE2020 (`donnees/typologies_logements.csv`, `outils/typologies/`) | fait |
 | 0.9.4 | Bâtiments en CSV | Bâtiments de départ lus dans `donnees/batiments/` (un CSV par bâtiment) ; nouveau logement de 70 m² (H1a, 7 × 10 m, baies 25 % devant et derrière, pignons aveugles, gestion motorisée) | fait |
-| 0.9.6 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées, explications | à faire |
-| 0.9.8 | Validation | Calage sur plus de 10 RSEE de logements collectifs et sur OPEE ; cible Bbio à ± 10 %. Export d'un bâtiment en CSV depuis l'interface (bouton « Télécharger ce bâtiment ») | à faire |
+| 0.9.6 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées dans les briques avec ce qu'elles disent, course solaire d'été (21 juin) au bord du sol du dessin, écart avec le calcul précédent dans les chiffres clés, aides des saisies dans un fichier à part (`interface/textes/aides.csv`), liens vers le Glossaire du confort dans le bâtiment (Notion) | fait |
+| 0.9.8 | Validation | Validation par lot (`outils/valider.py`) sur 10 études, 5 bâtiments, 23 groupes : 9 groupes dans la cible Bbio de ± 10 % (6 sur 6 en H2a, 2 sur 4 en H1a, 1 sur 13 en H3) ; parois à U = 0 lues ; bouton « Télécharger ce bâtiment ». Reste : plus de bâtiments (OPEE, nouveaux RSEE), froid en H3, chauffage en H1a | en partie |
 | 0.9.10 | Maison individuelle | Second usage | à faire |
 | 0.9.12 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
@@ -53,7 +53,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - saisies restantes : masque lointain (immeuble en face), joues et loggias, Sw2, gestion des brasseurs par
     thermostat (à attendre le calage du DH de Sète, voir plus bas), plusieurs groupes (traversant et non
     traversant). Le Uw horizontal ne concerne pas la boîte (pas de baie en toiture) ;
-  - briques à écrire (0.9.6) : bilan des flux d'une journée (baies, parois, ventilation, apports, inertie),
+  - briques à écrire (non faites en 0.9.6, version à fixer) : bilan des flux d'une journée (baies, parois, ventilation, apports, inertie),
     effet des protections mobiles, rafraîchissement nocturne, Bbio max et ses modulations, brasseurs d'air,
     effet d'un balcon selon l'orientation ;
   - comparaison : superposer la référence sur les graphiques des briques (aujourd'hui : un tableau d'écarts) ;
@@ -69,9 +69,28 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - 6 opérations seulement : refaire `donnees/typologies_logements.csv` avec les RSEE du calage (0.9.8), et
     séparer collectif et maison individuelle quand ce second usage arrivera (0.9.10) ;
   - montrer le graphique `docs/graphique_pedagogique_logements.png` (ou son équivalent interactif) dans
-    l'interface, par exemple dans une brique ou la page d'accueil (0.9.6) ;
+    l'interface, par exemple dans une brique ou la page d'accueil (non fait en 0.9.6) ;
+- **Validation, suites de la 0.9.8** (table `_resultats/validation.csv`, détail dans `docs/audit.md`) :
+  - études : 26 fichiers dans `../_RSEE`, dont 14 sans logement collectif (bureaux, maison individuelle) ; il
+    reste 5 bâtiments distincts (Paris et Hébert sont deux versions du même, Sète en a trois, Nice A trois) :
+    il en faut d'autres, ou l'extraction OPEE, pour « plus de 10 » ;
+  - froid en H3 : 1,2 à 3,8 fois celui des études (médiane 2,1), premier écart du Bbio à Nice et à Sète ;
+  - chauffage : 11 % sous les études en médiane (de − 34 à + 7 %) ; infiltrations d'hiver de l'outil à 15 à
+    44 % de l'indicateur `H_V_Def_Hiver` (entrées d'air non comptées, hypothèse 67) ;
+  - ventilation : `H_Vent_Hiver` des études vaut 0,1397 × `Qv_occ_BBIO` dans les 23 groupes, l'outil 0,17
+    (+ 22 %) ; ni l'échangeur à 0,5 ni l'occupation (0,79 en janvier et février) ne l'expliquent ;
+  - DH de H2a : 31 à 37 % sous l'étude dans quatre groupes sur six, aux DH faibles (77 à 308 °C.h).
+- **Pédagogie, suites de la 0.9.6** :
+  - course solaire : latitude fixe (46,5° N) ; la prendre selon la zone climatique ; vue du sud, la vraie course en
+    hauteur se projette presque en un trait, d'où le tracé au bord du sol ;
+  - le glossaire Notion est lié par l'identifiant de chaque page (`interface/textes/glossaire.csv`) : une page
+    ajoutée dans Notion doit y être ajoutée à la main ;
+  - écart avec le calcul précédent : gardé pour la session seulement, sur le Bbio et le DH (pas sur les autres
+    indicateurs des briques).
 - **Bâtiments en CSV, suites de la 0.9.4** :
-  - export du bâtiment affiché en CSV, bouton « Télécharger ce bâtiment » (0.9.8) ;
+  - fait en 0.9.8 : export du bâtiment affiché en CSV, bouton « Télécharger ce bâtiment » (forme, site, baies,
+    confort d'été ; l'enveloppe vient du niveau) ; à trancher : garder aussi une enveloppe retouchée à la main
+    (la lecture des CSV de départ refuse aujourd'hui les 13 saisies d'enveloppe) ;
   - ouvrir un CSV de bâtiment depuis l'interface (dépôt de fichier) : nécessaire une fois l'outil en ligne, où
     l'utilisateur ne peut pas écrire dans `donnees/batiments/`.
   - ponts thermiques : le ψ moyen des études couvre tous les ponts, la boîte ne compte que les rives des

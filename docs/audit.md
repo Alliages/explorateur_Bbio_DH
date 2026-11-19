@@ -975,3 +975,91 @@ En H1a, le Bbio max monte (91,0 et 82,8 contre 78,0 et 69,8 en H3) et le Bbio au
 DH baisse nettement (climat plus frais, pignons aveugles, volets motorisés). Les six cas respectent le DH max ;
 le logement isolé ne respecte le Bbio max qu'au niveau performant, à peine, comme en 0.9.2. Temps : 4 à 7 s par
 cas, Bbio et DH (poste chargé).
+
+
+## 0.9.8 — validation
+
+`outils/valider.py` passe dans `outils/comparer_reference.py` tous les XML de `../_RSEE` et de `_sources`, sans
+doublon de contenu, et écarte ceux qui n'ont aucune zone de logement collectif. Une correction du moteur : les
+parois à U = 0 (hypothèse 90).
+
+### Les études disponibles
+
+26 fichiers, dont 14 écartés : bureaux (usage 3 : dossier AREP, Eugène, Hayet, La Poste, Arkéa) et maison
+individuelle (usage 1 : SPGL). Restent 10 études et 23 groupes, mais 5 bâtiments distincts seulement : Paris
+(scénario 2) et Hébert sont deux versions du même immeuble, Sète en a trois (scénario 2, RSEE 8619, RSENV), Nice A
+trois (V5, 04-2026, sans climatisation), Nice B une, et `rsee.xml` (H2a, trois bâtiments, six groupes) est
+nouveau. La cible « plus de 10 RSEE » demande d'autres études ou l'extraction OPEE.
+
+### Vérifications
+
+| Contrôle | Référence | Résultat |
+|---|---|---|
+| Déperdition des parois de `rsee.xml`, 6 zones, dont 192 parois à U = 0 | `H_Th_op` | identique (à 0,7 % près dans une zone de 0,3 W/K) |
+| Surfaces et longueurs de ponts de `rsee.xml` | `A_opv`, `A_ophh`, `A_ophb`, `A_baies`, `L_PT` | identiques à l'arrondi |
+| Bbio max des 23 groupes | `O_Bbio_Max` | écart ≤ 0,05 point |
+| Études en double (même contenu, deux dossiers) | Empreinte SHA-1 | comptées une fois |
+
+### Résultats
+
+Besoins en kWh/m², Bbio en points, DH en °C.h ; écart du Bbio de l'outil à celui de l'étude.
+
+| Étude | Zone | Groupe | Bch outil / étude | Bfr outil / étude | Bbio outil / étude | Écart Bbio | DH outil / étude |
+|---|---|---|---|---|---|---|---|
+| Sète (RSEE 8619) | H3 | Groupe 1 | 0,7 / 1,1 | 7,0 / 3,3 | 24,1 / 18,0 | +34 % | 332 / 415 |
+| Nice A (RSEE V5) | H3 | Groupe Traversant_Groupe CE2 | 12,1 / 13,8 | 11,6 / 4,4 | 55,8 / 45,1 | +24 % | 1 302 / 1 083 |
+| Nice A (RSEE V5) | H3 | Groupe Non Traversant_Groupe CE2 | 7,2 / 6,7 | 10,2 / 7,0 | 43,7 / 36,7 | +19 % | 1 709 / 2 141 |
+| Hébert (Paris, variante) | H1a | Groupe 1 | 13,3 / 15,9 | 3,0 / 1,7 | 41,2 / 44,2 | − 7 % | 786 / 853 |
+| Hébert (Paris, variante) | H1a | Groupe 2 | 22,4 / 27,4 | 1,6 / 1,3 | 55,9 / 65,6 | − 15 % | 395 / 387 |
+| Nice A (sans clim) | H3 | Groupe Traversant_Groupe CE1 non climatisé - BR23 | 15,4 / 15,7 | 10,3 / 4,3 | 59,5 / 48,3 | +23 % | 506 / 444 |
+| Nice A (sans clim) | H3 | Groupe Non Traversant_Groupe CE1 non climatisé - BR23 | 15,6 / 17,1 | 10,8 / 5,6 | 61,1 / 54,2 | +13 % | 624 / 486 |
+| Nice B | H3 | Groupe Traversant_Groupe CE2 | 13,9 / 15,1 | 11,7 / 5,3 | 59,3 / 49,3 | +20 % | 1 204 / 1 069 |
+| Nice B | H3 | Groupe Non Traversant_Groupe CE2 | 9,6 / 13,0 | 12,0 / 6,1 | 52,2 / 47,9 | +9 % | 2 029 / 1 920 |
+| Sète (RSENV) | H3 | Groupe 1 | 9,6 / 10,1 | 9,4 / 4,4 | 46,5 / 37,9 | +23 % | 583 / 636 |
+| Sète (RSENV) | H3 | Groupe 2 | 5,0 / 5,7 | 11,0 / 5,7 | 41,1 / 32,3 | +27 % | 1 267 / 1 305 |
+| rsee.xml (H2a) | H2a | Groupe BAT A - T | 15,9 / 17,8 | 0,4 / 0,0 | 41,9 / 45,6 | − 8 % | 32 / 33 |
+| rsee.xml (H2a) | H2a | Groupe BAT A - NT | 2,6 / 2,8 | 0,2 / 0,1 | 16,2 / 16,8 | − 4 % | 77 / 113 |
+| rsee.xml (H2a) | H2a | Groupe BAT B - T | 17,6 / 20,1 | 0,6 / 0,1 | 45,5 / 49,8 | − 9 % | 33 / 36 |
+| rsee.xml (H2a) | H2a | Groupe BAT B - NT | 5,4 / 5,9 | 0,3 / 0,2 | 21,8 / 23,3 | − 6 % | 105 / 155 |
+| rsee.xml (H2a) | H2a | Groupe BAT C - NT Clim | 15,7 / 17,3 | 0,9 / 0,4 | 42,9 / 45,6 | − 6 % | 194 / 308 |
+| rsee.xml (H2a) | H2a | Groupe BAT C - T Clim | 31,8 / 32,3 | 0,2 / 0,1 | 73,0 / 74,3 | − 2 % | 56 / 82 |
+| Nice A (04-2026) | H3 | Groupe Traversant_Groupe CE2 | 10,4 / 10,9 | 10,6 / 4,6 | 50,5 / 39,8 | +27 % | 1 161 / 1 077 |
+| Nice A (04-2026) | H3 | Groupe Non Traversant_Groupe CE2 | 8,3 / 9,5 | 12,3 / 7,1 | 50,2 / 42,8 | +17 % | 1 939 / 1 979 |
+| Paris (scénario 2) | H1a | Groupe 1 | 16,9 / 19,5 | 1,5 / 0,4 | 45,8 / 49,2 | − 7 % | 435 / 373 |
+| Paris (scénario 2) | H1a | Groupe 2 | 27,7 / 33,0 | 0,6 / 0,3 | 64,9 / 75,3 | − 14 % | 171 / 145 |
+| Sète (scénario 2) | H3 | Groupe 1 | 7,2 / 8,7 | 6,3 / 1,9 | 35,3 / 29,9 | +18 % | 207 / 354 |
+| Sète (scénario 2) | H3 | Groupe 2 | 3,5 / 4,4 | 6,9 / 3,4 | 29,6 / 24,7 | +20 % | 344 / 530 |
+
+| Zone | Groupes | Dans ± 10 % | Écart du Bbio (médiane, étendue) | Chauffage (médiane) | Froid, outil / étude (médiane) |
+|---|---|---|---|---|---|
+| H1a | 4 | 2 | − 10 % (− 15 à − 7 %) | − 16 % | 1,8 |
+| H2a | 6 | 6 | − 6 % (− 9 à − 2 %) | − 9 % | 2,4 (sur moins de 1 kWh/m²) |
+| H3 | 13 | 1 | + 20 % (+ 9 à + 34 %) | − 11 % | 2,1 |
+
+Lecture :
+
+- **H2a : dans la cible**, parce que le froid y pèse peu (moins de 1 kWh/m²). Le chauffage y est 9 % trop faible.
+- **H1a : chauffage trop faible** (11 à 20 %), qui tire le Bbio vers le bas.
+- **H3 : froid environ deux fois trop fort** (1,2 à 3,8 fois), qui tire le Bbio vers le haut malgré un chauffage
+  un peu faible. C'est l'écart principal, inchangé depuis la 0.8.14.
+- **DH** : de − 42 à + 28 %. Les quatre groupes de H2a aux DH faibles (77 à 308 °C.h) sortent 31 à 37 % sous
+  l'étude.
+- **Aucun réglage n'a été fait pour coller aux études.** Les écarts restants viennent de points de méthode
+  ouverts (ci-dessous) ; les corriger demande de les comprendre, pas d'ajuster un coefficient.
+
+### Points ouverts relevés
+
+- **Ventilation d'hiver** : `H_Vent_Hiver` vaut 0,1397 × `Qv_occ_BBIO` dans les 23 groupes (déjà vu sur dix
+  groupes en 0.8.10), contre 0,34 × (1 − 0,5) = 0,17 dans l'outil, soit + 22 %. L'occupation n'est pas en cause :
+  sa moyenne de janvier et février vaut 0,79, pas 0,82. Les équations de l'indicateur (fiche 13.1, éq. 2404 à
+  2408) sont des images dans le PDF : elles n'ont pas pu être relues.
+- **Infiltrations d'hiver** : 15 à 44 % de l'indicateur `H_V_Def_Hiver` selon les zones ; les entrées d'air ne
+  sont pas comptées (hypothèse 67). Elles expliquent sans doute une part du chauffage trop faible.
+- **Froid en H3** : voir les variantes de la 0.8.10 et de la 0.8.12 ; à reprendre poste par poste, mois par mois.
+
+### Lectures du texte et hypothèses de l'outil
+
+90. **Paroi à U = 0 : adiabatique.** Certaines études (192 parois de `rsee.xml`) écrivent U = 0, avec Sf = 0 :
+    l'outil n'y compte ni transmission ni apport solaire, quelle que soit l'inclinaison. Le U « vertical » de la
+    fiche 5.17 (éq. 294) n'est pas défini pour U = 0 (division par zéro) ; l'indicateur `H_Th_op` de l'étude
+    confirme la lecture.

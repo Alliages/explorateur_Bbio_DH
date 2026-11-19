@@ -121,6 +121,24 @@ def test_batiments_lus_dans_les_csv(tmp_path):
         lire_batiment(tmp_path / "d.csv")
 
 
+def test_batiment_ecrit_puis_relu(tmp_path):
+    """0.9.8 : « Télécharger ce bâtiment » écrit un CSV que lire_batiment relit à l'identique, enveloppe exceptée."""
+    from interface.saisie import ecrire_batiment
+    enveloppe = set(CHAMPS_TYPOLOGIES.values())
+    variante = replace(IMMEUBLE, orientation_deg=-90.0, debord_m=1.2, facades_debord=("principale", "pignon_b"),
+                       traversant=False, brasseurs=True, altitude_m=437.5, hauteur_etage_m=2.95, uw=0.9)
+    for boite in (*BATIMENTS_DE_DEPART.values(), variante):
+        chemin = tmp_path / "03_mon_batiment.csv"
+        chemin.write_text(ecrire_batiment(boite, "Ma variante"), encoding="utf-8")
+        nom, relue = lire_batiment(chemin)
+        assert nom == "Ma variante"
+        assert all(getattr(relue, c.name) == getattr(boite, c.name) for c in fields(Boite) if c.name not in enveloppe)
+        assert relue.uw == Boite().uw                       # l'enveloppe vient du niveau, pas du fichier
+    texte = ecrire_batiment(variante, "Ma variante")
+    assert "altitude_m;437,5;m;" in texte and "facades_debord;principale, pignon_b;" in texte
+    assert "traversant;non;" in texte and "\nuw;" not in texte
+
+
 def test_niveaux_d_enveloppe(tmp_path):
     """Trois niveaux lus dans donnees/typologies_logements.csv, chacun pour les 13 saisies d'enveloppe."""
     assert list(NIVEAUX_ENVELOPPE) == ["Performant", "Moyen", "Faible"]
@@ -128,8 +146,8 @@ def test_niveaux_d_enveloppe(tmp_path):
     assert all(set(n) == set(CHAMPS_TYPOLOGIES.values()) for n in NIVEAUX_ENVELOPPE.values())
     assert len(moyen) == 13 and set(moyen) <= {champ.name for champ in fields(Boite)}
     # Valeurs du CSV (virgule décimale, classes d'inertie traduites)
-    assert (performant["uw"], moyen["uw"], faible["uw"]) == (1.35, 1.4, 1.45)
-    assert moyen["sw"] == 0.43 and moyen["psi_planchers"] == 0.22 and moyen["ratio_ouverture_max"] == 0.78
+    assert (performant["uw"], moyen["uw"], faible["uw"]) == (1.2, 1.3, 1.4)
+    assert moyen["sw"] == 0.4 and moyen["psi_planchers"] == 0.22 and moyen["ratio_ouverture_max"] == 0.78
     assert (performant["inertie"], moyen["inertie"]) == ("tres_lourde", "lourde")
     # Sens : U plus bas et ventilation plus forte du côté performant
     for champ in ("uw", "u_mur", "u_toiture", "u_plancher", "psi_planchers"):
@@ -269,6 +287,52 @@ def test_balcons_dessines_et_etiquettes_couchees():
     assert sum("rotate(" in t.get("transform", "") for t in sans.findall(f"{espace}text")) == 2
 
 
+def test_course_du_soleil_d_ete():
+    """0.9.6 : seule la course du 21 juin est dessinée : lever au nord-est, coucher au nord-ouest, haut à midi."""
+    from interface.axonometrie import DECLINAISON_ETE_DEG, LATITUDE_DEG, angle_coucher, direction_soleil
+    est, nord, haut = direction_soleil(0.0)
+    assert est == pytest.approx(0.0) and nord < 0                          # plein sud à midi solaire
+    assert math.degrees(math.asin(haut)) == pytest.approx(90.0 - LATITUDE_DEG + DECLINAISON_ETE_DEG)
+    coucher = angle_coucher()
+    assert 105.0 < coucher < 125.0                                          # 15 à 16 h de jour
+    for signe in (-1, 1):                                                   # lever puis coucher : au nord de l'axe
+        est, nord, haut = direction_soleil(signe * coucher)
+        assert haut == pytest.approx(0.0, abs=1e-9) and nord > 0 and est * signe < 0
+        assert math.hypot(est, nord) == pytest.approx(1.0)
+    assert direction_soleil(60.0)[0] < 0                                    # l'après-midi, le soleil est à l'ouest
+    textes = [t.text for t in ET.fromstring(dessiner(IMMEUBLE)).iter("{http://www.w3.org/2000/svg}text")]
+    assert "21 juin, 16 h" in textes
+
+
+# ============================================================
+# TEXTES : aides, glossaire, accueil (0.9.6)
+# ============================================================
+def test_aides_hors_du_code_et_glossaire_complet():
+    from interface import aides
+    from interface.briques import BRIQUES
+    # Plus aucune aide écrite dans le code : toutes viennent de interface/textes/aides.csv
+    sources = {nom: open(os.path.join(RACINE, nom), encoding="utf-8").read()
+               for nom in ("app.py", "interface/formulaire.py", "interface/briques/semaine_chaude.py")}
+    assert all('help="' not in texte for texte in sources.values())
+    # Chaque aide sert : sa clé est celle d'un widget de la page
+    tout = "".join(sources.values())
+    assert aides.aides() and all(f'"{cle}"' in tout for cle in aides.aides())
+    # Glossaire : une page Notion par terme ; chaque terme cité ([[…]] et Brique.glossaire) existe
+    pages = aides.glossaire()
+    assert len(pages) > 50 and all(len(url.rsplit("/", 1)[1]) == 32 for url in pages.values())
+    cites = [terme for texte in aides.aides().values() for terme in aides.termes_cites(texte)]
+    with open(os.path.join(aides.DOSSIER_TEXTES, "accueil.md"), encoding="utf-8") as fichier:
+        cites += aides.termes_cites(fichier.read())
+    for brique in BRIQUES:
+        cites += aides.termes_cites(brique.phenomene + brique.lecture) + list(brique.glossaire)
+    assert cites and set(cites) <= set(pages), set(cites) - set(pages)
+    # Liens : terme seul, terme sous un autre texte, terme inconnu laissé en texte
+    assert aides.lier("le [[DH]] et") == f"le [DH]({pages['DH']}) et"
+    assert aides.lier("[[Inertie|l'inertie]]") == f"[l'inertie]({pages['Inertie']})"
+    assert aides.lier("[[Inconnu]]") == "Inconnu" and aides.aide("cle_absente") is None
+    assert "](https://" in aides.aide("sw")
+
+
 # ============================================================
 # COMPARAISON DE DEUX VARIANTES
 # ============================================================
@@ -386,11 +450,20 @@ def test_page_entiere(resultats, monkeypatch):
     page = AppTest.from_file(os.path.join(RACINE, "app.py"), default_timeout=60).run()
     assert not page.exception
 
-    # Ouverture : le logement de 70 m², l'enveloppe moyenne, le DH seul, sans brique Bbio
+    # Ouverture sur l'accueil : aucun calcul, des liens vers le glossaire ; son bouton ouvre « Explorer »
+    assert page.session_state["page"] == "Accueil" and appels == [] and not page.metric
+    assert page.get("download_button") and "Télécharger ce bâtiment" in str(page.get("download_button")[0].proto)
+    assert any("notion.site" in m.value for m in page.markdown)
+    page.button(key="accueil_explorer").click().run()
+    assert not page.exception and page.session_state["page"] == "Explorer"
+
+    # Explorer : le logement de 70 m², l'enveloppe moyenne, le DH seul, sans brique Bbio ni calcul précédent
     assert [m.label for m in page.metric][:3] == ["Surface habitable", "Baies / surface habitable", "DH"]
     assert "Bbio (points)" not in [m.label for m in page.metric] and page.metric[0].value.startswith("70")
     assert appels == [("dh", boite_de_depart())] and page.button(key="calculer").disabled and not page.warning
-    assert page.segmented_control(key="niveau_enveloppe").value == "Moyen" and page.slider(key="sw").value == 0.43
+    assert page.metric[2].delta is None or page.metric[2].delta == ""
+    assert any(m.value.startswith("DH : :") and "DH max" in m.value for m in page.markdown)
+    assert page.segmented_control(key="niveau_enveloppe").value == "Moyen" and page.slider(key="sw").value == 0.4
     assert page.segmented_control(key="brique").options == [b.titre for b in BRIQUES if b.besoin == "dh"]
 
     # Bbio et DH : seul le Bbio est calculé, le DH vient de la mémoire
@@ -417,6 +490,17 @@ def test_page_entiere(resultats, monkeypatch):
     assert page.metric[0].value.startswith("350")
     page.button(key="calculer").click().run()
     assert not page.exception and page.button(key="calculer").disabled
+    # Nouvelle boîte : le DH montre l'écart avec le calcul précédent (nul ici, le calcul est simulé)
+    assert page.metric[2].delta == "inchangé depuis le calcul précédent"
+
+    # Retour à l'accueil, puis « Calculer » dans le menu, qui rouvre « Explorer »
+    page.segmented_control(key="page").set_value("Accueil").run()
+    page.slider(key="nb_niveaux").set_value(4).run()
+    assert not page.exception and not page.metric
+    page.button(key="calculer").click().run()
+    assert not page.exception and page.session_state["page"] == "Explorer" and appels[-1][1].nb_niveaux == 4
+    page.slider(key="nb_niveaux").set_value(5).run()
+    page.button(key="calculer").click().run()
 
     # Changer de niveau ne touche que l'enveloppe : la forme modifiée à la main (5 niveaux) reste
     from interface.formulaire import valeurs_des_widgets
@@ -425,7 +509,7 @@ def test_page_entiere(resultats, monkeypatch):
     assert not page.exception and page.slider(key="nb_niveaux").value == 5
     performant = valeurs_des_widgets(boite_de_depart(niveau="Performant"))
     assert all(page.session_state[cle] == performant[cle] for cle in NIVEAUX_ENVELOPPE["Performant"])
-    assert page.slider(key="uw").value == 1.35 and page.slider(key="u_mur").value == 0.2
+    assert page.slider(key="uw").value == 1.2 and page.slider(key="u_mur").value == 0.25
     assert page.select_slider(key="inertie").value == "tres_lourde"
     page.button(key="calculer").click().run()
     assert appels[-1] == ("dh", replace(boite_de_depart(niveau="Performant"), nb_niveaux=5))

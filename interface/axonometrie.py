@@ -12,7 +12,10 @@
    - les baies de chaque façade, de surface proportionnelle à la
      part vitrée saisie, avec leur protection mobile ;
    - les balcons ou casquettes, de la profondeur saisie ;
-   - la course du soleil (schéma, sans échelle).
+   - la course du soleil d'été (21 juin, à 46,5° N), dans le sol :
+     le bord du disque, du lever au nord-est au coucher au
+     nord-ouest par le sud ; le soleil de 16 h y est posé dans sa
+     direction (azimut vrai, sans sa hauteur).
 
  Projection : le spectateur se tient à l'azimut « vue_deg »
  (même convention que le moteur : 0 = sud, 90 = ouest) et
@@ -44,8 +47,11 @@ ELEVATION_DEG = 30.0                # hauteur du regard au-dessus de l'horizon
 VUE_PAR_DEFAUT_DEG = 45.0           # spectateur au sud-ouest : façades sud et ouest visibles
 VUES = {"sud-ouest": 45.0, "sud-est": -45.0, "nord-est": -135.0, "nord-ouest": 135.0}
 RAYON_SOL = 0.7                     # rayon du disque du sol, en diagonales de la boîte
-SOLEIL_HAUTEUR_DEG = 50.0           # hauteur du soleil à midi sur le schéma
-SOLEIL_POSITION = 0.62              # place du soleil sur sa course (0 = lever à l'est, 1 = coucher à l'ouest)
+# Course du soleil d'été (21 juin) : ses vraies directions, portées au bord du sol
+LATITUDE_DEG = 46.5                 # milieu de la France métropolitaine (de 42 à 51° N)
+DECLINAISON_ETE_DEG = 23.44         # déclinaison du soleil au solstice d'été
+SOLEIL_HEURE = 16.0                 # heure solaire du soleil dessiné : l'après-midi, qui chauffe le plus
+POINTS_COURSE = 48                  # nombre de segments de la course
 PART_VOLET = 0.28                   # part haute de la baie couverte par la protection dessinée
 TRAIT = 1.4                         # épaisseur des traits (px)
 POLICE = "font-family='Helvetica, Arial, sans-serif'"
@@ -197,17 +203,48 @@ def _sol(scene, proj, rayon):
                     font_weight="700" if lettre == "N" else "400")
 
 
+def direction_soleil(angle_horaire_deg, latitude_deg=LATITUDE_DEG, declinaison_deg=DECLINAISON_ETE_DEG):
+    """Direction du soleil (est, nord, haut), vecteur unitaire, pour un angle horaire (0 à midi solaire, positif
+    l'après-midi, 15° par heure). Formules classiques de la position du soleil."""
+    phi, delta, h = (math.radians(a) for a in (latitude_deg, declinaison_deg, angle_horaire_deg))
+    return (-math.cos(delta) * math.sin(h),
+            math.cos(phi) * math.sin(delta) - math.sin(phi) * math.cos(delta) * math.cos(h),
+            math.sin(phi) * math.sin(delta) + math.cos(phi) * math.cos(delta) * math.cos(h))
+
+
+def angle_coucher(latitude_deg=LATITUDE_DEG, declinaison_deg=DECLINAISON_ETE_DEG):
+    """Angle horaire du coucher du soleil (degrés) : cos H0 = − tan φ × tan δ."""
+    return math.degrees(math.acos(-math.tan(math.radians(latitude_deg)) * math.tan(math.radians(declinaison_deg))))
+
+
+def bord_du_sol(angle_horaire, rayon):
+    """Point (est, nord) du bord du sol dans la direction du soleil (son azimut, sans sa hauteur)."""
+    est, nord, _ = direction_soleil(angle_horaire)
+    norme = math.hypot(est, nord)
+    return rayon * est / norme, rayon * nord / norme
+
+
+def _course_au_sol(scene, proj, rayon):
+    """Course du soleil le 21 juin, dans le sol : le bord du disque, du lever (nord-est) au coucher (nord-ouest)
+    par le sud, et les deux points du lever et du coucher.
+
+    Dans le sol, et non dans le ciel : vue du sud, la vraie course en hauteur se projette presque en un trait.
+    Seule la course d'été est montrée : c'est elle qui fait l'inconfort, et elle montre que le soleil du soir
+    frappe les façades ouest, et même nord-ouest.
+    """
+    coucher = angle_coucher()
+    course = [proj.point(*bord_du_sol(-coucher + 2 * coucher * i / POINTS_COURSE, rayon))
+              for i in range(POINTS_COURSE + 1)]
+    scene.ligne(course, stroke=charte.ORANGE, stroke_width=2.2, stroke_dasharray="2 6", stroke_linecap="round")
+    for bout in (course[0], course[-1]):
+        scene.cercle(bout, 4, fill=charte.ORANGE, stroke="none")
+
+
 def _soleil(scene, proj, rayon):
-    """Course du soleil : un arc de l'est à l'ouest par le sud (schéma, sans échelle)."""
-    h = math.radians(SOLEIL_HAUTEUR_DEG)
-
-    def position(part):                 # 0 : lever à l'est, 1 : coucher à l'ouest
-        t = math.pi * part
-        return proj.point(rayon * math.cos(t), -rayon * math.sin(t) * math.cos(h), rayon * math.sin(t) * math.sin(h))
-
-    scene.ligne([position(i / 40) for i in range(41)], stroke=charte.ORANGE, stroke_width=1.6,
-                stroke_dasharray="2 6", stroke_linecap="round")
-    scene.cercle(position(SOLEIL_POSITION), 11, fill=charte.JAUNE, stroke=charte.ORANGE, stroke_width=1.6)
+    """Le soleil de SOLEIL_HEURE, posé sur la course au sol, dans sa direction."""
+    soleil = proj.point(*bord_du_sol((SOLEIL_HEURE - 12.0) * 15.0, rayon))
+    scene.cercle(soleil, 11, fill=charte.JAUNE, stroke=charte.ORANGE, stroke_width=1.6)
+    scene.texte(soleil, f"21 juin, {SOLEIL_HEURE:.0f} h", decalage=(16, 4), font_size=12, fill=charte.BLEU_NUIT)
 
 
 def _facade(scene, proj, boite, facade, couleur):
@@ -254,10 +291,13 @@ def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG):
     proj = Projection(vue_deg)
     scene = _Scene()
     rayon = RAYON_SOL * math.hypot(boite.longueur_m, boite.profondeur_m)
-    vue_du_sud = abs((vue_deg + 180.0) % 360.0 - 180.0) < 90.0
+    # Le soleil, au bord du sol, est devant la boîte s'il est du côté du spectateur, derrière sinon
+    x, y = bord_du_sol((SOLEIL_HEURE - 12.0) * 15.0, rayon)
+    soleil_devant = x * proj.regard[0] + y * proj.regard[1] < 0
 
     _sol(scene, proj, rayon)
-    if not vue_du_sud:                  # vu du nord, le soleil passe derrière la boîte
+    _course_au_sol(scene, proj, rayon)  # dans le sol : la boîte cache la partie qui passe derrière elle
+    if not soleil_devant:
         _soleil(scene, proj, rayon)
     # Façades visibles : la plus éloignée d'abord ; la seconde est ombrée
     mur = MURS[boite.teinte]
@@ -274,7 +314,7 @@ def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG):
              for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
     scene.polygone([proj.point(x, y, boite.hauteur_m) for x, y in coins], fill=_melanger(mur, "#FFFFFF", 0.45),
                    stroke=charte.BLEU_NUIT, stroke_width=TRAIT, stroke_linejoin="round")
-    if vue_du_sud:
+    if soleil_devant:
         _soleil(scene, proj, rayon)
 
     titre = (f"Boîte de {boite.longueur_m:.0f} m sur {boite.profondeur_m:.0f} m, {boite.nb_niveaux} niveaux, "

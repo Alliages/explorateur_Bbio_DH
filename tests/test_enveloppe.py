@@ -78,3 +78,12 @@ def test_transmissions_du_groupe():
     assert transmission_parois(groupe) == pytest.approx(20 * 0.25 + 50 * 0.5 * 0.20)
     assert transmission_ponts(groupe) == pytest.approx(30 * 0.3 + 5 * 0.1)
     assert transmission_ponts(Groupe("Vide", 50.0)) == 0
+
+
+def test_paroi_adiabatique():
+    """0.9.8 : U = 0 (paroi qui ne transmet rien, écrite ainsi dans certaines études) : ni transmission ni soleil."""
+    from moteur.solaire import facteurs_solaires_paroi
+    for inclinaison in (0.0, 45.0, 90.0, 135.0, 180.0):
+        paroi = Paroi("Mur", "mur", 10.0, u=0.0, orientation_deg=0, inclinaison_deg=inclinaison, alpha=0.6)
+        assert u_paroi(paroi) == 0.0
+    assert facteurs_solaires_paroi(paroi) == (0.0, 0.0)

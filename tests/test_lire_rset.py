@@ -332,3 +332,24 @@ def test_degres_heures_compares(lecture):
     finally:
         projet.batiments[0].zones[0].groupes[0].nom = "Groupe A"
     assert pd.isna(inconnu["dh_etude"]) and pd.isna(inconnu["dh_ecart_pct"]) and inconnu["dh_outil"] >= 0
+
+
+def test_validation_par_lot(tmp_path):
+    """0.9.8 : outils/valider.py passe un dossier d'études, sans doublon, et écarte les fichiers sans logement
+    collectif."""
+    from outils.valider import lister_etudes, main, nb_groupes_logement, resumer
+    dossier = tmp_path / "etudes"
+    (dossier / "sous").mkdir(parents=True)
+    (dossier / "a.xml").write_text(rset_essai(), encoding="utf-8")
+    (dossier / "sous" / "copie.xml").write_text(rset_essai(), encoding="utf-8")       # même contenu : compté une fois
+    autre = rset_essai().replace("<Usage>2</Usage>", "<Usage>3</Usage>")              # bureaux seulement
+    (dossier / "bureaux.xml").write_text(autre, encoding="utf-8")
+    etudes = lister_etudes([str(dossier)])
+    assert len(etudes) == 2 and nb_groupes_logement(str(dossier / "bureaux.xml")) == 0
+    sortie = tmp_path / "validation.csv"
+    main([str(dossier), "--sortie", str(sortie)])
+    table = pd.read_csv(sortie, sep=";", decimal=",")
+    assert set(table["etude"]) == {"a.xml"} and len(table) == nb_groupes_logement(str(dossier / "a.xml"))
+    assert {"bbio_outil", "bbio_etude", "bbio_ecart_pct", "dans_la_cible"} <= set(table.columns)
+    resume = resumer(table)
+    assert resume["etudes"] == 1 and resume["groupes"] == len(table)

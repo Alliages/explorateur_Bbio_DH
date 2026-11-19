@@ -31,6 +31,7 @@
 """
 
 import csv
+import io
 import math
 import os
 from dataclasses import dataclass, fields, replace
@@ -275,6 +276,39 @@ def lire_batiments(dossier=DOSSIER_BATIMENTS):
             raise ValueError(f"{fichier} : le nom « {nom} » est déjà pris par un autre bâtiment")
         batiments[nom] = boite
     return batiments
+
+
+def _ecrire_valeur(valeur):
+    """Valeur d'un champ de Boite écrite comme dans un CSV de bâtiment (inverse de _convertir)."""
+    if isinstance(valeur, bool):
+        return next(texte for texte, sens in OUI_NON.items() if sens is valeur)
+    if isinstance(valeur, float):
+        texte = repr(valeur)                                    # le plus court qui relit la même valeur
+        return (texte[:-2] if texte.endswith(".0") else texte).replace(".", DECIMALE_CSV)
+    if isinstance(valeur, tuple):
+        return ", ".join(valeur)
+    return str(valeur)
+
+
+def ecrire_batiment(boite, nom, dossier=DOSSIER_BATIMENTS):
+    """Texte du CSV de bâtiment qui décrit cette boîte, sous le nom donné (bouton « Télécharger ce bâtiment »).
+
+    Le fichier a le format de donnees/batiments/ et se relit avec lire_batiment : la forme, le site, les baies
+    (parts vitrées, protection, balcons) et le confort d'été. Les 13 saisies d'enveloppe n'y sont pas : comme pour
+    tout bâtiment de départ, elles viennent du niveau choisi. Unités et descriptions : celles du premier CSV du
+    dossier, qui sert de modèle ; un champ qu'il ne décrit pas garde des colonnes vides.
+    """
+    modele = sorted(f for f in os.listdir(dossier) if f.lower().endswith(".csv"))[0]
+    with open(os.path.join(dossier, modele), encoding="utf-8-sig", newline="") as f:
+        notes = {ligne["champ"]: (ligne.get("unite") or "", ligne.get("description") or "")
+                 for ligne in csv.DictReader(f, delimiter=SEPARATEUR_CSV)}
+    enveloppe = set(CHAMPS_TYPOLOGIES.values())
+    lignes = [("champ", "valeur", "unite", "description"), (CHAMP_NOM, nom, *notes.get(CHAMP_NOM, ("", "")))]
+    lignes += [(champ.name, _ecrire_valeur(getattr(boite, champ.name)), *notes.get(champ.name, ("", "")))
+               for champ in fields(Boite) if champ.name not in enveloppe]
+    sortie = io.StringIO()
+    csv.writer(sortie, delimiter=SEPARATEUR_CSV, lineterminator="\n").writerows(lignes)
+    return sortie.getvalue()
 
 
 # ============================================================

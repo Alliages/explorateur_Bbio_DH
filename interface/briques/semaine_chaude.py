@@ -19,6 +19,7 @@ import streamlit as st
 
 from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE
 from interface import charte
+from interface.aides import aide
 from interface.briques.base import Brique
 from interface.briques.graphiques import (FORMAT_HEURE, FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs,
                                           legende, nombre)
@@ -79,8 +80,7 @@ def _gestes(semaine):
 
 def afficher(r, boite):
     decalage = st.slider("Décaler la semaine (jours)", -DECALAGE_MAX_JOURS, DECALAGE_MAX_JOURS, 0,
-                         key="semaine_chaude_decalage",
-                         help="0 : les sept jours qui comptent le plus de degrés-heures.")
+                         key="semaine_chaude_decalage", help=aide("semaine_chaude_decalage"))
     semaine = extraire_semaine(r.ete, decalage)
     colonnes = st.columns(3)
     colonnes[0].metric("DH de la semaine", nombre(semaine["dh_horaire"].sum(), 0, "°C.h"))
@@ -108,9 +108,10 @@ BRIQUE = Brique(
     cle="semaine_chaude",
     titre="Une semaine chaude",
     icone=":material/timeline:",
-    phenomene=("Pendant une canicule, la température du logement **suit celle du dehors avec retard** : les "
-               "murs et les planchers stockent la chaleur le jour et la rendent la nuit. Baisser les "
-               "protections le jour et ouvrir la nuit, quand l'air est plus frais, décide du résultat."),
+    phenomene=("Pendant une [[Canicule|canicule]], la température du logement **suit celle du dehors avec "
+               "retard** : les murs et les planchers stockent la chaleur le jour et la rendent la nuit "
+               "([[Inertie|inertie]]). Baisser les [[Occultation|protections]] le jour et ouvrir la nuit, quand "
+               "l'air est plus frais ([[Rafraichissement|rafraîchissement]]), décide du résultat."),
     afficher=afficher,
     reperes=reperes,
     equation=(r"\theta_{conf} = \min\left(\theta_{fr} + 2 \;;\; \max\left(\theta_{fr} \;;\; "
@@ -118,7 +119,10 @@ BRIQUE = Brique(
     lecture=("$\\theta_{conf}$ : température limite de confort chaud, de jour. $\\theta_{fr}$ : consigne de "
              "refroidissement en occupation. $\\theta_{rm}$ : moyenne glissante de la température extérieure, "
              "$\\theta_{rm}(j) = 0{,}8 \\times \\theta_{rm}(j-1) + 0{,}2 \\times$ moyenne de la veille. La nuit, "
-             "en habitation, le seuil est la consigne."),
+             "en habitation, le seuil est la consigne.\n\n"
+             "Ce qu'elle dit : le seuil de jour suit la chaleur des jours passés. Après plusieurs jours chauds, "
+             "on s'y est fait et l'on supporte jusqu'à 2 °C de plus ([[Confort adaptatif|confort adaptatif]])."),
     reference="arrêté du 4 août 2021, annexe III, fiche 3.1, éq. 1 et 2, et fiche 13.5, éq. 2543 à 2545.",
     code=(seuil_confort_chaud, moyenne_glissante_exterieure),
-    besoin="dh")
+    besoin="dh",
+    glossaire=("Confort adaptatif", "Inertie", "Constante de temps", "Rafraichissement", "Occultation"))

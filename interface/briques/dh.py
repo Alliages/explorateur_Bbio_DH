@@ -81,23 +81,27 @@ def reperes():
             "1 °C au-dessus du seuil pendant 100 heures occupées, ou 2 °C pendant 50 heures : 100 °C.h.",
             "Le calcul se fait sur une année à séquence caniculaire, sans climatisation, même si le logement "
             "est climatisé.",
-            "Fiabilité de l'outil : sur cinq études, le DH va de 41 % sous l'étude à 28 % au-dessus."]
+            "Fiabilité de l'outil : sur 23 groupes de 10 études, le DH va de 42 % sous l'étude à 28 % au-dessus."]
 
 
 BRIQUE = Brique(
     cle="dh",
     titre="DH : l'inconfort d'été",
     icone=":material/sunny:",
-    phenomene=("Les degrés-heures mesurent à la fois **combien de temps** et **de combien** la température "
-               "ressentie dépasse le seuil de confort, quand le logement est occupé. Protections solaires, "
-               "ouverture des fenêtres la nuit, inertie et brasseurs d'air les font baisser."),
+    phenomene=("Les degrés-heures mesurent à la fois **combien de temps** et **de combien** la "
+               "[[Température opérative|température ressentie]] dépasse le seuil de confort, quand le logement "
+               "est occupé. Protections solaires, ouverture des fenêtres la nuit, [[Inertie|inertie]] et "
+               "[[Brasseur d’air (ventilateur de plafond)|brasseurs d'air]] les font baisser."),
     afficher=afficher,
     reperes=reperes,
     equation=r"DH = \sum_{h} \max\left(0 \;;\; \theta_{op}(h) - \theta_{conf}(h)\right)",
     lecture=("$\\theta_{op}$ : température opérative du logement (moyenne de l'air et des parois), en fin "
              "d'heure. $\\theta_{conf}$ : température limite de confort chaud, relevée par l'effet des "
-             "brasseurs d'air. La somme porte sur les heures occupées de la période de confort adaptatif."),
+             "brasseurs d'air. La somme porte sur les heures occupées de la période de confort adaptatif.\n\n"
+             "Ce qu'elle dit : seul compte l'écart au-dessus du seuil. Une heure à 2 °C de trop compte autant que "
+             "deux heures à 1 °C de trop ; une heure sous le seuil ne rattrape rien."),
     reference=("arrêté du 4 août 2021, annexe III, fiche 13.5, éq. 2542 à 2551 ; DH max : code de la "
                "construction et de l'habitation, annexe à l'article R. 172-4, chapitres II et III."),
     code=(degres_heures, dh_max),
-    besoin="dh")
+    besoin="dh",
+    glossaire=("DH", "Température opérative", "Confort adaptatif", "Canicule"))

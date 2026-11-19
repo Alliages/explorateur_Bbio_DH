@@ -19,15 +19,22 @@ puis ouvrir http://localhost:8501.
 
 ![La page : la boîte dessinée, ses chiffres clés et les briques](docs/capture_interface.jpg)
 
+La page s'ouvre sur un **accueil** (à quoi sert l'outil, trois notions, limites, liens) ; le bouton « Explorer la
+boîte » ou « Calculer » ouvre la page de travail.
+
 1. **Décrire** une boîte de logements dans le menu de gauche, en partant d'un logement de 70 m² ou d'un immeuble
    de 9 logements (site, forme, baies et balcons, parois, air, confort d'été) : elle se dessine aussitôt en
    axonométrie.
 2. **Calculer** : le bouton lance le calcul choisi, DH (par défaut), Bbio ou les deux, heure par heure sur une
    année chacun (quelques secondes par calcul).
-3. **Comprendre** : les résultats se lisent par briques, sur deux niveaux : le phénomène, un graphique et des
-   ordres de grandeur ; puis, dans un volet, l'équation, sa référence et le code du moteur.
-4. **Comparer** : « Garder comme référence », changer une saisie, recalculer : la page montre ce qui a changé et
-   l'écart sur chaque indicateur.
+3. **Comprendre** : les résultats se lisent par briques : le phénomène, un graphique, des ordres de grandeur et
+   l'équation avec ce qu'elle dit ; puis, dans un volet, sa référence et le code du moteur. Les mots techniques
+   renvoient au [Glossaire du confort dans le bâtiment](https://guillaume-meunier.notion.site/2446562e29cd80a99195f07beeade7c3).
+4. **Comparer** : les chiffres clés montrent l'écart avec le calcul précédent ; « Garder comme référence »,
+   changer une saisie, recalculer : la page montre ce qui a changé et l'écart sur chaque indicateur.
+
+Les textes de l'interface (accueil, aide de chaque saisie, termes du glossaire) sont dans `interface/textes/`,
+modifiables sans toucher au code.
 
 ### Mise en ligne
 
@@ -57,6 +64,12 @@ L'outil sait lire le fichier XML d'une étude réglementaire (RSET) et refaire s
 ```powershell
 python -m outils.comparer_reference "_sources\mon_etude.xml" --variantes
 python -m outils.comparer_reference "_sources\mon_etude.xml" --dh
+```
+
+Et passer toutes les études d'un ou plusieurs dossiers d'un coup (table dans `_resultats\validation.csv`) :
+
+```powershell
+python -m outils.valider "..\_RSEE" "_sources" --dh
 ```
 
 ## Premier calcul

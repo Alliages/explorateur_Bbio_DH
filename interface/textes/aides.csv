@@ -1,0 +1,41 @@
+cle;aide
+batiment_depart;Choisir un bâtiment remet toutes les saisies à ses valeurs, avec l'enveloppe du niveau choisi. Chaque bâtiment est un fichier CSV du dossier donnees/batiments/ : en ajouter un l'ajoute à cette liste.
+niveau_enveloppe;Valeurs observées sur 18 zones de logements de 6 études RE2020, pondérées par la surface : « performant », le quart le mieux placé ; « moyen », la médiane ; « faible », le quart le moins bien placé. Choisir un niveau remet les 13 saisies d'enveloppe (baies, parois, ponts thermiques, inertie, ventilation, perméabilité) à ses valeurs et garde la forme.
+choix_calculs;Chaque calcul prend à peu près le même temps : n'en lancer qu'un va deux fois plus vite.
+zone_climatique;Les huit zones de la [[RE2020]], de H1a (nord) à H3 (Méditerranée). Chacune a deux [[Fichier météo (EPW)|fichiers météo]] : une année moyenne pour le Bbio, une année avec canicule pour le DH.
+altitude_m;L'altitude abaisse la température extérieure du fichier météo et relève le Bbio max.
+exposition_bruit;Près d'une voie bruyante, on ouvre moins les fenêtres la nuit. BR2 et BR3 relèvent aussi le Bbio max.
+longueur_m;Longueur de la façade principale et de la façade arrière.
+profondeur_m;Longueur des pignons. Une boîte profonde a moins de façade, donc moins de baies, par m² habitable.
+nb_niveaux;Le premier niveau porte le plancher bas, le dernier la toiture : plus il y a de niveaux, moins ces deux parois pèsent par m².
+orientation;Orientation de la façade principale ; les trois autres suivent. Le dessin tourne avec elle.
+nb_logements;Donne la surface moyenne d'un logement, qui module le Bbio max et le DH max. Ne change pas les besoins.
+traversant;Un logement traversant ouvre sur deux façades : l'air le balaie mieux (voir [[Ventilation]]).
+hauteur_sous_plafond_m;Plus de volume à ventiler et à chauffer ; au-delà de 2,50 m, le Bbio max est relevé.
+uw;Plus Uw est bas, moins la baie laisse passer de chaleur. Double vitrage courant : 1,3 à 1,5.
+sw;Part de l'énergie du soleil qui entre par la baie nue. Voir [[Facteur solaire (FS ou g)]].
+tl;Part de la lumière uniquement du soleil qui entre par la baie. Voir [[Transmission lumineuse (TL)]].
+protection;Volets ou stores qu'on baisse devant la baie : ils coupent le soleil et, la nuit, la chaleur qui fuit. Voir [[Occultation]].
+gestion_protection;Les occupants baissent une protection manuelle moins souvent qu'une protection motorisée ; l'automatique suit le soleil.
+sw_protege;Part de l'énergie du soleil qui entre encore, protection baissée.
+uw_protege;La lame d'air entre la baie et la protection baissée isole un peu.
+debord_m;Dalle en débord au-dessus des baies, à chaque niveau. Elle arrête le soleil haut de l'été et laisse passer le soleil bas de l'hiver. 0 : aucune.
+ouvrable;Des fenêtres qu'on ouvre la nuit d'été évacuent la chaleur du jour. Voir [[Rafraichissement]].
+ratio_ouverture_max;Une fenêtre à la française ouvre presque toute sa surface, un coulissant la moitié.
+u_mur;Chaleur qui traverse un m² de mur pour 1 °C d'écart entre dedans et dehors. Voir [[Conduction]].
+u_toiture;Même grandeur pour la toiture, qui reçoit aussi le soleil d'été.
+u_plancher;Même grandeur pour le plancher bas.
+plancher_sur_sol;Sinon, le plancher bas donne sur l'extérieur (pilotis, porche).
+teinte;Une paroi sombre absorbe davantage le soleil. Voir [[Albédo]].
+psi_planchers;Fuite de chaleur à la jonction de chaque plancher avec la façade, par mètre de façade. Avec rupteur ou isolation par l'extérieur : 0,1 à 0,3. Les niveaux d'enveloppe y placent le ψ moyen de tous les ponts thermiques des études.
+inertie;Capacité des planchers et des murs à stocker la chaleur du jour pour la rendre la nuit. Voir [[Inertie]].
+debit_ventilation_m3h_m2;Air neuf soufflé ou extrait en continu. Il chauffe l'hiver ce qu'il faut réchauffer, et rafraîchit l'été quand il fait plus frais dehors. Voir [[Ventilation]].
+permeabilite_q4pa;Air qui passe par les défauts de l'enveloppe. 0 : enveloppe parfaitement étanche (calcul deux fois plus rapide).
+climatise;Ne change que le DH max : le DH se calcule toujours sans climatisation. Voir [[Climatisation]].
+brasseurs;Ventilateurs de plafond : l'air qui bouge rafraîchit la peau et relève le seuil de confort. Non comptés dans un logement climatisé (fiche 8.32). Voir [[Brasseur d’air (ventilateur de plafond)|brasseur d'air]].
+brasseurs_par_logement;Souvent un par pièce de vie et par chambre.
+brasseur_debit_m3h;Débit d'air brassé à la vitesse maximale, donné par le fabricant.
+brasseur_puissance_w;Puissance électrique à la vitesse maximale, donnée par le fabricant.
+garder_reference;Garde ce calcul en mémoire : après une nouvelle saisie et un nouveau calcul, la page montre l'écart avec lui.
+semaine_chaude_decalage;0 : les sept jours qui comptent le plus de degrés-heures.
+telecharger_batiment;Enregistre la forme, le site, les baies et le confort d'été saisis dans un CSV de bâtiment. Déposé dans le dossier donnees/batiments/, il s'ajoute à la liste « Bâtiment de départ ». L'enveloppe n'y est pas : elle vient du niveau choisi (performant, moyen ou faible).

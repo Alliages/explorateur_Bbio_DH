@@ -91,8 +91,8 @@ def reperes():
             f"d'éclairage {nombre(hyp('bbio_coef_eclairage'))} points.",
             f"Bbio max moyen du logement collectif : {nombre(hyp('bbio_max_moyen_logement_collectif'))} points, "
             "avant modulation par le climat, l'altitude, la surface, le bruit et la hauteur sous plafond.",
-            "Fiabilité de l'outil : sur cinq études, chauffage 2 à 26 % sous l'étude, besoin de froid 1,7 à "
-            "4 fois au-dessus. Le Bbio affiché est surestimé en climat chaud."]
+            "Fiabilité de l'outil : sur 23 groupes de 10 études, Bbio à ± 10 % en H2a, 7 à 15 % sous l'étude en "
+            "H1a (chauffage trop faible), 9 à 34 % au-dessus en H3 (besoin de froid environ deux fois trop fort)."]
 
 
 BRIQUE = Brique(
@@ -100,15 +100,20 @@ BRIQUE = Brique(
     titre="Bbio : les trois besoins",
     icone=":material/thermostat:",
     phenomene=("Le Bbio note le bâtiment **avant tout équipement** : ce qu'il faut de chaleur, de froid et de "
-               "lumière artificielle pour le tenir à température et l'éclairer, selon sa forme, son enveloppe, "
-               "ses baies et son climat. Plus il est bas, moins le bâtiment demande."),
+               "lumière artificielle pour le tenir à température et l'éclairer ([[Besoins (thermiques)|ses "
+               "besoins]]), selon sa forme, son enveloppe, ses baies et son climat. Plus il est bas, moins le "
+               "bâtiment demande."),
     afficher=afficher,
     reperes=reperes,
     equation=r"B_{bio} = 2 \times B_{ch} + 2 \times B_{fr} + 5 \times B_{ecl}",
     lecture=("$B_{ch}$, $B_{fr}$ et $B_{ecl}$ : besoins annuels de chauffage, de refroidissement et d'éclairage, "
              "en kWh par m² de surface de référence (la surface habitable en logement). Le Bbio se compare à "
-             "$B_{bio,max} = B_{bio,max\\,moyen} \\times (1 + \\sum M_b)$."),
+             "$B_{bio,max} = B_{bio,max\\,moyen} \\times (1 + \\sum M_b)$.\n\n"
+             "Ce qu'elle dit : un kWh/m² d'éclairage pèse deux fois et demie plus qu'un kWh/m² de chauffage ou "
+             "de froid. Des baies qui font entrer la lumière du jour peuvent donc faire baisser le Bbio, même si "
+             "elles ajoutent un peu de chauffage ou de froid."),
     reference=("arrêté du 4 août 2021, annexe III, fiche 13.1, éq. 2385 ; Bbio max : code de la construction et "
                "de l'habitation, annexe à l'article R. 172-4, chapitres II et III."),
     code=(points_bbio, bbio_max),
-    besoin="bbio")
+    besoin="bbio",
+    glossaire=("Besoins (thermiques)", "Bioclimatique", "RE2020"))

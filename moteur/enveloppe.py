@@ -73,10 +73,13 @@ def u_baie(baie):
 def u_paroi(paroi):
     """U de la paroi opaque (W/m².K), selon son inclinaison (fiche 5.17, § 5.17.3.4 et éq. 294).
 
-    Une paroi posée dans la position de son type garde le U saisi.
+    Une paroi posée dans la position de son type garde le U saisi. U = 0 : paroi qui ne transmet rien
+    (adiabatique), comme en écrivent certaines études ; elle reste nulle quelle que soit son inclinaison.
     """
     if paroi.u is None:
         raise ValueError(f"Paroi « {paroi.nom} » : u à renseigner")
+    if paroi.u == 0:
+        return 0.0
     # Résistance propre de la paroi, hors résistances superficielles de la position de saisie
     r_th = 1.0 / paroi.u - hyp(f"resistances_superficielles_{POSITION_PAR_TYPE[paroi.type]}")
     if r_th < 0:

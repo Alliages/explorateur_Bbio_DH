@@ -3,6 +3,76 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.8 — évolution (18/11/2026), validation (en partie)
+
+- **Validation par lot** (`outils/valider.py`) : tous les RSET et RSEE d'un ou plusieurs dossiers (par défaut
+  `../_RSEE` et `_sources`) passent dans `outils/comparer_reference.py`. Doublons de contenu comptés une fois,
+  fichiers sans logement collectif écartés et listés, une étude illisible n'arrête pas les autres. Table par
+  groupe (besoins, Bbio, Bbio max, écarts, cible ± 10 %, DH avec `--dh`) écrite dans `_resultats/validation.csv`
+  (hors dépôt), et résumé.
+- **Parois à U = 0** lues comme adiabatiques (`moteur/enveloppe.py`, `moteur/solaire.py`, hypothèse 90) : l'étude
+  `rsee.xml` (H2a, 6 groupes, 192 parois à U = 0) faisait planter le calcul (division par zéro).
+- **Bouton « Télécharger ce bâtiment »** (menu de gauche ; `interface/saisie.py`, `ecrire_batiment`) : la saisie en
+  CSV de bâtiment de départ (forme, site, baies, protections, balcons, confort d'été), relu à l'identique par
+  `lire_batiment`. L'enveloppe n'y est pas : comme pour tout bâtiment de départ, elle vient du niveau choisi.
+  Fichier proposé : `03_mon_batiment.csv`, avec BOM pour Excel.
+- Fiabilité affichée (accueil, briques Bbio et DH) mise à jour avec les 23 groupes.
+
+Résultats (détail dans `docs/audit.md`, 0.9.8)
+
+| Zone | Groupes | Bbio dans ± 10 % | Écart du Bbio (médiane) | Cause principale |
+|---|---|---|---|---|
+| H1a | 4 | 2 | − 10 % | chauffage 11 à 20 % trop faible |
+| H2a | 6 | 6 | − 6 % | froid faible ; chauffage 9 % trop faible |
+| H3 | 13 | 1 | + 20 % | froid 1,2 à 3,8 fois trop fort |
+
+- 10 études, 23 groupes, mais 5 bâtiments distincts : la cible « plus de 10 RSEE » et l'OPEE restent à faire.
+- Aucun coefficient ajusté pour coller aux études. Écart de ventilation d'hiver (+ 22 % dans l'outil, les
+  23 groupes) toujours inexpliqué.
+
+Vérification
+
+- Tests : 353 réussis, 2 sautés ; 3 nouveaux (paroi adiabatique, validation par lot, bâtiment écrit puis relu).
+- Résultats des 17 groupes déjà lisibles : inchangés par la correction U = 0.
+
+## 0.9.6 — évolution (18/11/2026), pédagogie
+
+- **Page d'accueil** (`interface/accueil.py`, texte dans `interface/textes/accueil.md`), comme Météo et Chaleur :
+  à quoi sert l'outil, comment s'en servir, trois notions (Bbio, DH, une boîte), limites et fiabilité, liens
+  utiles. La page s'ouvre sur l'accueil, qui ne lance aucun calcul ; « Explorer la boîte » ou « Calculer » ouvre
+  la page « Explorer ». Choix de page en tête (`app.py`, clé `page`).
+- **Équations montrées** : dans chaque brique, l'équation et sa lecture passent du volet à la page, dans un cadre
+  « L'équation », avec un paragraphe « Ce qu'elle dit » ; le volet garde la référence et le code du moteur
+  (`interface/briques/base.py`, titre « Référence et code du moteur »).
+- **Glossaire du confort dans le bâtiment** (Notion, site public `guillaume-meunier.notion.site`) : dans tout
+  texte, `[[terme]]` ou `[[terme|texte montré]]` devient un lien vers la page du terme
+  (`interface/aides.py`, `lier`) ; 82 termes dans `interface/textes/glossaire.csv` (terme ; identifiant de page).
+  Liens dans l'accueil, les aides et les briques ; chaque brique finit par « Pour aller plus loin »
+  (`Brique.glossaire`).
+- **Aides hors du code** : la bulle « ? » de chaque saisie vient de `interface/textes/aides.csv` (clé du widget ;
+  texte), lue par `aide(clé)`. Plus aucun `help="…"` dans `formulaire.py`, `app.py` ni les briques ; 20 aides
+  nouvelles (altitude, forme, protections, parois, ventilation, brasseurs…), vérifiées sur le moteur. L'aide de la
+  transmission lumineuse reprend le texte ajouté à la main avant la version.
+- **Course solaire d'été** dans le sol du dessin (`interface/axonometrie.py`) : le bord du disque, du lever
+  (nord-est) au coucher (nord-ouest) par le sud, au 21 juin et à 46,5° N (`direction_soleil`, `angle_coucher`,
+  `bord_du_sol`), et le soleil de 16 h posé dans sa direction. Remplace l'arc schématique est-ouest. Tracée en
+  hauteur, la vraie course se projetait presque en un trait vue du sud : elle est portée au sol.
+- **Chiffres clés** : sous le Bbio et le DH, l'écart avec le calcul précédent (« -165 °C.h depuis le calcul
+  précédent », « inchangé » à l'arrondi) ; la part du maximum passe sur une ligne en dessous, en rouge au-dessus du
+  max, en vert en dessous. Un calcul est une boîte calculée : ajouter le Bbio au DH de la même boîte ne compte pas.
+- Tests : `donnees/typologies_logements.csv`, arrondi dans le commit de la 0.9.4 (Uw 1,2 / 1,3 / 1,4, Sw moyen
+  0,40, U mur performant 0,25), faisait échouer deux tests restés sur les anciennes valeurs : valeurs attendues
+  alignées sur le CSV.
+
+Vérification
+
+- Tests : 350 réussis, 2 sautés ; 2 nouveaux (course du soleil d'été ; aides, glossaire et liens), page entière
+  étendue (ouverture sur l'accueil, retour à l'accueil puis « Calculer », écart avec le calcul précédent).
+- Vu dans Chrome : accueil (titres, notions, liens), page « Explorer », course au sol (lever NE, coucher NO,
+  soleil de 16 h à l'ouest), brique DH avec son équation et ses liens, bulle d'aide avec lien, passage à
+  « Performant » puis calcul : DH 804 → 639 °C.h, « -165 °C.h depuis le calcul précédent ». Page Notion « DH »
+  ouverte par son lien public.
+
 ## 0.9.4 — évolution (15/11/2026), bâtiments de départ en CSV
 
 « Pédagogie » passe en 0.9.6 ; « Diffusion » (module de la chaleur), qui occupait ce numéro, passe en 0.9.12,

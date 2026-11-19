@@ -2,9 +2,37 @@
 
 Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis claude.ai ou Claude Code.
 
-## État au 15/11/2026
+## État au 18/11/2026 (soir)
 
-- Dernière version publiée sur `travail` : **0.9.2**. **0.9.4** prête, non poussée (attend « Push »).
+- Dernière version publiée sur `travail` : **0.9.8**, avec la **0.9.6** dans le même commit (les fichiers de la
+  0.9.6 et de la 0.9.8 se mêlent dans `app.py`, `formulaire.py`, `saisie.py`). `outils/lire_horaires.py` (lecture
+  des sorties horaires, lot L1) reste hors commit, non relié au code.
+- **0.9.8** (validation, en partie) : `outils/valider.py` (`python -m outils.valider --dh`, table dans
+  `_resultats/validation.csv`) sur `../_RSEE` et `_sources` : 10 études, 23 groupes, 5 bâtiments distincts ;
+  9 groupes dans ± 10 % sur le Bbio (H2a 6 sur 6, H1a 2 sur 4 avec chauffage trop faible, H3 1 sur 13 avec froid
+  environ 2 fois trop fort). Aucun coefficient ajusté. Parois à U = 0 lues adiabatiques (hypothèse 90 ; `rsee.xml`
+  plantait). Bouton « Télécharger ce bâtiment » (`saisie.ecrire_batiment`) : forme, site, baies et confort d'été,
+  sans l'enveloppe (règle des bâtiments de départ). Détail et points ouverts : `docs/audit.md`, 0.9.8.
+- **Diagnostic des écarts** (Word, hors dépôt) : `_resultats/Ecarts_Bbio_DH_diagnostic_0.9.8.docx`. Constats
+  clés : froid de H3 trop fort aussi sans soleil (2 à 6 fois) et surtout en mai, juin, septembre ; chauffage
+  sans soleil juste à ± 6 % en H3 et H2a (lu dans `Ss_Apports_Sol_Bbio_*` des RSET, en points) ; janvier à 77-85 %
+  de l'étude ; départ à 12 °C : + 1,6 des 3,8 kWh/m² manquants à Paris ; échangeur sans effet sur le froid.
+  Plan en six lots (L1 instruments, L2 saison de froid, L3 ouvertures, L4 solaire, L5 hiver, L6 base et DH) ;
+  données attendues D1 à D9 (d'abord sorties horaires du moteur et nouvelles études).
+- **0.9.6** (pédagogie) : page d'accueil (`interface/accueil.py`, texte `interface/textes/accueil.md`), ouverte au
+  lancement, sans calcul ; « Explorer la boîte » ou « Calculer » ouvre « Explorer » (clé de session `page`).
+  Textes hors du code dans `interface/textes/` : `aides.csv` (cle;aide, clé du widget, lue par
+  `interface.aides.aide`) et `glossaire.csv` (82 termes du Glossaire du confort, Notion, identifiant de page,
+  site public `guillaume-meunier.notion.site`). `[[terme]]` ou `[[terme|texte]]` devient un lien (`lier`) ; un
+  test vérifie que chaque terme cité existe et qu'aucun `help="…"` ne reste dans le code. Toute nouvelle saisie :
+  une ligne dans `aides.csv` et `help=aide("clé")`. Briques : équation et « Ce qu'elle dit » visibles,
+  « Pour aller plus loin » (`Brique.glossaire`), volet « Référence et code du moteur ». Dessin : course du
+  21 juin au bord du sol (46,5° N), soleil de 16 h. Chiffres clés : écart avec le calcul précédent
+  (`_retenir_calcul` dans `app.py`), part du max en dessous. Vu dans Chrome (logement 70 m², moyen → performant :
+  DH 804 → 639 °C.h). Nouvelles briques non faites (voir `ROADMAP.md`).
+- Écart trouvé : `donnees/typologies_logements.csv` a été arrondi dans le commit de la 0.9.4 (Uw 1,2 / 1,3 / 1,4,
+  Sw moyen 0,40…) sans que les tests ni les chiffres de la 0.9.4 ci-dessous (DH 609 / 786 / 991) suivent : tests
+  alignés en 0.9.6 ; à l'écran, le logement de 70 m² moyen donne DH 804 °C.h, performant 639.
 - **0.9.4** : bâtiments de départ lus dans `donnees/batiments/` (un CSV par bâtiment, `champ;valeur;unite;
   description`, ligne `nom`, ordre alphabétique des fichiers ; mode d'emploi dans le `README.md` du dossier).
   `saisie.lire_batiment`, `lire_batiments` ; `BATIMENTS_DE_DEPART` est lu en fin de `interface/saisie.py`
@@ -53,7 +81,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 - 0.8.17 : relecture sans effet sur le calcul. 0.8.16 : `moteur/confort.py`, `moteur/dh.py`,
   `calculer_besoins(mode="th_d")`, règles Th-D des protections et des ouvertures, brasseurs lus dans les RSET,
   `outils/comparer_reference.py --dh`.
-- Tests : `python -m pytest` → 348 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
+- Tests : `python -m pytest` → 353 réussis, 2 sautés (classeurs de `_references/` absents), en moins d'une
   minute sur un poste peu chargé.
 - `docs/audit.md` : sections 0.8.16 (hypothèses 75 à 84), 0.8.17, 0.9.0 (constats du contrôle visuel, temps de
   calcul, hypothèses 85 et 86) et 0.9.1 (temps par calcul, hypothèse 87).
@@ -66,8 +94,8 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## Prochaine étape
 
-« Push » de la 0.9.4, puis mise en ligne sur accord. Ensuite la 0.9.6 (pédagogie) : page d'accueil,
-nouvelles briques (point « Interface, suites de la 0.9.0 » de `ROADMAP.md`). Écrire une brique : un fichier dans
+« Push » des 0.9.6 et 0.9.8, puis mise en ligne sur accord. Ensuite : poursuivre la validation (froid en H3,
+ventilation d'hiver + 22 %, infiltrations, autres études ou OPEE) ou les nouvelles briques (version à fixer). Écrire une brique : un fichier dans
 `interface/briques/` (voir `base.py`) et une ligne dans `__init__.py`. Deux points vus à l'écran et notés dans
 `ROADMAP.md` : protections baissées à 75 % jour et nuit pendant la semaine chaude ; dernier jour incomplet sur le
 graphique de la brique DH.

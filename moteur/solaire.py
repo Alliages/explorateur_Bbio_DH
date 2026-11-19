@@ -223,7 +223,8 @@ def facteurs_solaires_paroi(paroi):
     if sf_c is None or sf_e is None:
         if paroi.alpha is None or paroi.u is None:
             raise ValueError(f"Paroi « {paroi.nom} » : renseigner sf_c et sf_e, ou alpha et u")
-        u_e = 1.0 / (1.0 / paroi.u + hyp("ecart_resistances_c_e"))
+        # U = 0 : paroi qui ne transmet rien (adiabatique), donc aucun apport solaire
+        u_e = 1.0 / (1.0 / paroi.u + hyp("ecart_resistances_c_e")) if paroi.u > 0 else 0.0
         if sf_c is None:
             sf_c = paroi.alpha * paroi.u * hyp("rse_c")
         if sf_e is None:
