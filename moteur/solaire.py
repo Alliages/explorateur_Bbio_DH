@@ -87,13 +87,15 @@ def jour_astro(meteo):
 def eclairement_exterieur(meteo):
     """Fiche 3.1 : éclairements direct normal EDn et diffus horizontal Edi (lux).
 
-    EDn = IDn × polynôme de degré 6 en x, x étant la hauteur du soleil en degrés (la fiche ne définit
-    pas x : lecture retenue et vérifiée dans docs/audit.md, efficacité d'environ 100 lm/W).
+    EDn = IDn × polynôme de degré 6 en γ, la hauteur du soleil. La p. 32 écrit « …E-08xγ6 » : le « x » y est
+    un signe de multiplication. La nomenclature donne γ en radians, mais seule la lecture en degrés est
+    physiquement plausible (environ 105 lm/W, contre 20 lm/W au plus en radians) : lecture de l'outil
+    (docs/audit.md, 0.9.11). EDn est borné à 0 : soleil sous l'horizon, le polynôme devient négatif.
     Edi = 124, 116 ou 128 × Idi selon que le direct normal est < 1, entre 1 et 120, ou > 120 W/m².
     """
-    x = meteo["Gamma"].to_numpy(float)
+    gamma_deg = meteo["Gamma"].to_numpy(float)
     coefficients = [hyp(f"edn_a{n}") for n in range(6, -1, -1)]     # du degré 6 au terme constant
-    efficacite_directe = np.polyval(coefficients, x)
+    efficacite_directe = np.maximum(0.0, np.polyval(coefficients, gamma_deg))
     idn = meteo["dirN"].to_numpy(float)
     idi = meteo["diff"].to_numpy(float)
     efficacite_diffuse = np.where(idn < hyp("edi_seuil_bas"), hyp("edi_efficacite_couvert"),

@@ -127,6 +127,20 @@ def test_regime_permanent_parois_et_ventilation():
     assert [r[nom] for nom in TEMPERATURES] == pytest.approx([5.0] * 5)
 
 
+def test_equilibre_a_temperature_uniforme_avec_baies():
+    # Relecture de la 0.9.8 (T5) : groupe avec baies, sans apport, toutes les températures égales à te. Il doit
+    # rester à te heure après heure. C'est ce qu'assure le terme Hg_es.θes, absent de l'éq. 366 imprimée mais
+    # présent dans l'éq. 367 : sans lui, le groupe dériverait vers 0,83 × θ.
+    modele = preparer_modele(groupe_test(), "th_bc")
+    te = 20.0
+    etat = etat_initial()
+    etat.theta_mq = etat.theta_i = etat.theta_rm = etat.theta_op = etat.theta_ms = etat.theta_ma = te
+    for _ in range(48):
+        r = pas_groupe(modele, etat, te=te, hg_ei=25.5)
+        assert [r[nom] for nom in TEMPERATURES] == pytest.approx([te] * 5, abs=1e-9)
+        avancer_etat(modele, etat, r)
+
+
 def test_regime_permanent_avec_baies():
     # À l'équilibre, les déperditions égalent les apports ; l'air, source de chaleur, est le plus chaud
     modele = preparer_modele(groupe_test(), "th_bc")

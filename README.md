@@ -72,6 +72,13 @@ Et passer toutes les études d'un ou plusieurs dossiers d'un coup (table dans `_
 python -m outils.valider "..\_RSEE" "_sources" --dh
 ```
 
+Et, pour les études dont on a les sorties horaires d'un moteur Th-BCE (`..\_RSEE\Horaires`), comparer heure par
+heure (tables dans `_resultats\horaires\`) :
+
+```powershell
+python -m outils.comparer_horaires tous
+```
+
 ## Premier calcul
 
 Après l'installation (ci-dessous), depuis la racine du dépôt :

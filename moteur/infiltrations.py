@@ -4,7 +4,7 @@ r"""
 ============================================================
  Source : annexe III de l'arrêté du 4 août 2021, fiche 5.6
    (C_VEN_Débits_d'air_Cep), éq. 131 à 172, tableaux 23, 24 et
-   27 à 29 ; fiche 3.1 : correction locale du vent.
+   27 à 29 ; fiche 3.2 (p. 40) : correction locale du vent.
 
  L'enveloppe n'est jamais parfaitement étanche. Sa perméabilité
  se mesure par le débit de fuite sous 4 Pa, par m² de paroi
@@ -30,6 +30,13 @@ r"""
           +-----------+
     vent →
 
+ Entrées d'air du projet (éq. 141, tableau 25) : ouvertures de
+ loi q = M × (|ΔP| / 20 Pa)^0,5, M étant leur module (m³/h sous
+ 20 Pa) : un quart au vent en haut, un en bas, de même sous le
+ vent. En logement (pas de tirage entre niveaux), une seule
+ altitude : 0,92 × MIN(h ; 3). Pour un même écart de pression,
+ elles laissent entrer bien plus d'air que les défauts.
+
  Pib est l'inconnue : c'est la pression pour laquelle il entre
  autant d'air qu'il en sort (éq. 167), ventilation comprise.
  On la cherche chaque heure entre deux pressions qui l'encadrent,
@@ -45,11 +52,21 @@ r"""
  extérieure et ne passe pas par l'échangeur : c'est lui qui
  pèse sur le besoin de chauffage.
 
- Hypothèses de l'outil (docs/audit.md, 0.8.14) : un bilan par
- groupe (et non par zone) ; pas d'entrées d'air en mode Bbio ;
- humidité de l'air ignorée dans les masses volumiques.
+ Caractère traversant : celui de la zone au sens des conditions
+ d'hiver (tableau 22, Groupe.traversant_hiver), à défaut celui
+ du confort d'été. Hauteur moyenne inconnue : prise sous 15 m,
+ avec un avertissement.
+
+ Hypothèses de l'outil (docs/audit.md, 0.8.14 et 0.9.10) : un
+ bilan par groupe (et non par zone) ; entrées d'air du projet
+ gardées en mode Bbio, comme le moteur réglementaire
+ (hypothèse 92, qui remplace la 67), en entrées fixes, sans
+ autoréglage ni anti-retour ; humidité de l'air ignorée dans
+ les masses volumiques.
 ============================================================
 """
+
+import warnings
 
 import numpy as np
 
@@ -98,22 +115,37 @@ def coefficients_pression(traversant, hauteur_moyenne_m):
 
 
 def defauts_groupe(groupe, hauteur_zone_m=None, hauteur_moyenne_m=None):
-    """Défauts d'étanchéité conventionnels du groupe : liste de (C en m³/h/Pa^(2/3), Cp, altitude z en m).
+    """Ouvertures conventionnelles du groupe : liste de (C, Cp, altitude z en m, exposant n), débit C × |ΔP|^n.
 
-    Quatre défauts de façade (au vent et sous le vent, en bas et en haut, un quart chacun) et, s'il y a une
-    toiture, un cinquième qui porte toute sa perméabilité (tableaux 28 et 29). En habitation, pas de tirage entre
-    niveaux : les altitudes sont comptées sur 3 m au plus (éq. 138).
+    Défauts d'étanchéité (n = 2/3, C en m³/h/Pa^(2/3)) : quatre de façade (au vent et sous le vent, en bas et en
+    haut, un quart chacun) et, s'il y a une toiture, un cinquième qui porte toute sa perméabilité (tableaux 28 et
+    29). Entrées d'air du projet (n = 0,5, C en m³/h/Pa^0,5, éq. 141) : un quart à chacune des quatre places de
+    façade (tableau 25), toutes à l'altitude unique d'un logement. En habitation, pas de tirage entre niveaux :
+    les altitudes sont comptées sur 3 m au plus (éq. 138).
     """
-    facade, toit = surfaces_permeables(groupe)
-    par_pascal = groupe.permeabilite_q4pa / hyp("inf_pression_reference") ** EXPOSANT             # éq. 150
     hauteur = min(hauteur_zone_m if hauteur_zone_m is not None else hyp("inf_hauteur_tirage_max"),
                   hyp("inf_hauteur_tirage_max"))
-    bas, haut = hyp("inf_part_altitude_basse") * hauteur, hyp("inf_part_altitude_haute") * hauteur
-    cp_vent, cp_sous_vent, cp_toit = coefficients_pression(groupe.traversant, hauteur_moyenne_m)
-    quart = 0.25 * facade * par_pascal
-    defauts = [(quart, cp, z) for cp in (cp_vent, cp_sous_vent) for z in (bas, haut)]
-    if toit > 0:
-        defauts.append((toit * par_pascal, cp_toit, hauteur))
+    # Caractère traversant au sens des conditions d'hiver (tableau 22) : celui de la zone s'il est donné
+    traversant = groupe.traversant if groupe.traversant_hiver is None else groupe.traversant_hiver
+    if traversant and hauteur_moyenne_m is None:
+        warnings.warn(f"Groupe « {groupe.nom} » : hauteur moyenne de la zone inconnue, prise sous 15 m "
+                      "(Cp au vent 0,25 au lieu de 0,45, tableau 23)", stacklevel=2)
+    cp_vent, cp_sous_vent, cp_toit = coefficients_pression(traversant, hauteur_moyenne_m)
+    defauts = []
+    if groupe.permeabilite_q4pa:
+        facade, toit = surfaces_permeables(groupe)
+        par_pascal = groupe.permeabilite_q4pa / hyp("inf_pression_reference") ** EXPOSANT         # éq. 150
+        bas, haut = hyp("inf_part_altitude_basse") * hauteur, hyp("inf_part_altitude_haute") * hauteur
+        quart = 0.25 * facade * par_pascal
+        defauts += [(quart, cp, z, EXPOSANT) for cp in (cp_vent, cp_sous_vent) for z in (bas, haut)]
+        if toit > 0:
+            defauts.append((toit * par_pascal, cp_toit, hauteur, EXPOSANT))
+    # Entrées d'air du projet, gardées en mode Bbio comme le fait le moteur réglementaire (hypothèse 92)
+    if groupe.module_entrees_air_m3h:
+        n = hyp("inf_ea_exposant")
+        quart = 0.25 * groupe.module_entrees_air_m3h / hyp("inf_ea_pression_reference") ** n        # éq. 141
+        z = hyp("inf_ea_position") * hauteur
+        defauts += [(quart, cp, z, n) for cp in (cp_vent, cp_vent, cp_sous_vent, cp_sous_vent)]
     return [d for d in defauts if d[0] > 0]
 
 
@@ -123,7 +155,7 @@ def defauts_groupe(groupe, hauteur_zone_m=None, hauteur_moyenne_m=None):
 def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souffle=None):
     """Pression intérieure d'équilibre et débits par les défauts d'étanchéité.
 
-    defauts                 liste de (C, Cp, z) de defauts_groupe()
+    defauts                 liste de (C, Cp, z, n) de defauts_groupe() ; sans n, n = 2/3 (défaut d'étanchéité)
     vent                    vitesse du vent corrigée (m/s)
     te, theta_i             températures extérieure et intérieure (°C)
     debit_ventilation_m3h   débit de la double flux, soufflé et repris à volumes égaux
@@ -133,8 +165,9 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
     """
     rho_ext, rho_int = masse_volumique(te), masse_volumique(theta_i)
     # Pression motrice de chaque défaut, hors Pib : vent et tirage thermique (éq. 135 à 137)
-    motrices = [0.5 * cp * rho_ext * vent ** 2 + (rho_int - rho_ext) * PESANTEUR * z for _, cp, z in defauts]
-    coefficients = [c for c, _, _ in defauts]
+    motrices = [0.5 * d[1] * rho_ext * vent ** 2 + (rho_int - rho_ext) * PESANTEUR * d[2] for d in defauts]
+    coefficients = [d[0] for d in defauts]
+    exposants = [d[3] if len(d) > 3 else EXPOSANT for d in defauts]     # 2/3 défaut, 0,5 entrée d'air
     # Ventilation double flux : masses soufflée et reprise (éq. 156-157)
     rho_souffle = masse_volumique(theta_souffle if theta_souffle is not None else te)
     net_ventilation = (rho_souffle - rho_int) * debit_ventilation_m3h / SECONDES_PAR_HEURE
@@ -142,9 +175,9 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
     def bilan(pib):
         """Somme des débits massiques entrant dans le groupe (kg/s) pour une pression Pib : décroît avec Pib."""
         total = net_ventilation
-        for c, motrice in zip(coefficients, motrices):
+        for c, motrice, n in zip(coefficients, motrices, exposants):
             dp = motrice - pib
-            total += (rho_ext if dp > 0 else rho_int) * c * (abs(dp) ** EXPOSANT if dp > 0 else -abs(dp) ** EXPOSANT) \
+            total += (rho_ext if dp > 0 else rho_int) * c * (abs(dp) ** n if dp > 0 else -abs(dp) ** n) \
                 / SECONDES_PAR_HEURE
         return total
 
@@ -203,12 +236,12 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
                 break
 
     entrant = sortant = 0.0
-    for c, motrice in zip(coefficients, motrices):
+    for c, motrice, n in zip(coefficients, motrices, exposants):
         dp = motrice - pib
         if dp > 0:
-            entrant += rho_ext * c * dp ** EXPOSANT / SECONDES_PAR_HEURE
+            entrant += rho_ext * c * dp ** n / SECONDES_PAR_HEURE
         else:
-            sortant -= rho_int * c * (-dp) ** EXPOSANT / SECONDES_PAR_HEURE
+            sortant -= rho_int * c * (-dp) ** n / SECONDES_PAR_HEURE
     return {"pib": pib, "debit_entrant_kg_s": entrant, "debit_sortant_kg_s": sortant,
             "debit_entrant_m3h": entrant * SECONDES_PAR_HEURE / hyp("air_masse_volumique_reference")}
 
@@ -217,8 +250,8 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
 # 3. LE GROUPE, HEURE PAR HEURE
 # ============================================================
 def groupe_permeable(groupe):
-    """Vrai si une perméabilité à l'air est renseignée pour le groupe."""
-    return groupe.permeabilite_q4pa is not None and groupe.permeabilite_q4pa > 0
+    """Vrai si une perméabilité à l'air ou des entrées d'air sont renseignées pour le groupe."""
+    return bool(groupe.permeabilite_q4pa) or bool(groupe.module_entrees_air_m3h)
 
 
 class InfiltrationsGroupe:
@@ -227,7 +260,7 @@ class InfiltrationsGroupe:
     def __init__(self, groupe, meteo, debit_ventilation_m3h, hauteur_zone_m=None, hauteur_moyenne_m=None):
         self.defauts = defauts_groupe(groupe, hauteur_zone_m, hauteur_moyenne_m)
         self.debit_ventilation = debit_ventilation_m3h
-        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.1 : Ventc
+        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.2 : Ventc
         self.te = meteo["te"].to_numpy(float)
 
     def pas(self, h, theta_i_prec, theta_souffle):

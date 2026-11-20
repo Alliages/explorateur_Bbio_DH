@@ -81,7 +81,7 @@ def reperes():
             "1 °C au-dessus du seuil pendant 100 heures occupées, ou 2 °C pendant 50 heures : 100 °C.h.",
             "Le calcul se fait sur une année à séquence caniculaire, sans climatisation, même si le logement "
             "est climatisé.",
-            "Fiabilité de l'outil : sur 23 groupes de 10 études, le DH va de 42 % sous l'étude à 28 % au-dessus."]
+            "Fiabilité de l'outil : sur 23 groupes de 10 études, le DH va de 37 % sous l'étude à 30 % au-dessus."]
 
 
 BRIQUE = Brique(

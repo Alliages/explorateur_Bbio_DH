@@ -413,6 +413,8 @@ def resoudre_pas(modele, etat, p, phi_sys_conv=0.0, phi_sys_rad=0.0):
         "theta_i_moy": theta_i_moy, "theta_s_moy": theta_s_moy, "theta_mq_moy": theta_mq_moy,
         "theta_rm_moy": theta_rm_moy, "theta_op_moy": theta_op_moy,
         "theta_ms": p.theta_ms, "theta_ma": p.theta_ma, "phi_mq_seq": p.phi_seq, "phi_mq_ann": p.phi_ann,
+        # Flux injectés aux nœuds d'air, de surface et de masse (éq. 346, 348, 361), puissance émise comprise
+        "phi_i": phi_i, "phi_s": phi_s, "phi_m": phi_m,
         # Bilan de l'heure, avec les températures moyennes
         "flux_ventilation": p.hg_ei * (p.theta_eieq - theta_i_moy),
         "flux_baies": p.hg_es * (p.te - theta_s_moy) + p.phi_sl,
@@ -443,6 +445,8 @@ def pas_groupe(modele, etat, *, phi_sys_conv=0.0, phi_sys_rad=0.0, **sollicitati
         theta_i, theta_s, theta_mq, theta_rm, theta_op     en fin d'heure (°C)
         les mêmes suivis de « _moy »                       en moyenne sur l'heure (°C)
         theta_ms, theta_ma, phi_mq_seq, phi_mq_ann         inerties séquentielle et annuelle
+        phi_i, phi_s, phi_m                                flux injectés aux nœuds d'air, de surface et de
+                                                           masse (W, éq. 346, 348 et 361), système compris
         flux_ventilation, flux_baies, flux_parois, flux_apports, flux_inerties_longues, stockage
             bilan de l'heure (W) : stockage = somme des cinq flux, le stockage étant la chaleur prise par
             la masse quotidienne. flux_apports compte tout ce qui est injecté à l'intérieur (soleil de courte
@@ -499,10 +503,13 @@ def sollicitations_groupe(groupe, meteo, jeu, confort_adaptatif=None, avec_baies
 
 
 def debit_ventilation(groupe):
-    """Débit d'air neuf moyen du groupe (m³/h), au sens du Bbio (fiche 6.2, éq. 404-405, Cdep = 1).
+    """Débit d'air neuf moyen du groupe (m³/h), au sens du Bbio (fiche 6.2, éq. 403, Cdep = 1).
 
     Sans débit de pointe, c'est le débit saisi. Avec un débit de pointe, le grand débit est utilisé
-    Dugd = 14 heures par semaine : débit = base + (pointe − base) × 14 / 168.
+    Dugd = 14 heures par semaine : débit = base + (pointe − base) × 14 / 168 (débit moyen de l'éq. 403 ; les
+    éq. 404-405 en donnent la forme horaire, que l'outil ne reprend pas : écart < 1 %).
+    C'est la règle du logement. Hors logement, la fiche 6.2 (§ 6.2.3.2.2.1) impose qmax en occupation et qmin
+    en inoccupation : la zone n'admet aujourd'hui que le logement collectif (Zone.usage, USAGES).
     """
     base = groupe.debit_ventilation_m3h
     if groupe.debit_ventilation_pointe_m3h is None:

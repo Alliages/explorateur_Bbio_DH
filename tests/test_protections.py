@@ -7,6 +7,7 @@ from moteur.besoins import bilan_besoins, calculer_besoins
 from moteur.calendrier import construire_calendrier
 from moteur.groupe import FLUX_DU_BILAN
 from moteur.meteo import charger_meteo
+from moteur import ouvertures
 from moteur.ouvertures import (OuverturesGroupe, contrainte_ouverture, debit_surventilation, moderation_exterieure,
                                ratio_selon_temperature, seuils_ouverture, surface_traversante)
 from moteur.protections import (ProtectionsGroupe, ligne_saison, matrices_automatiques, matrices_manuelles,
@@ -132,6 +133,21 @@ def test_store_releve_par_grand_vent_et_baie_nue(meteo):
     assert interieur.ratios(2, HIVER, True, 1, 20.0, 20.0)[0][0] == pytest.approx(0.1)
 
 
+def test_store_manuel_garde_sa_position_par_grand_vent_hors_occupation(meteo):
+    # Fiche 5.9, éq. 193 : hors occupation, la gestion manuelle ne remonte pas le store par grand vent
+    store = dict(volet(), protection="store_enroulable")
+    p = ProtectionsGroupe(groupe([baie(**store)]), meteo, "th_bc")
+    calme = p.ratios(2, HIVER, False, -1, 20.0, 20.0)[0][0]
+    assert calme > 0
+    p.vent[2] = 12.0
+    assert p.ratios(2, HIVER, False, -1, 20.0, 20.0)[0][0] == pytest.approx(calme)
+    # En gestion automatique, le store est remonté, occupé ou non (éq. 190-191)
+    auto = ProtectionsGroupe(groupe([baie(**dict(store, gestion_protection="automatique"))]), meteo, "th_bc")
+    assert auto.ratios(2, ETE, False, -1, 27.0, 20.0)[0][0] == 1.0             # été, ambiance chaude : fermé
+    auto.vent[2] = 12.0
+    assert auto.ratios(2, ETE, False, -1, 27.0, 20.0)[0][0] == 0.0
+
+
 @pytest.mark.parametrize("fabrique", [
     lambda: baie(protection="persienne", uw_protege=1.1, sw_protege=0.1),
     lambda: baie(protection="volet", gestion_protection="domotique", uw_protege=1.1, sw_protege=0.1),
@@ -203,8 +219,7 @@ def test_ouverture_d_une_heure(meteo):
     o.te[h], o.vent[h] = 20.0, 0.0
     arguments = dict(consigne_fr=26.0, consigne_fr_confort=26.0, ecart_confort_adaptatif=0.0, theta_op_prec=26.0,
                      theta_i_prec=26.0)
-    # Hors saison de refroidissement, ou hors occupation : baies fermées
-    assert o.pas(h, MI_SAISON, False, True, 12, **arguments)["debit_m3h"] == 0.0
+    # Hors occupation : baies fermées
     assert o.pas(h, ETE, True, False, 12, **arguments)["debit_m3h"] == 0.0
     # Été, occupé, midi, 26 °C dedans et 20 °C dehors : Rouv = 0,7 × 1 × 1 × 1 ;
     # Aouv = 0,7 × 0,5 × 40 m² = 14 m²
@@ -214,10 +229,62 @@ def test_ouverture_d_une_heure(meteo):
     assert r["hg"] == pytest.approx(0.34 * r["debit_m3h"] * 292.0 / 293.0)
     # Protections fermées à 80 % : il ne reste que 20 % de la surface ouvrable, soit 4 m²
     assert o.pas(h, ETE, True, True, 12, rprot=np.array([0.8, 0.8]), **arguments)["aouv_m2"] == pytest.approx(4.0)
+    # Rouv brut de l'éq. 240 (O_Rouv du moteur) : 0,7 sur chaque baie, quelles que soient les protections
+    assert o.pas(h, ETE, True, True, 12, rprot=np.array([0.8, 0.8]), **arguments)["rouv_brut_moyen"]         == pytest.approx(0.7)
     # La nuit, la position du soir est gardée ; l'extérieur trop chaud (25,5 °C) fait tout refermer
     assert o.pas(h, ETE, True, True, 2, **dict(arguments, theta_op_prec=22.0))["aouv_m2"] == pytest.approx(14.0)
     o.te[h] = 25.5
     assert o.pas(h, ETE, True, True, 12, **arguments)["debit_m3h"] == 0.0
+
+
+def test_ouverture_th_b_hors_saison_de_froid(meteo, monkeypatch):
+    # Mi-saison du mode Th-B : comme le moteur réglementaire, règle générale de la gestion manuelle (hypothèse 91)
+    g = groupe([baie(ouvrable=True, ratio_ouverture_max=0.5), baie("Nord", 180, ouvrable=True,
+                                                                   ratio_ouverture_max=0.5)])
+    o = OuverturesGroupe(g, meteo)
+    h = 4000
+    o.te[h], o.vent[h] = 25.5, 0.0
+    arguments = dict(consigne_fr=26.0, consigne_fr_confort=26.0, ecart_confort_adaptatif=0.0, theta_op_prec=26.0,
+                     theta_i_prec=26.0)
+    # Pas de plafond à la consigne − 1 °C hors période de refroidissement : 14 m² ouverts à 25,5 °C dehors
+    assert o.pas(h, MI_SAISON, False, True, 12, **arguments)["aouv_m2"] == pytest.approx(14.0)
+    assert o.pas(h, MI_SAISON, False, False, 12, **arguments)["debit_m3h"] == 0.0         # hors occupation
+    # Lecture du texte (éq. 244) : aucune ouverture hors période de refroidissement
+    monkeypatch.setattr(ouvertures, "OUVERTURE_TH_B_COMME_LE_MOTEUR", False)
+    o.ratio_temperature = 1.0
+    assert o.pas(h, MI_SAISON, False, True, 12, **arguments)["debit_m3h"] == 0.0
+
+
+def test_seuils_d_ouverture_th_b_independants_de_theta_rm(meteo, monkeypatch):
+    # Relecture de la 0.9.8 (T1) : Δθconf_adapt n'est défini qu'en Th-D (fiche 13.5, éq. 2546) ; en Th-B, θouv2 =
+    # θiifr − 1 (fiche 5.13, éq. 242), quelle que soit la moyenne glissante θrm de la température extérieure
+    ecarts = []
+    pas = ouvertures.OuverturesGroupe.pas
+
+    def espion(self, h, *args, **options):
+        ecarts.append(args[6] if len(args) > 6 else options["ecart_confort_adaptatif"])
+        return pas(self, h, *args, **options)
+
+    monkeypatch.setattr(ouvertures.OuverturesGroupe, "pas", espion)
+    g = groupe([baie(ouvrable=True, ratio_ouverture_max=0.6), baie("Nord", 180, ouvrable=True, ratio_ouverture_max=0.6)])
+    calculer_besoins(g, meteo)
+    assert len(ecarts) == len(meteo) and set(ecarts) == {0.0}
+    assert seuils_ouverture(ETE, 26.0, 0.0)[1] == pytest.approx(25.0)
+
+
+def test_protection_ajouree_laisse_passer_l_air(meteo):
+    # Fiche 5.12, éq. 239 : la part fermée laisse passer 10 % (typologie 1) ou 75 % (typologie 4) de l'air
+    for typo, passage in ((0, 0.0), (1, 0.1), (4, 0.75)):
+        g = groupe([baie(ouvrable=True, ratio_ouverture_max=0.5, typo_permeabilite_protection=typo, **volet())])
+        o = OuverturesGroupe(g, meteo)
+        h = 4000
+        o.te[h], o.vent[h] = 20.0, 0.0
+        r = o.pas(h, ETE, True, True, 12, consigne_fr=26.0, consigne_fr_confort=26.0, ecart_confort_adaptatif=0.0,
+                  theta_op_prec=26.0, theta_i_prec=26.0, rprot=np.array([0.8]))
+        # Aouvmax = 10 m² ; Aouvmax_ac_PM = 10 × (0,8 × passage + 0,2) ; Aouv = MIN(ce plafond ; 0,7 × 10)
+        assert r["aouv_m2"] == pytest.approx(min(10.0 * (0.8 * passage + 0.2), 7.0))
+    with pytest.raises(ValueError, match="typologie"):
+        baie(typo_permeabilite_protection=5)
 
 
 # ------------------------------------------------------------------
@@ -237,8 +304,9 @@ def test_moins_de_froid_avec_volets_et_ouvertures(besoins):
     annuel = {nom: bilan_besoins(r, SURFACE)[1] for nom, r in besoins.items()}
     assert annuel["volets_ouvrants"]["b_fr"] < annuel["volets"]["b_fr"] < annuel["nu"]["b_fr"]
     assert annuel["volets_ouvrants"]["b_fr"] < 0.6 * annuel["nu"]["b_fr"]
-    # L'ouverture n'a lieu qu'en saison de refroidissement : le chauffage n'en dépend pas
-    assert annuel["volets_ouvrants"]["b_ch"] == pytest.approx(annuel["volets"]["b_ch"], rel=0.02)
+    # Les baies s'ouvrent aussi hors saison de froid (comme le moteur, hypothèse 91), par jours chauds : le
+    # chauffage en dépend à peine
+    assert annuel["volets_ouvrants"]["b_ch"] == pytest.approx(annuel["volets"]["b_ch"], rel=0.1)
 
 
 def test_sorties_horaires_des_protections_et_des_ouvertures(besoins):
@@ -248,7 +316,9 @@ def test_sorties_horaires_des_protections_et_des_ouvertures(besoins):
     assert complet["rprot_moyen"].between(0.0, 1.0).all() and complet["rprot_moyen"].max() > 0.8
     assert complet["hg_es"].between(2 * 20.0 * 1.1, 2 * 20.0 * 1.4).all()
     ouvert = complet["debit_ouvertures_m3h"] > 0
-    assert ouvert.sum() > 200 and (complet.loc[ouvert, "aut_fr"] == 1).all()
+    # Toujours en occupation ; aussi hors saison de refroidissement (comme le moteur, hypothèse 91)
+    assert ouvert.sum() > 200 and (complet.loc[ouvert, "occupe"] == 1).all()
+    assert (complet.loc[ouvert, "aut_fr"] == 0).sum() > 0
     assert complet["rouv_moyen"].between(0.0, 0.7).all()
 
 

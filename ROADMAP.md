@@ -25,8 +25,13 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.4 | Bâtiments en CSV | Bâtiments de départ lus dans `donnees/batiments/` (un CSV par bâtiment) ; nouveau logement de 70 m² (H1a, 7 × 10 m, baies 25 % devant et derrière, pignons aveugles, gestion motorisée) | fait |
 | 0.9.6 | Pédagogie | Page d'accueil (comme Météo et Chaleur), équations montrées dans les briques avec ce qu'elles disent, course solaire d'été (21 juin) au bord du sol du dessin, écart avec le calcul précédent dans les chiffres clés, aides des saisies dans un fichier à part (`interface/textes/aides.csv`), liens vers le Glossaire du confort dans le bâtiment (Notion) | fait |
 | 0.9.8 | Validation | Validation par lot (`outils/valider.py`) sur 10 études, 5 bâtiments, 23 groupes : 9 groupes dans la cible Bbio de ± 10 % (6 sur 6 en H2a, 2 sur 4 en H1a, 1 sur 13 en H3) ; parois à U = 0 lues ; bouton « Télécharger ce bâtiment ». Reste : plus de bâtiments (OPEE, nouveaux RSEE), froid en H3, chauffage en H1a | en partie |
-| 0.9.10 | Maison individuelle | Second usage | à faire |
-| 0.9.12 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 | à faire |
+| 0.9.9 | Comparaison horaire | Sorties horaires d'un moteur Th-BCE (Paris, Sète, Nice A) face à l'outil, heure par heure (`outils/lire_horaires.py`, `outils/comparer_horaires.py`) ; correction : ouverture des baies en Th-B hors saison de froid comme le moteur, pas comme l'éq. 244 (hypothèse 91) ; restent infiltrations d'hiver 1,5 à 3,5 fois trop faibles, Φsh des ponts thermiques absent, ratio d'ouverture trop faible | fait |
+| 0.9.10 | Ouverture et infiltrations | Perméabilité à l'air des protections mobiles devant une baie ouverte (fiche 5.12, typologie `Typo_Permea_PM`) ; entrées d'air du projet gardées dans les infiltrations du Bbio, comme le moteur (hypothèse 92) | fait |
+| 0.9.11 | Relecture indépendante de la 0.9.8 | Remarques mesurées face au moteur et aux études : écart de confort adaptatif nul en Th-B (froid de H3 : 1,7 → 1,0 fois l'étude, 9 groupes sur 13 dans ± 10 %), traversant d'hiver de la zone pour les infiltrations, store par grand vent, comptage des groupes de `valider.py` (46 et non 58) ; hypothèses 93 à 98 | fait |
+| 0.9.12 | Types de protection | Liste « type de protection » dans l'interface (volet roulant, persienne, store toile extérieur ou intérieur ; clair ou sombre) qui remplit Sw1, Sw2, Sw3, ΔR (d'où le U protégé), Tl protégée et Typo_PM, d'après le guide Actibaie (pp. 27, 45-48 ; `donnees/protections_types.csv`, double vitrage σ 0,70) ; les valeurs de la baie nue restent saisies (le guide ne les donne pas) | à faire |
+| 0.9.13 | Protections de la boîte | Correction d'après le guide Actibaie : volets et stores perméables à 10 % (Typo_PM 1), Sw protégé d'un volet tout en Sw2 ; test de tendance des gestions sur le DH ; DH des bâtiments de départ − 9 à − 13 % (hypothèse 99) | fait |
+| 0.9.14 | Maison individuelle | Second usage. Cas du guide Actibaie à reprendre : Bbio max d'une maison de 100 m² par ville (p. 6), DH et Bbio de la maison H3 (pp. 7, 28), maison de plain-pied H2b de l'AICVF (p. 33 : inertie, casquette, brasseurs) | à faire |
+| 0.9.16 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
 ## En attente
@@ -38,11 +43,31 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 - Seuils du plan de contrôle : 1 % sur les cas analytiques, 0,1 % sur le bilan d'énergie, quartiles OPEE.
 - Chapitre V de l'annexe à l'article R. 172-4 (catégories de contraintes extérieures), absent de `_sources/` : il
   fixe la colonne du DH max (hypothèse 76 de `docs/audit.md`).
-- RSET correspondant aux classeurs horaires de Paris, Sète et Nice : leur DH diffère de celui des RSET présents
-  (345,5 contre 372,7 °C.h pour Paris), ce qui interdit de comparer les températures heure par heure.
 
 ## Points à reprendre
 
+- **Prochaine correction (version à fixer) : entrées d'air trop fortes dans certains groupes** (0.9.10 :
+  Sète traversant, chauffage + 46 à + 53 % ; `rsee.xml` jusqu'à + 45 %) : coefficients de pression des zones
+  traversantes, partage entre façades, autoréglage et anti-retour, bilan par zone (hypothèses 66 et 92).
+- **Protections face au guide Actibaie** (0.9.13, `docs/audit.md`) : sur la boîte en H3, les volets ne gagnent que
+  11 % de DH (guide : environ la moitié) ; la typologie Typo_PM pèse fort (1 605 à 1 007 °C.h de 0 à 4 ; guide :
+  10 à 60 °C.h, Bbio identique) ; les volets manuels augmentent le Bbio en H3 (guide : le baissent). Piste
+  commune : la fermeture de nuit réduit trop l'ouverture des baies (éq. 239). À rapprocher du ratio d'ouverture
+  en Th-D ci-dessous : comparer ouverture et Rprot heure par heure sur Paris, Sète, Nice A.
+- Guide Actibaie, plus tard : indicateur « Sw maximal » des baies (exigence de moyens, p. 44 : le guide écrit « au
+  moins », c'est sûrement un maximum, à vérifier dans l'arrêté du 4 août 2021, absent de `_sources/`) ; aide à la
+  saisie de la classe BR selon la distance à l'infrastructure (pp. 24-25), avec la saisie BR ; tendances de
+  l'immeuble de 48 logements de Nantes (p. 29), à tester sur l'immeuble de départ en H2b, BR3, traversant ou non ; revue de
+  l'enchaînement des calculs de baie avec le schéma des pp. 54-55. Stores vénitiens et BSO : voir plus bas.
+- Ratio d'ouverture des baies : en Th-B, 5 à 10 % au-dessus du moteur depuis la 0.9.11 (froid 2 à 34 % sous le
+  sien) ; en Th-D, encore 16 à 32 % en dessous (DH de − 37 à + 30 %) : l'écart de confort adaptatif y est celui
+  du texte, la cause est ailleurs. Vérifier avec `python -m outils.comparer_horaires tous`.
+- Ouverture en Th-B en saison de chauffage (groupe surchauffé) : non vérifiée sur le moteur (hypothèse 91).
+- Φsh : flux solaire et voûte céleste des ponts thermiques (`O_Fsh_s_pt`, `O_Fsh_vc_pt` du moteur ; fiche 5.19).
+- Th-D : débit de ventilation hors occupation du moteur plus faible (hypothèse 75).
+- Apports des usages 7 % sous ceux du moteur (part variable selon le mois : pertes récupérées ?) ; éclairement
+  naturel 20 à 80 % au-dessus (`O_Einat`).
+- Variantes Th-B sans soleil des sorties horaires (`Th_B_Impact_Ss_Apports_Sol_*`) et mode Th-C : non exploités.
 - **Interface, suites de la 0.9.0** :
   - fait en 0.9.0 : contrôle visuel dans un navigateur et capture du `README.md` ; balcons et casquettes ;
     comparaison de deux variantes ;
@@ -67,7 +92,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
     le point « temps de calcul » plus bas.
 - **Niveaux d'enveloppe, suites de la 0.9.2** :
   - 6 opérations seulement : refaire `donnees/typologies_logements.csv` avec les RSEE du calage (0.9.8), et
-    séparer collectif et maison individuelle quand ce second usage arrivera (0.9.10) ;
+    séparer collectif et maison individuelle quand ce second usage arrivera (0.9.14) ;
   - montrer le graphique `docs/graphique_pedagogique_logements.png` (ou son équivalent interactif) dans
     l'interface, par exemple dans une brique ou la page d'accueil (non fait en 0.9.6) ;
 - **Validation, suites de la 0.9.8** (table `_resultats/validation.csv`, détail dans `docs/audit.md`) :
@@ -77,8 +102,9 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - froid en H3 : 1,2 à 3,8 fois celui des études (médiane 2,1), premier écart du Bbio à Nice et à Sète ;
   - chauffage : 11 % sous les études en médiane (de − 34 à + 7 %) ; infiltrations d'hiver de l'outil à 15 à
     44 % de l'indicateur `H_V_Def_Hiver` (entrées d'air non comptées, hypothèse 67) ;
-  - ventilation : `H_Vent_Hiver` des études vaut 0,1397 × `Qv_occ_BBIO` dans les 23 groupes, l'outil 0,17
-    (+ 22 %) ; ni l'échangeur à 0,5 ni l'occupation (0,79 en janvier et février) ne l'expliquent ;
+  - ventilation : `H_Vent_Hiver` des études vaut 0,1397 × `Qv_occ_BBIO` : **expliqué en 0.9.11**, c'est l'éq. 382
+    de la fiche 6.1 (1006 × 0,5 / 3600, débit en m³/h, 1 kg/m³), un indicateur de sortie et non le bilan du
+    groupe (éq. 333, 0,34 par m³/h, comme l'outil) ;
   - DH de H2a : 31 à 37 % sous l'étude dans quatre groupes sur six, aux DH faibles (77 à 308 °C.h).
 - **Pédagogie, suites de la 0.9.6** :
   - course solaire : latitude fixe (46,5° N) ; la prendre selon la zone climatique ; vue du sud, la vraie course en
@@ -138,8 +164,8 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   sur un groupe simple, nul sur une étude.
 - 0.9.8 : baies sur un espace tampon (coefficient b et soleil), aujourd'hui lues comme donnant sur l'extérieur.
 - 0.9.8 : U des baies en hiver : l'indicateur `Hg_es_hiver` des études est 1 à 15 % sous la somme des A × U sans
-  protection de l'outil (protections fermées la nuit ?) ; ventilation : `H_Vent_Hiver` des études vaut 0,1397 × débit,
-  contre 0,34 × 0,5 = 0,17 dans l'outil (éq. 382) : à comprendre.
+  protection de l'outil (protections fermées la nuit ?). (Ventilation `H_Vent_Hiver` : expliquée en 0.9.11,
+  indicateur de l'éq. 382.)
 - 0.9.8 : masques par tranches azimutales : les études donnent le même horizon à toutes les orientations d'un
   bâtiment, alors que la fiche 3.2 compte les tranches depuis la normale à la paroi (hypothèse 7) : vérifier la
   convention des logiciels.
@@ -170,6 +196,44 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   | Complémentaire | Fresh Sky | `#00B0F0` |
   | Complémentaire | Wine Plum | `#6D2E46` |
   | Complémentaire | Deep Space Blue | `#283246` |
+
+## Relecture indépendante de la 0.9.8 : points inscrits en 0.9.11 (sans action immédiate)
+
+Détail dans `docs/audit.md`, 0.9.11.
+
+- Infiltrations (fiche 5.6) : un Pib par groupe au lieu d'un par zone avec hall (éq. 167-170) ; double flux
+  sans échangeur en Th-D (éq. 154-166, hypothèse 75) ; planchers bas exclus et murs contre le sol comptés en
+  façade ; humidité ignorée dans les masses volumiques (< 0,5 %) ; Cp au-delà de 50 m absent du tableau 23.
+- Indicateur `H_V_Def_Hiver` des études : calculé avec le système réel (simple flux) ? À vérifier sur un RSEE
+  ou une sortie horaire avant d'en tirer une conclusion.
+- Caractère traversant d'hiver (0.9.11, `Is_Traversant` de la zone) : à confirmer sur une sortie horaire du
+  moteur d'une étude où il diffère du traversant d'été (Saint-Ouen, Vélizy cage B).
+- Ventilation hors logement : la fiche 6.2 (§ 6.2.3.2.2.1) impose qmax en occupation et qmin en inoccupation ;
+  `groupe.debit_ventilation` ne traite que le logement (la zone n'admet que le logement collectif).
+- Valeurs Ams par défaut (2 / 2,5 / 3, règles Th-Bât, tableau 89), non vérifiables dans l'annexe : en Th-D,
+  l'inertie séquentielle ne joue que si Ams < Amq ; sinon le choix de classe est sans effet sur le DH. À
+  vérifier à la relecture de `dh.py`, tableau 89 en main.
+- Éq. 332 : elle écrit ΔCm,a-s, la nomenclature ΔCm,a-q ; le code suit l'équation. Si le moteur suit la
+  nomenclature, l'inertie longue serait environ doublée en Th-D (DH seulement).
+- ΔR < 0 ramené à 0 (`groupe.py`, inertie) : à documenter dans `docs/audit.md`.
+- Surface des baies : Abaies vient de `surface_baies_m2`, Hg_es de la somme des baies ; contrôler qu'elles
+  concordent, ou calculer Abaies comme Σ des baies.
+- Points mineurs (≤ 1 % chacun) : φsys,rad perdu par les baies (0,5 %) ; Hg_ei = 0,34 × débit au lieu de
+  qm·(Ca + Cv·ω) (± 1 %) ; flux solaires des ponts thermiques omis (éq. 345, voir Φsh) ; débit Bbio moyen au
+  lieu du grand débit horaire (< 1 %).
+- Protections et ouvertures (fiches 5.9 et 5.13) : seconde protection (éq. 198 à 201) ; horloge des volets
+  automatiques (éq. 182 : par défaut ouverts les nuits d'hiver) ; facteur solaire avec protection tout en Sw1 ;
+  éclairage artificiel calculé baies nues ; seuil de vent automatique égal au seuil manuel ; stores vénitiens
+  (éq. 194 et suivantes, seuil de vent propre) ; gestion automatique des ouvrants (éq. 246-247) ; aération
+  par les baies (éq. 256).
+- Figure 35, cellule « dérogation avec détecteur, été frais, Ecl1 » lue 30 000 lux sur un scan flou : à
+  confirmer sur un exemplaire net de l'annexe (Guillaume).
+- Solaire : γ' (éq. 3-6, utile aux stores vénitiens) ; arbres à feuilles caduques ; espaces tampons ; toiture
+  végétalisée (éq. 293) ; Sf par défaut des parois opaques (règles Th-Bât, non vérifiable dans l'annexe).
+- Sw2 par défaut nul (hypothèse 21) : sans effet sur les études, qui donnent Sw2 (`Sw2_sp_e`, environ 0,035 à
+  0,046 pour Sw1 0,13 à 0,25, soit 15 à 20 % de Sw) ; l'essai à 0,2 × Sw ne change donc rien à la validation
+  (le DH trop bas en H2a ne vient pas de là). Ne joue que dans l'interface : un défaut de 0,15 à 0,2 × Sw
+  serait plus proche des études.
 
 ## Idées
 

@@ -365,18 +365,26 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         dh_ch, dh_fr                        écarts d'inconfort froid et chaud de l'heure (°C)
         rprot_moyen, hg_es                  ratio de fermeture moyen des protections mobiles (pondéré par les
                                             surfaces de baie) et transmission des baies de l'heure (W/K)
+        rouv_brut_moyen                     Rouv de l'éq. 240 (avant Rouvmax et protections), moyenne des baies
         rouv_moyen, debit_ouvertures_m3h    part ouverte de la surface ouvrable des baies et débit d'air entrant
                                             par les baies ouvertes (m³/h)
         debit_infiltrations_m3h, hg_infiltrations   air entrant par les défauts d'étanchéité (m³/h) et son
                                             coefficient d'échange (W/K)
         phi_occupants, phi_usages, einat    apports internes (W) et éclairement naturel (lux)
+        occupe                              occupation de la zone (0 ou 1)
+        hg_ei, theta_eieq                   renouvellement d'air de l'heure : coefficient d'échange (W/K ;
+                                            ventilation, infiltrations et baies ouvertes) et température
+                                            équivalente de l'air entrant (°C)
+        fs1, fs3, phi_sl, phi_sh            flux des baies (courte longueur d'onde, lame d'air ventilée,
+                                            Fs2 + Ftvc) et des parois opaques (W) : entrées du groupe
+        phi_i, phi_s, phi_m                 flux injectés aux nœuds d'air, de surface et de masse (W), sans
+                                            la puissance émise
         puis les colonnes de moteur.groupe.pas_groupe() : températures et bilan de l'heure.
     En mode Th-D s'ajoutent
         theta_rm_ext, confort_adaptatif     moyenne glissante de la température extérieure (°C) et indicateur
                                             de période de confort adaptatif
         seuil_confort, ecart_ba, seuil_confort_corrige   température limite de confort chaud (°C), effet des
                                             brasseurs d'air (°C) et leur somme (fiche 13.5, éq. 2547)
-        occupe                              occupation de la zone (0 ou 1)
         energie_brasseurs_wh                consommation des brasseurs d'air (Wh)
     Les brasseurs d'air n'interviennent pas dans les besoins du mode Th-B.
     """
@@ -474,7 +482,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         # Air entrant : ventilation (à travers l'échangeur) et, baies ouvertes, air extérieur direct (fiche 5.13)
         te = s["te"][h]
         theta_souffle = te + efficacite_echangeur * (etat.theta_i - te)
-        hg_air, theta_air, rouv_moyen, debit_ouvertures = hg_ei, theta_souffle, 0.0, 0.0
+        hg_air, theta_air, rouv_moyen, debit_ouvertures, rouv_brut = hg_ei, theta_souffle, 0.0, 0.0, 0.0
         debit_infiltrations = hg_infiltrations = 0.0
         if infiltrations is not None:
             i = infiltrations.pas(h, etat.theta_i, theta_souffle)
@@ -483,13 +491,14 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                 theta_air = (hg_air * theta_air + hg_infiltrations * te) / (hg_air + hg_infiltrations)
                 hg_air += hg_infiltrations
         if ouvertures is not None:
-            # Écart de confort adaptatif : fiche 4.5 en Th-B ; fiche 13.5 en Th-D (plafonné à 2 °C, nul la nuit)
-            ecart_confort = (confort.ecart[h] if th_d
-                             else max(0.0, pente * theta_rm_ext + origine + marge - consigne_fr_confort))
+            # Écart de confort adaptatif Δθconf_adapt des seuils d'ouverture (fiche 5.13, éq. 242) : défini par la
+            # fiche 13.5 en Th-D seulement (éq. 2542 à 2546 : plafonné à 2 °C, nul la nuit) ; nul en Th-B (0.9.11,
+            # relecture de la 0.9.8 : l'outil prenait 0,33 θrm + 18,8 + 2 − θiifr, et ouvrait trop peu en été)
+            ecart_confort = confort.ecart[h] if th_d else 0.0
             o = ouvertures.pas(h, saison, bool(saisons.aut_fr), bool(occupe[h]), int(hleg[h]), consigne_fr[h],
                                consigne_fr_confort, ecart_confort, etat.theta_op, etat.theta_i, rprot,
                                th_b=not th_d)
-            rouv_moyen, debit_ouvertures = o["rouv_moyen"], o["debit_m3h"]
+            rouv_moyen, debit_ouvertures, rouv_brut = o["rouv_moyen"], o["debit_m3h"], o["rouv_brut_moyen"]
             if o["hg"] > 0:
                 theta_air = (hg_air * theta_air + o["hg"] * te) / (hg_air + o["hg"])
                 hg_air += o["hg"]
@@ -522,6 +531,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         theta_op_libre = libre["theta_op_moy"]
         seuil_chaud = max(consigne_fr[h], pente * theta_rm_ext + origine + marge)       # éq. 58
         dh_ch = max(0.0, consigne_ch[h] - theta_op_libre) if occupe[h] else 0.0
+        # Éq. 61 : le facteur imprimé (iinconf_cons,ch + 1) / 2 vaudrait 0,5 en inconfort chaud ; l'outil lit
+        # (iinconf_C1,fr + 1) / 2 = 1, comme l'éq. 60 (coquille probable ; le moteur va dans ce sens, docs/audit.md)
         dh_fr = max(0.0, theta_op_libre - seuil_chaud) if occupe[h] else 0.0
         q_ch, q_fr = max(0.0, phi), max(0.0, -phi)                                      # éq. 810 (1 h)
         saisons.ajouter_heure(occupe[h], dh_ch, dh_fr, q_ch, q_fr)
@@ -531,9 +542,12 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                  saison=SAISONS[(saisons.aut_ch, saisons.aut_fr)], consigne_ch=consigne_ch[h],
                  consigne_fr=consigne_fr[h], theta_sd=_sonde(psd, r["theta_i_moy"], r["theta_rm_moy"]),
                  theta_op_libre=theta_op_libre,
-                 dh_ch=dh_ch, dh_fr=dh_fr, rprot_moyen=rprot_moyen, hg_es=hg_es, rouv_moyen=rouv_moyen,
+                 dh_ch=dh_ch, dh_fr=dh_fr, rprot_moyen=rprot_moyen, hg_es=hg_es, rouv_moyen=rouv_moyen, rouv_brut_moyen=rouv_brut,
                  debit_ouvertures_m3h=debit_ouvertures, debit_infiltrations_m3h=debit_infiltrations,
-                 hg_infiltrations=hg_infiltrations)
+                 hg_infiltrations=hg_infiltrations,
+                 # Sollicitations de l'heure, pour comparer aux sorties horaires d'un moteur Th-BCE
+                 hg_ei=hg_air, theta_eieq=theta_air, fs1=baies["fs1"], fs3=baies["fs3"], phi_sl=baies["phi_sl"],
+                 phi_sh=s["phi_sh"][h], phi_i=libre["phi_i"], phi_s=libre["phi_s"], phi_m=libre["phi_m"])
         if th_d:
             r.update(ecart_ba=ecart_ba, energie_brasseurs_wh=energie_brasseurs)
         lignes.append(r)
@@ -545,7 +559,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         resultat["confort_adaptatif"] = periode.astype(int)
         resultat["seuil_confort"] = confort.seuil
         resultat["seuil_confort_corrige"] = confort.seuil + resultat["ecart_ba"].to_numpy()
-        resultat["occupe"] = np.asarray(occupe).astype(int)
+    resultat["occupe"] = np.asarray(occupe).astype(int)
     resultat["cecl_wh"] = eclairage["cecl_wh"].to_numpy()
     resultat["einat"] = eclairage["einat"].to_numpy()
     resultat["phi_occupants"] = apports["phi_occupants"].to_numpy()

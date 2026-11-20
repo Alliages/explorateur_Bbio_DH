@@ -80,8 +80,10 @@ def valider_etude(chemin, avec_dh=False):
     groupes["dans_la_cible"] = groupes["bbio_ecart_pct"].abs() <= CIBLE_BBIO_PCT
     groupes["non_repris"] = "; ".join(f"{cle} : {n}" for cle, n in c.reference.infos["non_repris"].items())
     if avec_dh:
-        dh = comparer_dh(c.projet, c.reference)[["groupe", "dh_outil", "dh_etude", "dh_ecart_pct", "dh_max_outil"]]
-        groupes = groupes.merge(dh, on="groupe", how="left")
+        dh = comparer_dh(c.projet, c.reference)[["batiment", "zone", "groupe", "dh_outil", "dh_etude", "dh_ecart_pct",
+                                                "dh_max_outil"]]
+        # Appariement par bâtiment, zone et groupe : un même nom de groupe peut revenir dans plusieurs zones
+        groupes = groupes.merge(dh, on=["batiment", "zone", "groupe"], how="left")
     return groupes.drop(columns=["niveau"])
 
 

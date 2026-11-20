@@ -30,10 +30,22 @@ r"""
               entre θouv1 et θouv2, on referme entre θfer1 et
               θfer2, plus bas.
 
-    En mode Th-B, l'ouverture ne sert qu'à modérer le besoin de
-    froid : elle n'a lieu qu'en saison de refroidissement, en
-    occupation, et jamais quand l'air extérieur approche la
-    consigne de refroidissement (à 1 °C près).
+    En mode Th-B (§ 5.13.3.1.2), les baies ne s'ouvrent qu'en
+    occupation (éq. 245). En période de refroidissement, jamais
+    quand l'air extérieur approche la consigne de refroidissement
+    (à 1 °C près).
+
+    !! Hors période de refroidissement, l'outil suit le MOTEUR
+    !! réglementaire (COMETH 2025.E1), PAS le texte de l'annexe.
+    !! Le texte (éq. 244) y annule l'ouverture : Mod_ext_man = 0.
+    !! Le moteur, lui, applique la règle générale de la gestion
+    !! manuelle (sans plafond de consigne) : il ouvre à la
+    !! mi-saison, d'avril à juin et de septembre à octobre
+    !! (constaté heure par heure sur Paris, Sète et Nice A,
+    !! docs/audit.md, 0.9.9, hypothèse 91). En saison de chauffage,
+    !! la même règle ne fait rien ouvrir : la température opérative
+    !! reste sous le seuil d'ouverture. Réglage
+    !! OUVERTURE_TH_B_COMME_LE_MOTEUR ci-dessous (False : texte).
 
     En mode Th-D (confort d'été), la règle générale s'applique :
     ni condition de saison de refroidissement, ni plafond lié à
@@ -46,10 +58,22 @@ r"""
                        différentes, ou tirage (éq. 252 à 254).
     L'air entre à la température extérieure, sans échangeur.
 
+    Une protection mobile fermée laisse passer une part de l'air
+    selon sa typologie (fiche 5.12, tableau 40 et éq. 239) :
+
+        Aouvmax_ac_PM = Aouvmax × (Rprot × Taux_passage + 1 − Rprot)
+
+    0 % (typologie 0, par défaut) à 75 % (typologie 4, très
+    ajourée) ; puis Aouv = MIN(Aouvmax_ac_PM ; Rouv × Aouvmax)
+    (éq. 248-249).
+
  Hypothèses de l'outil (docs/audit.md, 0.8.12) : la nuit, les
- occupants laissent les baies dans la position du soir ; une
- protection mobile fermée réduit d'autant la surface ouvrable ;
+ occupants laissent les baies dans la position du soir ;
  gestion automatique de l'ouverture non traitée.
+ Lectures du texte (docs/audit.md, 0.9.11) : l'hystérésis lit
+ θop(h−1), comme la figure 62 (la nomenclature, tableau 41,
+ cite θop,fin(h−2)) ; une baie est en façade si β ≥ 60°, comme
+ la prose de la p. 269 (l'éq. 253 imprime « β < 60° »).
 ============================================================
 """
 
@@ -61,6 +85,10 @@ from moteur.hypotheses import hyp
 SAISON_CHAUFFAGE = 3            # saison propre du groupe : chauffage sans refroidissement (fiche 4.6)
 INCLINAISON_FACADE_DEG = 60.0   # en dessous, la baie est en toiture : hors du calcul traversant (éq. 252)
 SECTEURS = 4                    # quatre orientations globales, pour deux roses décalées de 45° (éq. 253)
+# Mode Th-B, hors période de refroidissement : True = comme le moteur réglementaire (COMETH 2025.E1), règle générale
+# de la gestion manuelle ; False = comme le texte de l'annexe (éq. 244), aucune ouverture. Voir l'en-tête du module
+# et docs/audit.md (0.9.9, hypothèse 91).
+OUVERTURE_TH_B_COMME_LE_MOTEUR = True
 
 
 # ============================================================
@@ -169,13 +197,15 @@ class OuverturesGroupe:
         self.ouvrable = np.array([b.ouvrable for b in baies], dtype=bool)
         # Surface maximale d'ouverture de chaque baie : Rouvmax × surface en tableau
         self.aouv_max = np.array([b.ratio_ouverture_max * b.surface_m2 if b.ouvrable else 0.0 for b in baies])
+        # Part de l'air qui traverse la protection mobile fermée (fiche 5.12, tableau 40)
+        self.passage_air = np.array([hyp(f"ouv_passage_air_pm_{b.typo_permeabilite_protection}") for b in baies])
         self.exposition = [b.exposition_bruit or groupe.exposition_bruit for b in baies]
         self.orientations = np.array([b.orientation_deg for b in baies], dtype=float)
         self.inclinaisons = np.array([b.inclinaison_deg for b in baies], dtype=float)
         self.traversant = groupe.traversant
         self.hauteur_tirage = (groupe.hauteur_tirage_m if groupe.hauteur_tirage_m is not None
                                else hyp("ouv_hauteur_tirage_defaut"))
-        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.1 : Ventc
+        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.2 : Ventc
         self.te = meteo["te"].to_numpy(float).copy()
         self.part_occupee = hyp("gpm_part_occupee_logement_collectif")
         self.ratio_temperature = 0.0        # Rouv_op de l'heure précédente (hystérésis)
@@ -186,14 +216,18 @@ class OuverturesGroupe:
 
         th_b                    mode Th-B (défaut) : restrictions du § 5.13.3.1.2 ; False : règle générale (Th-D)
         saison                  saison propre du groupe (1 à 4)
-        froid_autorise          le groupe est en saison de refroidissement (en Th-B, sinon aucune ouverture :
-                                éq. 244 ; sans effet en Th-D)
+        froid_autorise          le groupe est en saison de refroidissement. En Th-B : plafond de la consigne − 1 °C ;
+                                hors de cette saison, règle générale comme le moteur réglementaire, ou aucune
+                                ouverture selon le texte (éq. 244), voir OUVERTURE_TH_B_COMME_LE_MOTEUR ; sans
+                                effet en Th-D
         occupe, hleg            occupation de la zone ; heure légale de début de pas
         consigne_fr             consigne de refroidissement de l'heure (°C) ; consigne_fr_confort : en occupation
-        ecart_confort_adaptatif écart entre le seuil d'inconfort chaud et la consigne de confort (°C)
+        ecart_confort_adaptatif Δθconf_adapt : écart entre le seuil d'inconfort chaud et la consigne de confort (°C),
+                                défini en Th-D seulement (fiche 13.5, éq. 2546) ; 0 en Th-B
         theta_op_prec, theta_i_prec   températures opérative et d'air en fin d'heure précédente (°C)
         rprot                   ratio de fermeture des protections mobiles, par baie (réduit la surface ouvrable)
-        Sortie : debit_m3h, hg (W/K, air entrant à la température extérieure), aouv_m2 et rouv_moyen.
+        Sortie : debit_m3h, hg (W/K, air entrant à la température extérieure), aouv_m2, rouv_moyen (part ouverte
+        de la surface ouvrable) et rouv_brut_moyen (Rouv de l'éq. 240, moyenne simple de toutes les baies).
         """
         te = self.te[h]
         # Rouv_op : le jour et en occupation, hystérésis ; la nuit, position du soir conservée. Hors occupation, il
@@ -204,17 +238,23 @@ class OuverturesGroupe:
         elif hyp("ouv_heure_debut_journee") < hleg < hyp("ouv_heure_fin_journee"):
             seuils = seuils_ouverture(saison, consigne_fr_confort, ecart_confort_adaptatif)
             self.ratio_temperature = ratio_selon_temperature(self.ratio_temperature, theta_op_prec, seuils)
+        # Mod_ext : en Th-B et en période de refroidissement, plafonné à la consigne − 1 °C (§ 5.13.3.1.2). En Th-B
+        # hors de cette période, le texte annule l'ouverture (éq. 244) ; le moteur réglementaire applique la règle
+        # générale, et l'outil le suit (OUVERTURE_TH_B_COMME_LE_MOTEUR)
         commun = 0.0
-        if occupe and (froid_autorise or not th_b):
-            commun = (self.part_occupee * moderation_exterieure(te, theta_op_prec, consigne_fr if th_b else None)
-                      * self.ratio_temperature)
+        ouvre = occupe and (not th_b or froid_autorise or OUVERTURE_TH_B_COMME_LE_MOTEUR)
+        if ouvre:
+            plafond = consigne_fr if th_b and froid_autorise else None
+            commun = self.part_occupee * moderation_exterieure(te, theta_op_prec, plafond) * self.ratio_temperature
         if commun <= 0:
-            return {"debit_m3h": 0.0, "hg": 0.0, "aouv_m2": 0.0, "rouv_moyen": 0.0}
+            return {"debit_m3h": 0.0, "hg": 0.0, "aouv_m2": 0.0, "rouv_moyen": 0.0, "rouv_brut_moyen": 0.0}
 
         cpr = np.array([contrainte_ouverture(e, saison, hleg) for e in self.exposition])
         rouv = commun * cpr                                                             # éq. 240
-        # Protection mobile en place : la surface ouvrable se réduit, le ratio est corrigé (éq. 248-249)
-        aouv_max_pm = self.aouv_max * (1.0 - rprot) if rprot is not None else self.aouv_max
+        # Protection mobile en place : la part fermée ne laisse passer que Taux_passage de l'air (éq. 239), le
+        # ratio est corrigé pour garder la même section d'ouverture (éq. 248-249)
+        aouv_max_pm = (self.aouv_max * (1.0 - rprot * (1.0 - self.passage_air)) if rprot is not None
+                       else self.aouv_max)
         aouv = np.minimum(aouv_max_pm, rouv * self.aouv_max)
         debit = debit_surventilation(aouv, self.orientations, self.inclinaisons, self.traversant,
                                      self.hauteur_tirage, self.vent[h], te, theta_i_prec)
@@ -222,4 +262,7 @@ class OuverturesGroupe:
         densite = (KELVIN + hyp("ouv_temperature_reference")) / (KELVIN + te)
         total_max = float(self.aouv_max.sum())
         return {"debit_m3h": debit, "hg": hyp("chaleur_volumique_air") * debit * densite,
-                "aouv_m2": float(aouv.sum()), "rouv_moyen": float(aouv.sum()) / total_max if total_max else 0.0}
+                "aouv_m2": float(aouv.sum()), "rouv_moyen": float(aouv.sum()) / total_max if total_max else 0.0,
+                # Rouv de l'éq. 240, avant Rouvmax et protections, en moyenne simple sur toutes les baies (nul pour
+                # une baie fixe) : la grandeur O_Rouv des sorties horaires du moteur réglementaire
+                "rouv_brut_moyen": float(np.mean(np.where(self.ouvrable, rouv, 0.0)))}

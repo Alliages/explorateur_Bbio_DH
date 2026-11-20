@@ -4,7 +4,9 @@
 ============================================================
  Toutes les constantes physiques et réglementaires sont lues
  dans donnees/hypotheses.csv (cle ; valeur ; unite ; source ;
- commentaire). Le code ne contient aucune valeur « en dur ».
+ commentaire). Le code ne contient aucune valeur « en dur », hormis
+ les conversions d'unités (ex. KJ_PAR_WH = 3,6 kJ par Wh dans
+ moteur/groupe.py) et les réglages de config/reglages.py.
 
  Usage :
      from moteur.hypotheses import hyp

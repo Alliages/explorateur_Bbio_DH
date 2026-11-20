@@ -47,6 +47,24 @@ def test_defauts_d_un_groupe():
     assert defauts_groupe(groupe(permeabilite_q4pa=0.0)) == []
 
 
+def test_entrees_d_air():
+    # Module de 400 m³/h sous 20 Pa : quatre entrées de 100 m³/h, loi en racine (éq. 141), à 0,92 × 3 m
+    entrees = defauts_groupe(groupe(module_entrees_air_m3h=400.0))
+    assert [round(d[0] * 20.0 ** 0.5, 6) for d in entrees] == [100.0] * 4
+    assert all(d[2] == pytest.approx(0.92 * 3.0) and d[3] == 0.5 for d in entrees)
+    assert [d[1] for d in entrees] == [0.05, 0.05, -0.05, -0.05]
+    # Sous 20 Pa d'écart, le module passe : 100 m³/h par entrée à la masse volumique de référence
+    r = equilibre([(100.0 / 20.0 ** 0.5, 0.0, 0.0, 0.5), (100.0 / 20.0 ** 0.5, 0.0, 0.0, 0.5)], 0.0, 19.0, 19.0,
+                  debit_ventilation_m3h=0.0)
+    assert r["debit_entrant_m3h"] == pytest.approx(0.0, abs=1e-6)
+    # Avec les défauts, les entrées d'air font entrer bien plus d'air (vent de 4 m/s, hiver)
+    seuls = equilibre(defauts_groupe(groupe(permeabilite_q4pa=1.0)), 4.0, 0.0, 20.0)
+    avec = equilibre(defauts_groupe(groupe(permeabilite_q4pa=1.0, module_entrees_air_m3h=400.0)), 4.0, 0.0, 20.0)
+    assert avec["debit_entrant_m3h"] > 2.0 * seuls["debit_entrant_m3h"]
+    with pytest.raises(ValueError, match="entrées d'air"):
+        groupe(module_entrees_air_m3h=-1.0)
+
+
 # ------------------------------------------------------------------
 # Équilibre aéraulique (éq. 135 à 137, 151 et 167)
 # ------------------------------------------------------------------
@@ -109,6 +127,19 @@ def test_traversant_plus_expose_au_vent():
     assert traversant["debit_entrant_m3h"] > 2 * non_traversant["debit_entrant_m3h"]
 
 
+def test_traversant_au_sens_de_l_hiver():
+    # Fiche 5.6, tableau 22 : le caractère traversant de la zone en hiver prime sur celui du confort d'été
+    ete_seul = defauts_groupe(groupe(True, permeabilite_q4pa=1.0, traversant_hiver=False), hauteur_moyenne_m=10.0)
+    assert ete_seul == defauts_groupe(groupe(False, permeabilite_q4pa=1.0), hauteur_moyenne_m=10.0)
+    hiver = defauts_groupe(groupe(False, permeabilite_q4pa=1.0, traversant_hiver=True), hauteur_moyenne_m=10.0)
+    assert hiver == defauts_groupe(groupe(True, permeabilite_q4pa=1.0), hauteur_moyenne_m=10.0)
+
+
+def test_hauteur_moyenne_inconnue_signalee():
+    with pytest.warns(UserWarning, match="hauteur moyenne"):
+        defauts_groupe(groupe(True, permeabilite_q4pa=1.0))
+
+
 # ------------------------------------------------------------------
 # Effet sur les besoins
 # ------------------------------------------------------------------
@@ -138,6 +169,8 @@ def test_plus_de_chauffage_avec_infiltrations(meteo):
 @pytest.mark.parametrize("fabrique", [
     lambda: groupe(permeabilite_q4pa=-0.5),
     lambda: Zone("Z", hauteur_m=0.0),
+    lambda: groupe(hauteur_tirage_m=3.0),           # Httf saisi : au-delà de 4 m seulement (fiche 5.13)
+    lambda: groupe(hauteur_tirage_m=16.0),          # et 15 m au plus
 ])
 def test_saisies_refusees(fabrique):
     with pytest.raises(ValueError):

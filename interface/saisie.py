@@ -25,7 +25,9 @@
  son widget dans interface/formulaire.py.
 
  Ce que la boîte ne sait pas décrire (voir ROADMAP.md) : masques
- lointains, joues et loggias, plusieurs groupes, part réémise Sw2,
+ lointains, joues et loggias, plusieurs groupes, part réémise Sw2
+ de la baie nue (celle de la baie protégée et la perméabilité de
+ la protection suivent le type de protection, guide Actibaie),
  gestion des brasseurs par thermostat, ponts thermiques au détail.
 ============================================================
 """
@@ -384,6 +386,19 @@ def point_cardinal(orientation_deg):
 # ============================================================
 # DE LA BOÎTE AU PROJET
 # ============================================================
+def _conventions_protection(boite):
+    """Ce que la boîte ne fait pas saisir d'une protection mobile, pris selon son type (volet, store enroulable)
+    dans le guide Actibaie (donnees/hypotheses.csv, clés boite_…) :
+
+      typo_permeabilite_protection   part de l'air qui traverse la protection fermée (Typo_PM, fiche 5.12) : 1, soit
+                                     10 % (tablier peu ajouré), au lieu de 0 (étanche, défaut de la méthode) ;
+      sw2_protege                    part réémise du Sw protégé : tout pour un volet opaque (Sw1 = 0), 40 % pour un
+                                     store en toile ; sans elle, tout le Sw protégé entrerait en Sw1.
+    """
+    return {"typo_permeabilite_protection": int(hyp(f"boite_typo_pm_{boite.protection}")),
+            "sw2_protege": hyp(f"boite_sw2_part_protege_{boite.protection}") * boite.sw_protege}
+
+
 def construire_projet(boite):
     """Projet du moteur décrit par la boîte : un bâtiment, une zone, un groupe.
 
@@ -425,6 +440,7 @@ def construire_projet(boite):
                               gestion_protection=boite.gestion_protection,
                               uw_protege=boite.uw_protege if avec_protection else None,
                               sw_protege=boite.sw_protege if avec_protection else None,
+                              **(_conventions_protection(boite) if avec_protection else {}),
                               ouvrable=boite.ouvrable,
                               ratio_ouverture_max=boite.ratio_ouverture_max if boite.ouvrable else None))
     # --- Toiture et plancher bas : l'emprise de la boîte ---

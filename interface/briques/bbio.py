@@ -91,8 +91,9 @@ def reperes():
             f"d'éclairage {nombre(hyp('bbio_coef_eclairage'))} points.",
             f"Bbio max moyen du logement collectif : {nombre(hyp('bbio_max_moyen_logement_collectif'))} points, "
             "avant modulation par le climat, l'altitude, la surface, le bruit et la hauteur sous plafond.",
-            "Fiabilité de l'outil : sur 23 groupes de 10 études, Bbio à ± 10 % en H2a, 7 à 15 % sous l'étude en "
-            "H1a (chauffage trop faible), 9 à 34 % au-dessus en H3 (besoin de froid environ deux fois trop fort)."]
+            "Fiabilité de l'outil : sur 23 groupes de 10 études, Bbio 4 à 7 % sous l'étude en H1a, 4 % en dessous à "
+            "18 % au-dessus en H2a (chauffage parfois trop fort), 12 % en dessous à 27 % au-dessus en H3 (9 groupes "
+            "sur 13 à ± 10 %)."]
 
 
 BRIQUE = Brique(

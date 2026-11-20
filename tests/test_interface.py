@@ -185,6 +185,12 @@ def test_options_de_la_boite():
     groupe = _groupe(replace(QUATRE_FACADES, part_vitree_arriere=0.0, protection="aucune", ouvrable=False))
     assert len(groupe.baies) == 3
     assert all(b.protection is None and not b.ouvrable for b in groupe.baies)
+    # Protection (0.9.13, guide Actibaie) : un volet laisse passer 10 % de l'air (Typo_PM 1) et son Sw protégé est
+    # tout réémis (Sw1 = 0) ; un store en toile en réémet 40 %
+    volet = _groupe(replace(IMMEUBLE, sw_protege=0.05)).baies[0]
+    assert volet.typo_permeabilite_protection == 1 and volet.sw2_protege == pytest.approx(0.05)
+    store = _groupe(replace(IMMEUBLE, protection="store_enroulable", sw_protege=0.1)).baies[0]
+    assert store.typo_permeabilite_protection == 1 and store.sw2_protege == pytest.approx(0.04)
     # Teinte : absorption lue dans les hypothèses ; plancher sur l'extérieur ; étanchéité parfaite
     groupe = _groupe(replace(IMMEUBLE, teinte="sombre", plancher_sur_sol=False, permeabilite_q4pa=0.0,
                              psi_planchers=0.0))

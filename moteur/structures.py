@@ -81,6 +81,8 @@ EXPOSITIONS_BRUIT = ("BR1", "BR2", "BR3")
 # Protections mobiles des baies (annexe III, fiche 5.9) : type de la première protection et mode de gestion
 PROTECTIONS_MOBILES = ("volet", "store_enroulable")
 GESTIONS_PROTECTION = ("manuelle_non_motorisee", "manuelle_motorisee", "automatique")
+# Typologie des protections mobiles selon le passage de l'air (fiche 5.12, tableau 40) : 0 défaut à 4 très ajourée
+TYPOLOGIES_PERMEABILITE_PM = (0, 1, 2, 3, 4)
 
 
 def _exiger_positif(valeur, nom):
@@ -203,6 +205,8 @@ class Baie:
     sw2_protege: float = 0.0    # part réémise (grande longueur d'onde et convection) de sw_protege
     sw3_protege: float = 0.0    # part transmise par la lame d'air ventilée (protection intérieure) de sw_protege
     tl_protege: float = None    # transmission lumineuse avec la protection en place
+    typo_permeabilite_protection: int = 0   # Typo_PM (fiche 5.12, tableau 40) : 0 (défaut, étanche) à 4 (très ajourée) ;
+                                            # part de l'air qui traverse la protection fermée devant la baie ouverte
     # Ouverture pour la surventilation naturelle (annexe III, fiche 5.13)
     ouvrable: bool = False      # la baie peut s'ouvrir (hors portes d'accès)
     ratio_ouverture_max: float = None       # Rouvmax : surface maximale d'ouverture / surface en tableau
@@ -217,6 +221,9 @@ class Baie:
         if self.exposition_bruit is not None and self.exposition_bruit not in EXPOSITIONS_BRUIT:
             raise ValueError(f"Baie « {self.nom} » : exposition au bruit « {self.exposition_bruit} » inconnue "
                              f"({', '.join(EXPOSITIONS_BRUIT)})")
+        if self.typo_permeabilite_protection not in TYPOLOGIES_PERMEABILITE_PM:
+            raise ValueError(f"Baie « {self.nom} » : typologie de perméabilité de la protection "
+                             f"« {self.typo_permeabilite_protection} » inconnue (0 à 4)")
         if self.protection is not None:
             if self.protection not in PROTECTIONS_MOBILES:
                 raise ValueError(f"Baie « {self.nom} » : protection « {self.protection} » inconnue "
@@ -350,7 +357,10 @@ class Groupe:
     """Unité de calcul thermique : un ensemble de locaux à la même température."""
     nom: str
     surface_m2: float           # surface habitable (SHAB) : surface du modèle thermique et surface de référence
-    traversant: bool = False    # logements traversants ou non (confort d'été)
+    traversant: bool = False    # logements traversants ou non (confort d'été) : ouverture des baies
+    traversant_hiver: bool = None   # caractère traversant de la zone au sens des conditions d'hiver (fiche 5.6,
+                                    # tableau 22 : traversant d'été ET portes intérieures détalonnées) :
+                                    # infiltrations ; None : comme « traversant »
     parois: list = field(default_factory=list)
     baies: list = field(default_factory=list)
     volume_m3: float = None     # volume du groupe ; exigé en présence de brasseurs d'air (fiche 8.32, éq. 1657)
@@ -371,14 +381,26 @@ class Groupe:
     cma_surf: float = None      # capacité annuelle (kJ/K/m²), classe personnalisée
     ama_surf: float = None      # surface d'échange annuelle (m²/m²) ; par défaut ams_surf
     exposition_bruit: str = "BR1"   # exposition au bruit des infrastructures de transport : module le Bbio max
-    hauteur_tirage_m: float = None  # Httf : hauteur de tirage thermique des baies ouvertes ; par défaut 1,5 m
+    hauteur_tirage_m: float = None  # Httf : hauteur de tirage thermique des baies ouvertes ; par défaut 1,5 m ;
+                                    # saisie seulement au-delà de 4 m, dans la limite de 15 m (fiche 5.13)
     permeabilite_q4pa: float = None     # Q4Pa_surf : débit de fuite sous 4 Pa par m² de paroi hors plancher bas
                                         # (m³/h/m²) ; None : pas d'infiltrations
+    module_entrees_air_m3h: float = None    # somme des modules des entrées d'air du groupe (m³/h sous 20 Pa,
+                                            # fiche 5.6, éq. 141) ; None : pas d'entrées d'air
 
     def __post_init__(self):
         _exiger_positif(self.surface_m2, f"Surface du groupe « {self.nom} »")
+        if self.module_entrees_air_m3h is not None and self.module_entrees_air_m3h < 0:
+            raise ValueError(f"Groupe « {self.nom} » : module d'entrées d'air négatif ({self.module_entrees_air_m3h})")
         if self.permeabilite_q4pa is not None and self.permeabilite_q4pa < 0:
             raise ValueError(f"Groupe « {self.nom} » : perméabilité à l'air négative ({self.permeabilite_q4pa})")
+        # Httf (fiche 5.13, § 5.13.3.2) : 1,5 m dans le cas général ; une valeur n'est saisie qu'au-delà de 4 m,
+        # dans la limite de 15 m
+        if self.hauteur_tirage_m is not None and \
+                not hyp("ouv_hauteur_tirage_seuil") < self.hauteur_tirage_m <= hyp("ouv_hauteur_tirage_max"):
+            raise ValueError(f"Groupe « {self.nom} » : hauteur de tirage thermique {self.hauteur_tirage_m} m hors de "
+                             f"]{hyp('ouv_hauteur_tirage_seuil'):g} ; {hyp('ouv_hauteur_tirage_max'):g}] m "
+                             f"(laisser vide pour 1,5 m)")
         if self.exposition_bruit not in EXPOSITIONS_BRUIT:
             raise ValueError(f"Groupe « {self.nom} » : exposition au bruit « {self.exposition_bruit} » inconnue "
                              f"({', '.join(EXPOSITIONS_BRUIT)})")

@@ -3,8 +3,11 @@ r"""
  PROTECTIONS MOBILES — volets et stores des baies
 ============================================================
  Sources : annexe III de l'arrêté du 4 août 2021
-   fiche 5.9 (C_BAT_Gestion_protections_mobiles), éq. 175 à 192,
-     figures 34, 35, 38 et 44 : ratio de fermeture Rprot ;
+   fiche 5.9 (C_BAT_Gestion_protections_mobiles), éq. 175 à 193
+     (volets : éq. 188-189 ; stores enroulables : éq. 190-193),
+     figures 34, 35, 38 et 44 : ratio de fermeture Rprot ; la
+     fiche va jusqu'à l'éq. 205 (stores vénitiens, seconde
+     protection, mode Th-D : éq. 202 à 204 reprises) ;
    fiche 4.1, éq. 50 à 53 : occupation au sens des protections ;
    fiche 5.10 (C_BAT_Baie vitrée), éq. 209 à 211 et 219 à 222 :
      effet sur la déperdition et sur les flux de la baie.
@@ -178,7 +181,9 @@ def valeurs_th_d(protection, gestion, de_jour, de_nuit):
 
 
 def rprot_manuel_occupe(protection, gestion, ligne, etp, jour, th_d_chaud=False):
-    """Rprot des locaux occupés, gestion manuelle ou dérogation manuelle (éq. 188) ; etp et jour par baie.
+    """Rprot des locaux occupés, gestion manuelle ou dérogation manuelle ; etp et jour par baie.
+
+    Éq. 188 pour les volets, éq. 192 pour les stores enroulables (le grand vent est traité dans ratios).
 
     th_d_chaud : mode Th-D, en période de confort adaptatif, après une journée chaude (éq. 203-204).
     """
@@ -189,7 +194,10 @@ def rprot_manuel_occupe(protection, gestion, ligne, etp, jour, th_d_chaud=False)
 
 
 def rprot_manuel_inoccupe(protection, gestion, ligne, jour, th_d_chaud=False):
-    """Rprot des locaux inoccupés, gestion manuelle : une valeur de jour, une de nuit (éq. 189)."""
+    """Rprot des locaux inoccupés, gestion manuelle : une valeur de jour, une de nuit.
+
+    Éq. 189 pour les volets, éq. 193 pour les stores enroulables.
+    """
     de_jour, _, de_nuit = matrices_manuelles()[(protection, gestion, "inoccupation", ligne)]
     if th_d_chaud:
         de_jour, de_nuit = valeurs_th_d(protection, gestion, de_jour, de_nuit)
@@ -260,7 +268,7 @@ class ProtectionsGroupe:
                        baie.horloge_crepusculaire, baie.protection_exterieure)
                 self.classes.setdefault(cle, []).append(i)
         self.classes = {cle: np.array(indices) for cle, indices in self.classes.items()}
-        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.1 : Ventc
+        self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.2 : Ventc
         self.part_occupee = hyp("gpm_part_occupee_logement_collectif")
         self.part_derogation = hyp("gpm_part_derogation_logement_collectif")
         self.chaud = False              # gestion automatique : ambiance chaude (hystérésis entre deux seuils)
@@ -293,6 +301,8 @@ class ProtectionsGroupe:
 
         for (protection, gestion, detecteur, crepusculaire, exterieure), indices in self.classes.items():
             etp = self.etp[indices, h]
+            # La fiche écrit Etp** ≠ 0 ; EDn étant borné à 0 (solaire.eclairement_exterieur), Etp ≥ 0 et les deux
+            # tests sont équivalents
             eclairee = etp > 0
             if gestion == "automatique":
                 # Jour de la gestion automatique : toujours, sauf horloge crépusculaire (éq. 182)
@@ -317,8 +327,9 @@ class ProtectionsGroupe:
                 else:
                     r = inoccupe
                 r_u = r                                                                 # éq. 210
-            # Store enroulable extérieur : remonté par grand vent (éq. 190 à 192)
-            if protection == "store_enroulable" and exterieure and grand_vent:
+            # Store enroulable extérieur : remonté par grand vent (éq. 190 à 192). En gestion manuelle, seulement
+            # en occupation : hors occupation, l'éq. 193 garde la position des locaux inoccupés
+            if protection == "store_enroulable" and exterieure and grand_vent and (occupe or gestion == "automatique"):
                 r, r_u = 0.0, 0.0
             rprot[indices], rprot_u[indices] = r, r_u
         return rprot, rprot_u

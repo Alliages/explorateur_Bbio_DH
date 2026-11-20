@@ -34,12 +34,18 @@ r"""
                  manuelle non motorisée, manuelle motorisée), avec
                  Uap, Sw1_ap + Sw2_ap + Sw3_ap et Tli_ap ;
                  Baie_ouvrable, Rouv_Max, Exp_BR → ouverture
-   Groupe (suite) Delta_trav_surv → traversant ; Httf si
-                 Def_Httf = 0 → hauteur de tirage
+   Groupe (suite) Delta_trav_surv → traversant (confort d'été) ;
+                 Is_Traversant de la zone → traversant_hiver
+                 (infiltrations, fiche 5.6, tableau 22) ; Httf si
+                 Def_Httf = 0 → hauteur de tirage (au-delà de 4 m,
+                 15 m au plus : sinon 1,5 m ou 15 m, signalé)
    Lineaire      Ll, Psil (multiplié par b sur un espace tampon,
                  fiche 5.19, éq. 304 ; l'indicateur H_Th_PT des
                  sorties, lui, est la somme des Ll × Psil sans b)
-   Permeabilite  Q4PaSurf → perméabilité à l'air du groupe
+   Permeabilite  Q4PaSurf → perméabilité à l'air du groupe ;
+                 absente : 1 m³/(h.m²), défaut du logement collectif
+                 (fiche 5.6, tableau 30), signalé
+   Entree_Air    somme des Module → entrées d'air du groupe
    Brasseur_Air  Nb, Rat_surf (× SHAB → surface desservie), Us
                  (0 nuit, 1 jour, 2 jour et nuit),
                  Mode_gestion_brasseur (0 manuelle, 1 thermostat,
@@ -56,8 +62,9 @@ r"""
  Ce que l'outil ne sait pas encore reprendre est compté dans
  Reference.infos["non_repris"] : gestion automatique de
  l'ouverture, stores vénitiens et secondes protections, baies sur un espace tampon,
- entrées d'air, flux solaires des ponts thermiques, usages autres que le
- logement collectif.
+ flux solaires des ponts thermiques, usages autres que le logement
+ collectif. Y sont aussi comptées les valeurs remplacées (Httf hors
+ bornes, perméabilité absente).
 
  Les RSET sont des études de projets réels : ils restent hors
  du dépôt (dossiers commençant par « _ »).
@@ -74,6 +81,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from config.reglages import ZONES_CLIMATIQUES
+from moteur.hypotheses import hyp
 from moteur.structures import (Baie, Batiment, Brasseur, Groupe, MasqueProcheHorizontal, MasqueProcheVertical,
                                MasqueTranches, Paroi, PontThermique, Projet, Zone)
 
@@ -252,7 +260,8 @@ def _lire_baie(element, nom, non_repris):
                           uw_horizontal_protege=_nombre(element, "Uap_Horiz"),
                           sw_protege=sum(_nombre(element, b, 0.0) for b in ("Sw1_ap", "Sw2_ap", "Sw3_ap")),
                           sw2_protege=_nombre(element, "Sw2_ap", 0.0), sw3_protege=_nombre(element, "Sw3_ap", 0.0),
-                          tl_protege=_nombre(element, "Tli_ap"))
+                          tl_protege=_nombre(element, "Tli_ap"),
+                          typo_permeabilite_protection=int(_nombre(element, "Typo_Permea_PM", 0.0)))
     elif choix != SANS_PROTECTION:
         cle = "baies à store vénitien (lues sans protection mobile)"
         non_repris[cle] = non_repris.get(cle, 0) + 1
@@ -379,23 +388,45 @@ def _lire_groupe(element, nom, zone, nb_logements, coefficients_b, non_repris, c
         ponts.append(PontThermique(nom_pont, _exiger(pont, "Ll", f"le pont thermique « {nom_pont} »"),
                                    _exiger(pont, "Psil", f"le pont thermique « {nom_pont} »") * b))
     # Ce que l'outil ne modélise pas encore, compté pour le compte rendu
-    for cle, nombre in (("ponts thermiques : flux solaires (Sf_cl, Sf_el) et masques", len(lineaires)),
-                        ("groupes : entrées d'air (absentes du calcul du Bbio)", 1)):
-        non_repris[cle] = non_repris.get(cle, 0) + nombre
+    cle = "ponts thermiques : flux solaires (Sf_cl, Sf_el) et masques"
+    non_repris[cle] = non_repris.get(cle, 0) + len(lineaires)
+
+    # Httf saisi (Def_Httf = 0) : seulement au-delà de 4 m, plafonné à 15 m (fiche 5.13, § 5.13.3.2) ; une valeur
+    # de 4 m ou moins revient au cas général (1,5 m), une valeur de plus de 15 m est plafonnée
+    httf = _nombre(element, "Httf") if _texte(element, "Def_Httf", "1") == "0" else None
+    if httf is not None and not hyp("ouv_hauteur_tirage_seuil") < httf <= hyp("ouv_hauteur_tirage_max"):
+        cle = "groupes : Httf saisi hors de ]4 ; 15] m (ramené à 1,5 m ou plafonné à 15 m)"
+        non_repris[cle] = non_repris.get(cle, 0) + 1
+        httf = None if httf <= hyp("ouv_hauteur_tirage_seuil") else hyp("ouv_hauteur_tirage_max")
+    # Perméabilité à l'air absente : valeur par défaut du logement collectif (fiche 5.6, tableau 30)
+    permeabilite = element.find("Permeabilite")
+    q4pa = _nombre(permeabilite, "Q4PaSurf") if permeabilite is not None else None
+    if q4pa is None:
+        q4pa = hyp("inf_q4pa_defaut_logement_collectif")
+        cle = "groupes sans perméabilité à l'air (valeur par défaut du tableau 30 de la fiche 5.6)"
+        non_repris[cle] = non_repris.get(cle, 0) + 1
 
     surface = _exiger(element, "SHAB", f"le groupe « {nom} »")
     return Groupe(nom, surface, brasseurs=_lire_brasseurs(element, surface),
                   traversant=_texte(element, "Delta_trav_surv", _texte(zone, "Is_Traversant", "0")) == "1",
-                  hauteur_tirage_m=_nombre(element, "Httf") if _texte(element, "Def_Httf", "1") == "0" else None,
+                  traversant_hiver=(_texte(zone, "Is_Traversant") == "1"
+                                    if _texte(zone, "Is_Traversant") is not None else None),
+                  hauteur_tirage_m=httf,
                   parois=[_lire_paroi(p, n, coefficients_b, non_repris) for p, n in zip(parois, noms_parois)],
                   baies=[_lire_baie(b, n, non_repris) for b, n in zip(baies, noms_baies)],
                   volume_m3=_nombre(element, "V"), ponts_thermiques=ponts,
                   debit_ventilation_m3h=_nombre(element, "Qv_occ_BBIO", 0.0), nb_logements=nb_logements,
                   climatise=_texte(element, "Is_Climatise", "0") == "1",
                   exposition_bruit="BR" + _texte(element, "Exp_BR_Groupe", "1"),
-                  permeabilite_q4pa=(_nombre(element.find("Permeabilite"), "Q4PaSurf")
-                                     if element.find("Permeabilite") is not None else None),
+                  permeabilite_q4pa=q4pa,
+                  module_entrees_air_m3h=_module_entrees_air(element),
                   **_lire_inertie(element.find("Inertie")))
+
+
+def _module_entrees_air(groupe):
+    """Somme des modules des entrées d'air du groupe (m³/h sous 20 Pa) ; None s'il n'y en a pas."""
+    modules = [_nombre(e, "Module", 0.0) for e in groupe.iter("Entree_Air")]
+    return sum(modules) if modules else None
 
 
 def _repartir_logements(nb_logements, surfaces):

@@ -479,7 +479,9 @@ Lecture :
     1 en permanence), avec l'échangeur à 0,5 (fiche 6.1). Remplace, pour une étude lue, le débit moyen de
     l'hypothèse 39.
 49. **Baies lues sans protection mobile** : U, Sw (Sw1 + Sw2 + Sw3) et Tl « sp ». Les valeurs avec protection sont
-    gardées dans `Reference.baies` pour la 0.8.12.
+    gardées dans `Reference.baies` pour la 0.8.12. *Levée en 0.8.12* : les valeurs « ap » (Sw1, Sw2, Sw3, U, Tli)
+    et Typo_Permea_PM (0.9.10) sont lues dans `Baie` et entrent dans le calcul ; seule Tli « ap » reste inemployée
+    (éclairage calculé baies nues).
 50. **Espaces tampons** : une paroi opaque sur un espace tampon non solarisé prend son coefficient b et ne reçoit pas
     de soleil ; un pont thermique voit son ψ multiplié par b (fiche 5.19, éq. 304), alors que l'indicateur
     `H_Th_PT` des études ne l'applique pas ; une baie sur un espace tampon est lue comme donnant dehors (4 baies au
@@ -661,7 +663,7 @@ les compte pas (hypothèse 67) ; la question reste ouverte et figure dans `ROADM
     protections mobiles et l'ouverture des baies.
 66. **Un bilan par groupe.** La fiche 5.6 équilibre la zone entière, avec une pression commune et des échanges entre
     groupes par un hall ; l'outil équilibre chaque groupe seul. Identique quand la zone n'a qu'un groupe.
-67. **Pas d'entrées d'air en mode Bbio** : la ventilation conventionnelle du Bbio est une double flux (fiche 6.1),
+67. **(remplacée par la 92 en 0.9.10) Pas d'entrées d'air en mode Bbio** : la ventilation conventionnelle du Bbio est une double flux (fiche 6.1),
     qui n'en a pas besoin ; le texte ne dit pas ce que deviennent celles du projet.
 68. **Double flux à débits volumiques égaux** : les masses soufflée et reprise diffèrent par leur température
     (éq. 156-157), ce qui met le groupe en légère surpression en hiver.
@@ -1063,3 +1065,442 @@ Lecture :
     l'outil n'y compte ni transmission ni apport solaire, quelle que soit l'inclinaison. Le U « vertical » de la
     fiche 5.17 (éq. 294) n'est pas défini pour U = 0 (division par zéro) ; l'indicateur `H_Th_op` de l'étude
     confirme la lecture.
+
+## 0.9.9 — comparaison heure par heure à un moteur Th-BCE
+
+Sorties horaires d'un moteur réglementaire (COMETH, version 2025.E1) pour Paris, Sète et Nice A, rangées hors du
+dépôt dans `../_RSEE/Horaires`. Il y a un dossier par calcul : modes Th-B, Th-C et Th-D, et les deux variantes Th-B
+sans soleil. Pour chaque groupe, environ 140 grandeurs heure par heure, plus 12 par baie. S'y ajoute le fichier
+d'entrée du moteur (`Entree.xml`). `outils/comparer_horaires.py` refait chaque calcul avec l'outil et compare
+33 grandeurs (tables dans `_resultats/horaires/`, hors dépôt).
+
+### Appariement
+
+| Calcul horaire | RSET du même calcul | Contrôle |
+|---|---|---|
+| Paris | `_sources/paris_scenario2_resultats_groupes_occ.xml` | Bch 19,5 / 33,0 ; DH 372,7 / 145,2 : identiques |
+| Sète | `_sources/sete_scenario2_resultats_groupes_occ.xml` | Bch 8,7 / 4,4 ; DH 353,6 / 529,7 : identiques |
+| Nice A | `../_RSEE/RSET/CW2020_…_2026-10-12 - sans clim.xml` | Bch 15,7 / 17,1 ; DH 444,4 / 486,2 : identiques |
+
+Le numéro de groupe du moteur (`Zone_2_Groupe_2`) court sur tout le bâtiment ; l'ordre est celui du RSET. Le DH
+recalculé à partir des colonnes horaires du moteur (`NbDegresHeures`) redonne celui de ses résultats.
+
+### Ce qui est identique
+
+| Grandeur | Résultat |
+|---|---|
+| Température extérieure, Th-B et Th-D (jeu, altitude, heure) | identique, sans décalage |
+| Occupation, consignes de chauffage et de refroidissement | identiques heure par heure |
+| Moyenne glissante θrm, seuil de confort chaud en occupation (Th-D) | identiques |
+| Calcul du DH : θop de fin d'heure du moteur et son seuil corrigé | 372,7 °C.h, comme le moteur |
+| Protections mobiles (moyenne des baies) | Paris à 2 % près (Th-B et Th-D) ; Sète + 14 % en Th-B, + 2 à 4 % en Th-D ; Nice voir point 6 |
+| Transmission des baies de l'heure (`O_Hges`) | à 0,1 % près (Nice : 2 %) |
+| Apports des occupants | identiques |
+| Air entrant en Th-D (`O_Temp_eieq`) | égal à la température extérieure chez le moteur aussi (hypothèse 75, pour ces trois études) |
+| Saison de chauffage | à 1 à 4 % des heures près en Th-B |
+
+### Écarts, du plus fort au plus faible
+
+Écart = outil / moteur − 1, sur l'année, groupe par groupe (Paris, Sète, Nice).
+
+| Grandeur | Th-B | Th-D | Lot |
+|---|---|---|---|
+| Ouverture des baies (moyenne) | − 48 à − 88 % | − 31 à − 52 % | L3 |
+| Renouvellement d'air `O_Hgei` | − 23 à − 79 % | − 6 à − 45 % | L3, L5 |
+| Heures de refroidissement autorisé | + 56 à + 122 % | (sans objet) | L2 |
+| Flux des parois opaques Φsh | − 37 à − 92 % | − 19 à − 87 % | L4 |
+| Éclairement naturel | + 20 à + 30 % | + 33 à + 83 % | L4 |
+| Apports des usages (`O_Phiint_*_Proc`) | − 7 % | − 7 % | L4 |
+| Flux solaire des baies Fs1 | − 30 à + 19 % | − 9 à + 41 % | L4 |
+| Besoin de chauffage | − 2 à − 21 % | | résultat |
+| Besoin de refroidissement | + 77 à + 263 % | | résultat |
+| Degrés-heures | | − 41 à + 28 % | résultat |
+
+**1. Ouverture des baies en Th-B, hors saison de froid (L2, L3).** Le moteur ouvre les baies à la mi-saison,
+d'avril à juin et de septembre à octobre, jamais en saison de chauffage. Sur le groupe 1 : 946 heures à Paris,
+1 929 à Sète, 1 605 à Nice. L'outil n'ouvre qu'en saison de refroidissement, comme le dit l'annexe III, fiche 5.13,
+§ 5.13.3.1.2 : « Hors période d'autorisation de refroidissement (Autfr,pro(j) = 0) : Mod_ext_man(h) = 0 »
+(éq. 244). Sans cet air frais, la mi-saison de l'outil est plus chaude de 0,4 à 1,1 °C (mai, juin, septembre). Le
+cumul d'inconfort chaud atteint alors le seuil de la fiche 4.6 dès mai. La saison de froid de l'outil commence
+aux jours 126 à 148 et finit aux jours 246 à 267, soit 98 à 140 jours. Celle du moteur commence au jour 176
+ou 183 (le refroidissement d'office) et finit au jour 246 ou 250, soit 63 à 74 jours. D'où un froid 1,8 à
+3,6 fois trop fort. C'est l'écart principal du Bbio en H3. **Décision du 19/11/2026 : l'outil suit le moteur**
+(hypothèse 91, correction ci-dessous).
+
+**2. Infiltrations d'hiver (L5).** En janvier et février, le renouvellement d'air effectif du moteur,
+Hgei × (θi − θeieq) / (θi − θe), est retrouvé à 1-2 % près en prenant la ventilation de l'outil (débit du
+Bbio, échangeur à 0,5) plus des infiltrations égales à Hgei − 0,34 × débit :
+
+| Étude | Groupe | Débit (m³/h) | Infiltrations outil (W/K) | Infiltrations moteur (W/K) | Rapport | H effectif prévu / moteur (W/K) |
+|---|---|---|---|---|---|---|
+| Paris | 1 | 1 040 | 19 | 68 | 3,5 | 245 / 241 |
+| Paris | 2 | 6 008 | 503 | 990 | 2,0 | 2 011 / 1 988 |
+| Sète | 1 | 3 827 | 415 | 617 | 1,5 | 1 268 / 1 259 |
+| Sète | 2 | 3 066 | 64 | 187 | 2,9 | 708 / 701 |
+| Nice A | 1 | 2 193 | 151 | 237 | 1,6 | 609 / 605 |
+| Nice A | 2 | 422 | 5 | 15 | 3,3 | 87 / 86 |
+
+La ventilation du Bbio de l'outil est donc juste. Les infiltrations sont 1,5 à 3,5 fois trop faibles, ce qui
+explique le chauffage trop faible (− 2 à − 21 %). Piste déjà notée : les entrées d'air du projet (hypothèse 67).
+L'indicateur `H_Vent_Hiver` des RSET (0,1397 × débit, 0.9.8) ne correspond donc pas au calcul horaire du
+moteur. C'est un indicateur de sortie, pas un terme du bilan.
+
+**3. Flux des parois opaques Φsh (L4).** Le moteur en compte 1,2 à 13 fois plus. Ses colonnes `O_Fsh_s_pt` et
+`O_Fsh_vc_pt` (flux solaire et voûte céleste des ponts thermiques) montrent ce qui manque à l'outil (fiche 5.19,
+éq. 300 et 306, « non repris » dans `comparer_reference`).
+
+**4. Apports des usages et éclairement naturel (L4).** Les apports « Proc » du moteur dépassent ceux de l'outil
+de 7 %, avec une part qui varie selon le mois (+ 11 % en hiver, + 3 % en été) : un terme est à identifier. Les
+pertes récupérées (`O_Pertes_Recup_*`) sont à examiner. L'éclairement naturel de l'outil est 20 à 80 % plus fort
+(`O_Einat`, définition à vérifier). Le besoin d'éclairage reste à − 2 à − 5 %.
+
+**5. Th-D (L6).** Le seuil de confort et le calcul du DH sont ceux du moteur. L'écart du DH vient entièrement
+de la température opérative : par exemple, à Paris, la θop de l'outil avec le seuil du moteur donne 434 °C.h,
+contre 372,7. En été, l'outil ouvre 31 à 52 % moins que le moteur ; un jour chaud d'août à Paris, le moteur
+ouvre à 0,49 ou 0,70 selon la baie, l'outil à 0,20. Le débit de ventilation hors occupation du moteur est plus
+faible (Paris : 270 contre 360 W/K ; ventilation du projet, hypothèse 75).
+
+**6. Divers.** À Nice A, groupe 2, les protections de l'outil sont fermées 47 % plus souvent en Th-B (stores
+vénitiens, 0.9.8). L'autorisation de refroidissement de Th-D (`O_Auth_fr`) vient de la génération et vaut 0 :
+elle ne se compare pas à la saison propre de l'outil.
+
+Les chiffres ci-dessus sont ceux d'avant la correction de l'ouverture en Th-B.
+
+### Correction : ouverture des baies en Th-B, l'outil suit le moteur (hypothèse 91)
+
+**L'outil s'écarte ici volontairement du texte de l'annexe pour suivre le moteur réglementaire.** Pour savoir ce
+que fait le moteur en Th-B, on a relevé ses colonnes `O_Rouv` (baie par baie), `O_Auth_fr`, `O_Auth_ch`,
+`O_Ind_occ`, `O_Temp_ext` et `O_Temp_Cons_Init_Fr` sur les 6 groupes :
+
+| Constat sur le moteur (6 groupes, mode Th-B) | Heures |
+|---|---|
+| Baies ouvertes hors occupation | 0 |
+| Baies ouvertes en saison de chauffage | 0 (θop occupée ≤ 21,0 à 23,5 °C, sous θouv1 = 25 °C) |
+| Baies ouvertes à la mi-saison (ni chauffage ni froid) | 564 à 2 297 par groupe |
+| En période de refroidissement, ouvertes avec θe > consigne − 1 °C | 0 sur 128 à 545 heures possibles |
+| À la mi-saison, ouvertes avec θe > consigne − 1 °C | 59 à 252 sur 75 à 265 heures possibles |
+
+Le moteur applique donc :
+
+- en période de refroidissement, la règle du § 5.13.3.1.2 : Mod_ext plafonné à la consigne − 1 °C ;
+- hors de cette période, la règle générale de la gestion manuelle (Mod_ext de la figure 61, sans plafond), au
+  lieu de Mod_ext_man = 0 (éq. 244) ;
+- dans tous les cas, baies fermées et Rouv_op remis à zéro hors occupation (éq. 245).
+
+L'outil fait de même (`moteur/ouvertures.py`, réglage `OUVERTURE_TH_B_COMME_LE_MOTEUR = True` ; `False` rend la
+lecture du texte). Effet, outil face au moteur (Th-B ; écarts outil / moteur − 1) :
+
+| Étude | Groupe | Saison de froid, outil avant → après (jours ; moteur) | Froid avant → après | θop mai, juin, sept. avant → après |
+|---|---|---|---|---|
+| Paris | 1 | 147-246 → 183-246 (183-246) | + 263 % → + 167 % | + 1,10 → + 0,07 °C |
+| Paris | 2 | 148-246 → 183-246 (183-246) | + 77 % → + 47 % | + 0,61 → − 0,25 °C |
+| Sète | 1 | 126-259 → 174-259 (183-246) | + 228 % → + 210 % | + 0,62 → + 0,50 °C |
+| Sète | 2 | 127-262 → 175-262 (176-246) | + 106 % → + 107 % | + 0,49 → + 0,59 °C |
+| Nice A | 1 | 126-266 → 175-266 (183-246) | + 140 % → + 111 % | + 0,41 → + 0,35 °C |
+| Nice A | 2 | 127-267 → 174-267 (176-250) | + 93 % → + 82 % | + 0,46 → + 0,55 °C |
+
+La saison de froid de Paris est maintenant celle du moteur, au jour près. À Sète et Nice, elle commence au bon
+moment mais finit 13 à 21 jours trop tard : le besoin de froid d'août et de septembre reste au-dessus du seuil
+d'arrêt (2 Wh/m² par heure sur 4 semaines). Le froid reste trop fort, parce que l'outil ouvre encore 23 à 64 % moins
+que le moteur (mi-saison : 0,5 à 0,9 fois son renouvellement d'air), comme en Th-D. Le chauffage et le DH ne
+changent pas.
+
+Bbio des 23 groupes de la validation de la 0.9.8 (`python -m outils.valider --dh`), avant → après :
+
+| Zone | Groupes | Dans ± 10 % | Écart du Bbio (médiane, étendue) | Froid, outil / étude (médiane) |
+|---|---|---|---|---|
+| H1a | 4 | 2 → 2 | − 10 % → − 11 % (− 16 à − 8 %) | 1,8 → 1,6 |
+| H2a | 6 | 6 → 5 | − 6 % → − 7 % (− 11 à − 2 %) | 2,4 → 1,4 (sur moins de 1 kWh/m²) |
+| H3 | 13 | 1 → 1 | + 20 % → + 17 % (+ 3 à + 22 %) | 2,1 → 1,9 |
+
+En H3, l'écart du Bbio baisse de 2 à 14 points sur 12 groupes (Sète RSEE 8619 : + 34 → + 20 %) ; Sète
+scénario 2, groupe 2, reste à + 20 %. En H1a et H2a, il baisse aussi
+un peu, ce qui creuse l'écart déjà négatif dû au chauffage trop faible : le groupe BAT B - T de `rsee.xml` passe
+de − 8,6 à − 10,6 %. Le DH ne change pas (− 41 à + 28 %).
+
+Depuis la 0.9.8, `../_RSEE` compte de nouvelles études (Strasbourg et ses variantes de climat) : la validation porte
+maintenant sur 16 études et 58 groupes, dont 13 dans ± 10 % (écart médian du Bbio + 15 %, `_resultats/validation.csv`).
+Ces études n'ont pas encore été examinées.
+
+Cas non vérifié : en saison de chauffage, un groupe surchauffé (θop ≥ 25 °C, petit bâtiment de test en H3) ouvre
+aussi ses baies avec la règle générale (Cpr = 0,3). Les études du moteur n'atteignent jamais ce seuil en hiver :
+elles ne disent pas si le moteur ouvre alors.
+
+### Suites proposées
+
+Dans l'ordre : le ratio d'ouverture des baies, encore 23 à 64 % sous le moteur en Th-B et 31 à 52 % en Th-D
+(valeurs baie par baie de `O_Rouv` : 0,49 ou 0,70 un jour chaud) ; les infiltrations (point 2) ; Φsh des ponts
+thermiques (point 3). Chaque correction se vérifie avec `python -m outils.comparer_horaires tous`.
+
+### Lectures du texte et hypothèses de l'outil
+
+91. **Ouverture des baies en Th-B hors période de refroidissement : comme le moteur, pas comme le texte.** La
+    fiche 5.13 (§ 5.13.3.1.2, éq. 244) annule l'ouverture hors période d'autorisation de refroidissement. Le moteur
+    réglementaire COMETH 2025.E1, relevé heure par heure sur 6 groupes (Paris, Sète, Nice A), applique à la place la
+    règle générale de la gestion manuelle. Le plafond « consigne de froid − 1 °C » ne vaut qu'en période de
+    refroidissement, et rien ne s'ouvre hors occupation. L'outil suit le moteur (décision du 19/11/2026), avec le
+    réglage `OUVERTURE_TH_B_COMME_LE_MOTEUR` de `moteur/ouvertures.py` pour revenir au texte. Le sens de
+    « Autfr,pro(j) » dans l'annexe reste à éclaircir.
+
+## 0.9.10 — ouverture des baies et infiltrations
+
+Deux corrections guidées par les sorties horaires du moteur (0.9.9). Aucun coefficient n'est ajusté : l'une
+applique un tableau du texte que l'outil ignorait, l'autre suit le moteur sur un point que le texte ne tranche pas.
+
+### Protection mobile devant une baie ouverte (fiche 5.12)
+
+L'outil considérait qu'une protection fermée bloque tout l'air (hypothèse de la 0.8.12) : une baie protégée à
+70 % ne pouvait plus s'ouvrir qu'à 30 %. La fiche 5.12 (tableau 40, éq. 239) donne un taux de passage de l'air
+selon la typologie de la protection (`Typo_Permea_PM` des études) : 0 % (typologie 0, par défaut), 10 % (1 : tablier
+peu ajouré, le cas des volets roulants), 25 % (2), 50 % (3) et 75 % (4 : très ajourée, stores vénitiens) :
+
+    Aouvmax_ac_PM = Aouvmax × (Rprot × Taux_passage + 1 − Rprot)
+    Aouv = MIN(Aouvmax_ac_PM ; Rouv × Aouvmax)                    (éq. 248-249)
+
+Contrôle sur le moteur (Paris, groupe 1, Th-D, une nuit d'août, protections fermées à 70 %) : sa colonne
+`O_Rouv_corrige` vaut 0,568 sur les baies de typologie 1, soit 0,21 / (0,7 × 0,1 + 0,3), et 0,848 sur celles de
+typologie 4, soit 0,7 / (0,7 × 0,75 + 0,3). Les études lues : typologies 1 (254 baies), 3 (49) et 4 (14) à Paris.
+
+### Entrées d'air dans les infiltrations du Bbio (hypothèse 92)
+
+En hiver, le renouvellement d'air du moteur se retrouve à 1-2 % près avec la ventilation de l'outil plus des
+infiltrations 1,5 à 3,5 fois plus fortes que les siennes (0.9.9). Les entrées d'air du projet (`Entree_Air`,
+module en m³/h sous 20 Pa, par groupe) expliquent l'écart. Essai hors moteur, avec les températures du moteur
+(janvier et février, m³/h) :
+
+| Étude | Groupe | Module | Moteur | Outil sans entrées d'air | Outil avec |
+|---|---|---|---|---|---|
+| Paris | 1 | 1 397 | 201 | 57 | 143 |
+| Paris | 2 | 5 182 | 2 912 | 1 479 | 2 347 |
+| Sète | 1 | 5 871 | 1 815 | 1 221 | 2 703 |
+| Sète | 2 | 2 662 | 549 | 187 | 418 |
+| Nice A | 1 | 1 795 | 696 | 443 | 846 |
+| Nice A | 2 | 389 | 45 | 14 | 47 |
+
+Avec les entrées d'air, le total des six groupes vaut 1,05 fois celui du moteur, contre 0,55 sans elles ; groupe
+par groupe, 0,7 à 1,5 fois. L'altitude des entrées d'air pèse peu : 0,68 au lieu de 0,92 change moins de 10 %.
+
+### Résultats face au moteur (écarts outil / moteur − 1, 0.9.9 → 0.9.10)
+
+| Étude | Groupe | Chauffage | Froid | Ouverture Th-B | Ouverture Th-D | DH |
+|---|---|---|---|---|---|---|
+| Paris | 1 | − 14 → − 4 % | + 167 → + 135 % | − 23 → − 20 % | − 40 → − 27 % | + 17 → − 6 % |
+| Paris | 2 | − 16 → − 6 % | + 47 → + 25 % | − 37 → − 28 % | − 50 → − 32 % | + 18 → + 6 % |
+| Sète | 1 | − 17 → + 47 % | + 210 → + 189 % | − 63 → − 54 % | − 47 → − 26 % | − 41 → − 33 % |
+| Sète | 2 | − 21 → − 3 % | + 107 → + 71 % | − 64 → − 48 % | − 52 → − 31 % | − 35 → − 37 % |
+| Nice A | 1 | − 2 → + 15 % | + 111 → + 83 % | − 56 → − 48 % | − 31 → − 20 % | + 14 → + 17 % |
+| Nice A | 2 | − 9 → − 1 % | + 82 → + 71 % | − 57 → − 46 % | − 36 → − 16 % | + 28 → + 30 % |
+
+- Le chauffage est maintenant à ± 6 % du moteur dans quatre groupes sur six. Il dépasse dans les deux groupes
+  traversants du sud (Sète 1 : + 47 %, Nice A 1 : + 15 %), où l'outil fait entrer trop d'air en hiver (Sète 1 :
+  2 221 contre 1 918 W/K). La répartition des entrées d'air et les coefficients de pression des zones traversantes
+  sont à revoir (tableau 23).
+- Le froid baisse partout, mais reste 1,3 à 2,9 fois trop fort. L'ouverture des baies reste 20 à 54 % sous le
+  moteur en Th-B, et le renouvellement d'air de mi-saison 0,6 à 0,9 fois le sien.
+- Le DH de Paris est à ± 6 % ; celui de Sète reste 33 à 37 % trop bas (brasseurs de nuit), celui de Nice 17 à
+  30 % trop haut.
+
+### Lectures du texte et hypothèses de l'outil
+
+92. **Entrées d'air du projet gardées en mode Bbio** (remplace la 67), comme le moteur réglementaire. Le texte ne
+    dit pas ce qu'elles deviennent sous la double flux conventionnelle du Bbio. Lois : entrée fixe, q = M ×
+    (|ΔP| / 20 Pa)^0,5 (éq. 141, tableau 21), sans autoréglage ni anti-retour (les modules autoréglables de Nice
+    ne changent de comportement qu'au-delà de 20 Pa). Répartition du tableau 25 : un quart au vent et sous le
+    vent, en haut et en bas, à une seule altitude en logement, 0,92 × MIN(h ; 3). Cette valeur est lue dans un
+    tableau mal extrait du PDF (0,92 ou 0,68) ; l'écart est faible. Les entrées d'air d'un groupe sont la somme de
+    ses `Entree_Air` dans le RSET ; l'interface n'en saisit pas.
+
+### Bbio des 23 groupes de la validation (0.9.9 → 0.9.10)
+
+| Zone | Groupes | Dans ± 10 % | Écart du Bbio (médiane ; étendue après) | Chauffage (médiane ; étendue après) | Froid, outil / étude |
+|---|---|---|---|---|---|
+| H1a | 4 | 2 → 4 | − 11 → − 4 % (− 6 à 0 %) | − 16 → − 6 % (− 7 à − 4 %) | 1,6 → 1,4 |
+| H2a | 6 | 5 → 3 | − 7 → + 10 % (− 4 à + 18 %) | − 9 → + 17 % (− 4 à + 45 %) | 1,4 → 1,4 |
+| H3 | 13 | 1 → 0 | + 17 → + 23 % (+ 11 à + 50 %) | − 11 → + 7 % (− 12 à + 53 %) | 1,9 → 1,7 |
+
+Le DH va de − 37 à + 30 %. Sur les 58 groupes de 16 études : 18 dans ± 10 % (13 avant), écart médian + 22 % (+ 15 %).
+
+Lecture :
+
+- **H1a : dans la cible**, chauffage à − 4 à − 7 %, comme les sorties horaires de Paris le laissaient prévoir.
+- **H2a et H3 : chauffage parfois trop fort.** Les entrées d'air font entrer trop d'air dans certains groupes :
+  Sète (RSENV et scénario 2, zone traversante) + 46 à + 53 %, `rsee.xml` BAT A - NT (92 m²) + 45 %. L'hypothèse 92
+  est juste en moyenne sur les six groupes horaires mais trop forte là. Pistes : coefficients de pression des zones
+  traversantes, partage des entrées d'air entre façades, anti-retour et autoréglage, bilan par zone (hypothèse 66).
+- **H3 : le froid reste l'écart principal** (1,7 fois l'étude). Le chauffage ne le compense plus : le Bbio s'écarte
+  davantage, alors que chacun des deux postes se rapproche du moteur.
+- La version 0.9.9 de la table : `_resultats/validation_0.9.9.csv` ; celle de la 0.9.8 :
+  `_resultats/validation_0.9.8_avant_ouverture.csv` (hors dépôt).
+
+## 0.9.11 — relecture indépendante de la 0.9.8
+
+Relecture faite dans claude.ai sur la 0.9.8 (commit `acab5fb`), fiche `relecture_0.9.8.md` (à la racine, non
+suivie par git) : un relecteur par module, avec `moteur/`, `donnees/hypotheses.csv` et l'annexe III seulement, sans
+CHANGELOG, ROADMAP, audit ni tests. Les commentaires du code et les sources des hypothèses y sont pris pour des
+affirmations à vérifier. Le moteur n'avait pas tourné : les effets annoncés étaient estimés. Ils sont mesurés ici,
+sur la version 0.9.10, face au moteur COMETH (sorties horaires de Paris, Sète et Nice A, 0.9.9) et face aux études
+(`outils/valider.py`). Tables dans `_resultats/mesures_0.9.11/` (hors dépôt).
+
+### Décompte de la relecture
+
+| Module | Fiches | Conformes | Écarts | Simplifications | Non vérifiables |
+|---|---|---|---|---|---|
+| `groupe.py` | 5.21 (+ 6.1, 6.2) | 40 | 2 | 8 | 4 |
+| constantes de `groupe.py` | 5.21, 6.1, 6.2, 4.1, 8.1 | 30 | 0 | — | 4 |
+| `besoins.py` | 13.1, 6.1, 4.6, 4.5, 8.1 (+ 5.13, 13.5, 8.5) | 28 | 3 | 1 | 4 |
+| `ouvertures.py` | 5.13 (+ 3.1, 13.5) | 22 | 2 | 3 | 2 |
+| `protections.py` + deux CSV | 5.9 (+ 4.1, 5.10) | 28 | 1 | 10 | 2 |
+| `solaire.py` | 3.2, 3.1 (+ 5.10, 5.17) | 24 | 1 | 6 | 3 |
+| `infiltrations.py` | 5.6 (+ 5.21, 6.1, 3.2) | 18 | 1 | 7 | 4 |
+
+Restent à relire : `enveloppe.py`, `apports.py`, `eclairage.py`, `bbio.py`, `dh.py`, `confort.py`, `brasseurs.py`,
+`meteo.py`, `scenarios.py`, `calendrier.py`, `masques.py`.
+
+Résultat principal de la relecture : le noyau est juste (réseau RC concordant à 4·10⁻¹⁴ près avec une résolution
+directe, bilan d'énergie fermé, constantes conformes, 54 lignes des tables de protections conformes).
+
+### Mesures et décisions
+
+Écarts outil / moteur − 1 (Th-B, 6 groupes) ; « avant » = 0.9.10, « après » = 0.9.11.
+
+| Étude | Groupe | Froid avant → après | Ouverture des baies avant → après | Saison de froid de l'outil, avant → après (moteur) |
+|---|---|---|---|---|
+| Paris | 1 | + 135 → − 10 % | − 20 → + 6 % | jours 183-246 → 183-246 (183-246) |
+| Paris | 2 | + 25 → − 33 % | − 28 → + 7 % | 183-246 → 183-246 (183-246) |
+| Sète | 1 | + 189 → − 11 % | − 54 → + 6 % | 176-259 → 183-246 (183-246) |
+| Sète | 2 | + 71 → − 34 % | − 48 → + 6 % | 183-262 → 183-246 (176-246) |
+| Nice A | 1 | + 83 → − 10 % | − 48 → + 5 % | 183-266 → 183-246 (183-246) |
+| Nice A | 2 | + 71 → − 2 % | − 46 → + 10 % | 176-267 → 176-257 (176-250) |
+
+Le chauffage (− 6 à + 48 % ; Sète 1 et Nice A 1 trop forts, entrées d'air) et le DH (− 37 à + 30 %) ne changent
+pas.
+
+| Point | Mesure | Décision (19/11/2026) |
+|---|---|---|
+| **T1** Δθconf_adapt dans les seuils d'ouverture en Th-B | L'outil prenait 0,33 θrm + 18,8 + 2 − θiifr (sans plafond ni règle de nuit) : en été, θouv dépassait la consigne et les baies ne s'ouvraient presque plus. À 0 : tableau ci-dessus ; validation, H3 de 0 à 9 groupes sur 13 dans ± 10 % | **corrigé** : nul en Th-B (fiche 13.5, éq. 2546 ; fiche 5.13, éq. 242), hypothèse 93 |
+| **T2** facteur 0,5 de l'éq. 61 | Saison de froid de Nice A, groupe 2 : début au jour 183 au lieu de 176 (moteur : 176) ; validation, H3 + 1 groupe dans la cible | **gardé à 1** (hypothèse 94) |
+| **T3.1** Q4Pa absente | Les 46 groupes de la validation donnent tous Q4Pa (0,5 à 1,0) | défaut du tableau 30 (1 m³/(h.m²)) à la lecture d'un RSET qui n'en donne pas, signalé ; sans effet sur la validation |
+| **T3.2** entrées d'air | — | déjà fait en 0.9.10 (hypothèse 92) |
+| **T3.3** traversant d'hiver | Diffère du traversant d'été dans 4 groupes : Vélizy cage B (traversant l'été, pas l'hiver), chauffage + 55 → + 32 % ; Saint-Ouen (zone traversante, groupes non traversants l'été), + 22 → + 38 % | **celui de la zone** (`Is_Traversant`) pour les infiltrations (hypothèse 95) |
+| **T3.4** hmoy absente | Toujours donnée par les RSET et l'interface | avertissement si elle manque (zone traversante) |
+| **T6** ventilation d'hiver 0,1397 | 0,1397 = 1006 × 0,5 / 3600 : éq. 382 de la fiche 6.1, indicateur de sortie (débit en m³/h, 1 kg/m³) ; le bilan (éq. 333) prend 0,34, comme l'outil | piste close |
+| **T9** heure légale | Face au moteur, heure par heure (Paris, Th-D) : le seuil de confort de nuit (éq. 2544) bascule aux mêmes heures légales (7 h et 23 h de début de pas), le Cpr de nuit de l'ouverture des baies aussi (22 h) | **inchangé** : même convention que le moteur (hypothèse 42) |
+| **T11** Sw2 = 0,2 × Sw | Aucun effet : les études donnent Sw2 (`Sw2_sp_e`, 15 à 20 % de Sw) ; le défaut ne sert qu'à l'interface | inchangé ; noté dans `ROADMAP.md` |
+
+Validation (`python -m outils.valider --dh`), avant → après :
+
+| Groupes | Dans ± 10 % | Écart du Bbio, médiane (étendue après) | Chauffage, médiane (étendue) | Froid, outil / étude (médiane) |
+|---|---|---|---|---|
+| H1a (4) | 4 → 4 | − 4 → − 5 % (− 7 à − 4) | − 6 % (− 7 à − 4) | 1,43 → 0,83 |
+| H2a (6) | 3 → 3 | + 10 → + 9 % (− 4 à + 18) | + 17 % (− 4 à + 45) | 1,40 → 0,73 |
+| H3 (13) | 0 → 9 | + 23 → − 2 % (− 12 à + 27) | + 7 % (− 12 à + 53) | 1,73 → 0,97 |
+| 23 groupes de la 0.9.8 | 7 → 16 | + 16 → − 2 % | + 7 % | 1,70 → 0,90 |
+| 46 groupes de 16 études | 18 → 29 | + 16 → − 2 % (− 12 à + 47) | + 5 % | 1,73 → 0,89 |
+
+- **Le froid de H3 n'est plus l'écart principal** : 0,97 fois l'étude en médiane (0,65 à 1,24). Face au moteur, il
+  est maintenant un peu faible (− 2 à − 34 %) ; les baies s'ouvrent 5 à 10 % de plus que chez le moteur.
+- **Écart principal restant : le chauffage trop fort de certains groupes** (entrées d'air, 0.9.10) : Sète traversant
+  (+ 47 à + 53 %, Bbio + 25 à + 27 %), `rsee.xml` (jusqu'à + 45 %), les études récentes (Vélizy, Saint-Ouen).
+- **Comptage des groupes** : `outils/valider.py` joignait le DH par le seul nom du groupe. Vélizy répète ses noms
+  d'une zone à l'autre : ses 6 groupes comptaient pour 18 lignes, avec des DH mêlés. Les « 58 groupes » des 0.9.9
+  et 0.9.10 sont en fait 46 (en 0.9.10, 18 sur 46 dans ± 10 %). Jointure corrigée (bâtiment, zone, groupe) ; les
+  chiffres ci-dessus sont dédoublonnés.
+
+### Autres suites données à la relecture
+
+| Point | Suite |
+|---|---|
+| T4 frs, frsd | déjà documenté (hypothèses 18 et 19) ; c'est un choix de formule, pas une constante : pas de ligne dans `hypotheses.csv` |
+| T5 Hg_es.θes (éq. 366) | gardé (hypothèse 17) ; test ajouté : groupe avec baies, sans apport, à température uniforme, stable heure après heure |
+| T5 froid pour tous les groupes | gardé (hypothèse 29) |
+| T5 seuil C1 de l'inconfort chaud | gardé et documenté (hypothèse 96) |
+| T7 `chaleur_volumique_air` | source corrigée : éq. 377 et 379 ; l'éq. 382 prend Cpa = 1006 J/(kg.K) |
+| T7 `debit_ventilation` | renvoi corrigé (éq. 403, débit moyen avec Dugd = 14) ; règle du non résidentiel notée (la zone n'admet que le logement collectif) |
+| T7 3,6 kJ par Wh | en-tête de `moteur/hypotheses.py` : les conversions d'unités restent dans le code |
+| T3.7 Cvent = 0,9 | source corrigée : fiche 3.2, p. 40 |
+| T10 store enroulable par grand vent | **corrigé** : en gestion manuelle, remonté seulement en occupation (éq. 192-193) ; en gestion automatique, occupé ou non (éq. 190-191) ; test ajouté. Sans effet visible sur la validation |
+| T10 citations de la fiche 5.9 | en-tête et docstrings : éq. 188-189 (volets), 190-193 (stores), fiche jusqu'à l'éq. 205 |
+| T10 Httf | garde : saisi seulement au-delà de 4 m, 15 m au plus (`Groupe` refuse ; la lecture d'un RSET ramène à 1,5 m ou plafonne à 15 m, et le signale). Aucun groupe de logement des études n'a de Httf saisi |
+| T10 θop(h−1), β ≥ 60° | lectures de l'outil, notées dans l'en-tête de `ouvertures.py` (hypothèse 97) |
+| T11 coefficients EDn | déjà exacts depuis la 0.9.8 (−1,03753210E-08, −3,31804423E-04, −6,72171072E-01) : la remarque ne s'appliquait pas |
+| T11 variable du polynôme EDn | commentaire corrigé : le « x » est un signe de multiplication, la variable est γ, lue en degrés (hypothèse 98) ; EDn borné à 0 (aucune heure concernée dans les fichiers météo) |
+| T8, T10, T11, T3.6 : simplifications et points mineurs | inscrits dans `ROADMAP.md` (« Relecture indépendante de la 0.9.8 ») |
+
+### Lectures du texte et hypothèses de l'outil
+
+93. **Δθconf_adapt nul en Th-B** (lecture du texte ; l'outil prenait l'écart de la fiche 4.5). La fiche 13.5 ne le définit
+    qu'en Th-D (éq. 2542 à 2546) ; en Th-B, θouv2 = θiifr − 1 (fiche 5.13, éq. 242). Confirmé par le moteur :
+    ouverture des baies et fin de saison de froid retrouvées.
+94. **Facteur de l'éq. 61 lu égal à 1.** Le texte imprime (iinconf_cons,ch + 1) / 2, qui vaut 0,5 en inconfort chaud
+    occupé. La structure de l'éq. 60 (même indice dans les deux facteurs, le second ne servant qu'à annuler
+    l'inoccupation, où iinconf = −1) fait lire (iinconf_C1,fr + 1) / 2 = 1 : coquille probable. Le moteur va dans
+    ce sens : avec 0,5, Nice A, groupe 2, démarrerait son froid au jour 183 au lieu de 176, celui du moteur.
+95. **Caractère traversant des infiltrations : celui de la zone au sens des conditions d'hiver** (fiche 5.6,
+    tableau 22 : traversant au sens du confort d'été et portes intérieures détalonnées), lu dans `Is_Traversant`
+    de la zone (`Groupe.traversant_hiver`) ; l'ouverture des baies garde le traversant d'été du groupe
+    (`Delta_trav_surv`, tableau 43). À confirmer sur une sortie horaire d'une étude où les deux diffèrent.
+96. **Seuil d'inconfort chaud du démarrage du froid : C1** (fiche 4.6) : les tableaux 9-10 imposent C1, les éq. 82-84
+    écrivent « cons » ; l'outil suit les tableaux.
+97. **Ouverture des baies : θop(h−1) et β ≥ 60°.** L'hystérésis lit θop(h−1), comme la figure 62 (la nomenclature,
+    tableau 41, cite θop,fin(h−2)) ; une baie est en façade si β ≥ 60°, comme la prose de la p. 269 (l'éq. 253
+    imprime « β < 60° »).
+98. **Polynôme EDn en γ, en degrés** (fiche 3.1, p. 32). La nomenclature donne γ en radians ; seule la lecture en
+    degrés est plausible (environ 105 lm/W, contre 20 lm/W au plus en radians).
+
+## 0.9.13 — protections mobiles de la boîte (guide Actibaie)
+
+Source : *Les protections solaires dans la RE 2020*, groupement Actibaie (avec FFB, AICVF et Pouget Consultants),
+version 8, mars 2024, guide professionnel non réglementaire. Le PDF et sa note d'analyse
+(`_sources/guide_protections_solaires_re2020.md`, avec les tableaux transcrits) restent hors du dépôt. Ce qui en
+était déjà dans le moteur : perméabilité des protections fermées (p. 27 = fiche 5.12, tableau 40, fait en 0.9.10),
+Sw1, Sw2, Sw3 et U de la baie protégée (fait en 0.8.12, lus dans les RSET).
+
+### Hypothèse
+
+99. **Protection de la boîte : perméabilité et part réémise selon le type** (`interface/saisie.py`,
+    `_conventions_protection` ; clés `boite_…` de `donnees/hypotheses.csv`). La boîte ne fait saisir ni la typologie
+    Typo_PM ni Sw2 protégé. Jusqu'en 0.9.11, un volet était étanche (Typo_PM 0, défaut de la méthode) et son Sw
+    protégé entrait tout en Sw1 (transmis). Désormais : Typo_PM 1 (10 % de l'air, volets roulants et battants, stores
+    enroulables guidés, p. 27) ; Sw protégé tout en Sw2 pour un volet (protection extérieure opaque : Sw1 = 0,
+    p. 46), à 40 % pour un store enroulable (toile claire, Sw1 0,08 et Sw2 0,05, p. 47). Le Sw protégé lui-même
+    reste celui du niveau d'enveloppe (0,03 / 0,07 / 0,10, tiré des études), plus haut que celui du guide pour un
+    volet opaque (0,02 à 0,04). Sans effet sur une étude lue (RSET), qui donne ces grandeurs.
+
+### Effet sur les bâtiments de départ (DH, °C.h ; Bbio à ± 0,4 point)
+
+| Bâtiment | Performant | Moyen | Faible |
+|---|---|---|---|
+| Logement de 70 m² (H1a) | 639 → 559 | 804 → 728 | 969 → 883 |
+| Immeuble de 9 logements (H1a) | 524 → 454 | 685 → 601 | 848 → 744 |
+
+En 0.9.11, sur le logement de 70 m² (niveau moyen), les volets motorisés **augmentaient** le DH (808 contre 790 sans
+protection) : la fermeture de nuit coupait l'aération par les baies plus que le volet ne coupait le soleil.
+
+### Tendances du guide sur la boîte (niveau moyen, volets motorisés sauf mention)
+
+| Cas | H1a DH | H1a Bbio | H3 DH | H3 Bbio | H3 froid |
+|---|---|---|---|---|---|
+| Sans protection | 790 | 118,6 | 1 572 | 88,9 | 6,3 |
+| Volet, manuelle non motorisée | 741 | 121,2 | 1 441 | 91,9 | 5,9 |
+| Volet, manuelle motorisée | 728 | 119,7 | 1 395 | 92,2 | 6,7 |
+| Volet, automatique | 558 | 118,2 | 995 | 84,0 | 3,6 |
+| Volet motorisé, Typo_PM 0 | 808 | 119,9 | 1 605 | 94,5 | 7,8 |
+| Volet motorisé, Typo_PM 4 | 531 | 119,3 | 1 007 | 88,2 | 4,7 |
+| Store enroulable motorisé | 618 | 121,0 | 1 137 | 88,2 | 4,5 |
+
+- **Reproduit** (testé, `tests/test_tendances.py`) : ordre des gestions sur le DH, sans protection > manuelle non
+  motorisée > manuelle motorisée > automatique (pp. 28-29).
+- **Non reproduit 1 : effet des protections sur le DH.** Le guide divise le DH par environ 2 (maison individuelle H3 :
+  1 842 → 950 en gestion motorisée, p. 28 ; immeuble H2b : 1 262 → 763 en non traversant, p. 29) ; la boîte en H3
+  ne gagne que 11 % (1 572 → 1 395).
+- **Non reproduit 2 : effet de la typologie Typo_PM.** Faible et de signe variable dans le guide (10 à 60 °C.h entre
+  10 et 75 %, pp. 28-29 ; Bbio identique, p. 7) ; fort dans l'outil (H3 : 1 605 à 1 007 °C.h de Typo_PM 0 à 4, Bbio
+  94,5 à 88,2). L'outil réduit l'ouverture de la baie de Rprot × (1 − passage d'air) (fiche 5.12, éq. 239), avec
+  des volets fermés la nuit à 70 % ou plus : l'aération nocturne en dépend fortement. Piste à rapprocher du ratio
+  d'ouverture en Th-D, 16 à 32 % sous celui du moteur (0.9.11) : comparer, heure par heure, ouverture et Rprot
+  des études de Paris, Sète et Nice A (`outils/comparer_horaires.py`).
+- **Non reproduit 3 : Bbio.** Le guide range le Bbio comme le DH (H3 : 79 sans protection, 65 à 66 en manuel, 54
+  en automatique, p. 7) ; dans l'outil, les volets manuels l'augmentent en H3 (88,9 → 92,2) : le froid ne baisse
+  pas (6,3 → 6,7). Même cause probable que le point 2.
+- Les cas du guide sont décrits sommairement (« conformes RT 2012 », sans géométrie) : ces écarts sont des signaux,
+  pas des mesures. Ils ne sont pas testés.

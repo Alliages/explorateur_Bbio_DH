@@ -185,3 +185,17 @@ def test_entrees_incoherentes():
         calculer_besoins(immeuble(), meteo.iloc[:100])
     with pytest.raises(ValueError, match="nb_logements"):
         calculer_besoins(Groupe("Sans logements", 50.0), meteo)
+
+
+def test_sollicitations_de_l_heure(besoins_h1a):
+    # Colonnes ajoutées en 0.9.9 pour comparer aux sorties horaires d'un moteur Th-BCE
+    b = besoins_h1a
+    for colonne in ("occupe", "hg_ei", "theta_eieq", "fs1", "fs3", "phi_sl", "phi_sh", "phi_i", "phi_s", "phi_m"):
+        assert colonne in b.columns
+    # Renouvellement d'air : au moins la ventilation du Bbio (0,34 × 600 m³/h)
+    assert (b["hg_ei"] >= 0.34 * 600.0 - 1e-9).all()
+    # Sans émission, les trois flux injectés font les apports du bilan
+    libre = (b["q_ch_wh"] == 0) & (b["q_fr_wh"] == 0)
+    somme = b.loc[libre, ["phi_i", "phi_s", "phi_m"]].sum(axis=1)
+    assert np.allclose(somme, b.loc[libre, "flux_apports"])
+    assert b["fs1"].sum() > 0 and set(b["occupe"].unique()) <= {0, 1}

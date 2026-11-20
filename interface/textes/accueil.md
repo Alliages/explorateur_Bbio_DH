@@ -24,7 +24,7 @@ Cet outil recalcule les deux, de façon approchée, sur une **boîte simple** : 
 <h2 class="alerte">Limites</h2>
 
 - **L'outil n'est pas une étude thermique** et n'a aucune valeur réglementaire.
-- Sur 23 groupes de logements de 10 études RE2020 recalculées (5 bâtiments) : le Bbio est à ± 10 % de l'étude en H2a, 7 à 15 % en dessous en H1a (chauffage trop faible), 9 à 34 % au-dessus en H3 (besoin de froid environ deux fois trop fort) ; le DH va de 42 % sous l'étude à 28 % au-dessus.
+- Sur 23 groupes de logements de 10 études RE2020 recalculées (5 bâtiments) : le Bbio est 4 à 7 % sous l'étude en H1a, de 4 % en dessous à 18 % au-dessus en H2a (chauffage parfois trop fort), de 12 % en dessous à 27 % au-dessus en H3 (9 groupes sur 13 à ± 10 %) ; le DH va de 37 % sous l'étude à 30 % au-dessus.
 - Logement collectif seulement, un seul volume, sans masque lointain ni loggia.
 
 <h2 class="liens">Liens utiles</h2>

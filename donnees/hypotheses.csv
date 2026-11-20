@@ -86,7 +86,7 @@ inertie_seq_lourde_cms;850;kJ/K/m²;Annexe III, fiche 5.21, tableau 54;Cms_surf,
 inertie_seq_legere_ams;2;m²/m²;Règles Th-Bât, fascicule Inertie, tableau 89;Ams_surf, classe d'inertie séquentielle légère
 inertie_seq_moyenne_ams;2,5;m²/m²;Règles Th-Bât, fascicule Inertie, tableau 89;Ams_surf, classe d'inertie séquentielle moyenne
 inertie_seq_lourde_ams;3;m²/m²;Règles Th-Bât, fascicule Inertie, tableau 89;Ams_surf, classe d'inertie séquentielle lourde
-chaleur_volumique_air;0,34;Wh/m³/K;Annexe III, fiche 6.1 (C_VEN_BBIO), éq. 377, 379 et 382;Chaleur volumique de l'air : déperdition par m³/h de débit
+chaleur_volumique_air;0,34;Wh/m³/K;Annexe III, fiche 6.1 (C_VEN_BBIO), éq. 377 et 379 (l'éq. 382, indicateur de sortie H_Vent_Hiver, prend Cpa = 1006 J/(kg.K) et 1 kg/m³ : 0,2794 × débit, soit 0,1397 avec l'échangeur à 0,5);Chaleur volumique de l'air : déperdition par m³/h de débit
 ventilation_bbio_efficacite;0,5;-;Annexe III, fiche 6.1, § 6.1.3 et nomenclature (efficacité de l'échangeur fixée à 0,5 pour le Bbio);Efficacité de l'échangeur de la ventilation conventionnelle du Bbio
 inclinaison_beta1;30;°;Annexe III, fiches 5.10 (éq. 207, figure 59) et 5.17 (éq. 294, figure 64);En dessous, la baie ou la paroi est horizontale (flux ascendant)
 inclinaison_beta2;60;°;Annexe III, fiches 5.10 (éq. 207) et 5.17 (éq. 294);À partir de cette inclinaison, la baie ou la paroi est verticale
@@ -220,9 +220,21 @@ ouv_coefficient_decharge;0,6;-;Annexe III, fiche 5.13 (C_BAT_Surventilation natu
 ouv_vent_max;3;m/s;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), tableau 41 (Vventmax);Vitesse de vent maximale du débit traversant
 ouv_temperature_reference;19;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), tableau 41 (θref) et éq. 255;Température de référence de la masse volumique de l'air
 ouv_hauteur_tirage_defaut;1,5;m;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), § 5.13.3.2 : Httf = 1,5 m dans le cas général;Hauteur de tirage thermique par défaut
-vent_correction_locale;0,9;-;Annexe III, fiche 3.1 (C_Clim), correction locale de la vitesse du vent : Ventc = Vent × Cvent;Cvent : vitesse du vent corrigée = 0,9 × vitesse du fichier météo
+ouv_hauteur_tirage_seuil;4;m;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), § 5.13.3.2 : Httf n'est saisi que si la différence d'altitude des ouvrants dépasse 4 m;En dessous, Httf vaut 1,5 m
+ouv_hauteur_tirage_max;15;m;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), § 5.13.3.2 et nomenclature (Httf, max 15);Plafond de la hauteur de tirage thermique saisie
+ouv_passage_air_pm_0;0;-;Annexe III, fiche 5.12 (C_BAT_Perméabilité_des_PM), tableau 40 et éq. 239 (Typo_PM = 0, valeur par défaut : volets isolants);Part de l'air qui traverse une protection mobile fermée, typologie 0
+ouv_passage_air_pm_1;0,1;-;Annexe III, fiche 5.12 (C_BAT_Perméabilité_des_PM), tableau 40 et éq. 239 (Typo_PM = 1 : tablier non ou faiblement ajouré, < 10 %);Part de l'air qui traverse une protection mobile fermée, typologie 1
+ouv_passage_air_pm_2;0,25;-;Annexe III, fiche 5.12 (C_BAT_Perméabilité_des_PM), tableau 40 et éq. 239 (Typo_PM = 2 : tablier ajouré, 10 à 30 %);Part de l'air qui traverse une protection mobile fermée, typologie 2
+ouv_passage_air_pm_3;0,5;-;Annexe III, fiche 5.12 (C_BAT_Perméabilité_des_PM), tableau 40 et éq. 239 (Typo_PM = 3 : tablier fortement ajouré, 30 à 50 %);Part de l'air qui traverse une protection mobile fermée, typologie 3
+ouv_passage_air_pm_4;0,75;-;Annexe III, fiche 5.12 (C_BAT_Perméabilité_des_PM), tableau 40 et éq. 239 (Typo_PM = 4 : tablier très fortement ajouré ou à projection);Part de l'air qui traverse une protection mobile fermée, typologie 4
+boite_typo_pm_volet;1;-;Guide Actibaie « Les protections solaires dans la RE 2020 » (v8, 2024), p. 27, et annexe III, fiche 5.12, tableau 40 : volets roulants et battants sans projection, tablier non ou faiblement ajouré (< 10 %);Boîte de l'interface : typologie de perméabilité Typo_PM d'un volet (0 = étanche, défaut de la méthode)
+boite_typo_pm_store_enroulable;1;-;Guide Actibaie (v8, 2024), p. 27 : stores extérieurs enroulables guidés et stores intérieurs enroulables, typologie 1;Boîte de l'interface : typologie de perméabilité Typo_PM d'un store enroulable
+boite_sw2_part_protege_volet;1;-;Guide Actibaie (v8, 2024), p. 46 : protection extérieure opaque déployée, Sw1 = 0, tout le Sw protégé est réémis (Sw2 0,02 à 0,04 en conditions C);Boîte de l'interface : part réémise Sw2 / Sw du facteur solaire protégé d'un volet
+boite_sw2_part_protege_store_enroulable;0,4;-;Guide Actibaie (v8, 2024), p. 47 : store extérieur non opaque clair déployé, double vitrage, σ = 0,70, conditions C : Sw1 0,08, Sw2 0,05 (0,05 / 0,13 = 0,4);Boîte de l'interface : part réémise Sw2 / Sw du facteur solaire protégé d'un store enroulable
+vent_correction_locale;0,9;-;Annexe III, fiche 3.2 (C_EEX_environnement_proche), p. 40, correction locale de la vitesse du vent : Ventc = Vent × Cvent;Cvent : vitesse du vent corrigée = 0,9 × vitesse du fichier météo
 air_masse_volumique_reference;1,2;kg/m³;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 21 (ρref, à 19 °C);Masse volumique de référence de l'air
 inf_pression_reference;4;Pa;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 21 et éq. 150;Différence de pression de référence de la perméabilité
+inf_q4pa_defaut_logement_collectif;1;m³/(h.m²);Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 30 (usage 2, logements collectifs, tableau mal extrait du PDF, lu 1 entre 0,6 des maisons et 1,7 des bureaux);Perméabilité à l'air retenue quand un RSET n'en donne pas (le tableau ne vaut que hors exigence de l'article 19)
 inf_hauteur_tirage_max;3;m;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), éq. 138 et § hauteur des défauts : MIN(hzone, 3) sans perméabilité verticale (habitation);Hauteur sur laquelle joue le tirage thermique en habitation
 inf_part_altitude_basse;0,25;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), § hauteur des défauts d'étanchéité;Altitude des défauts bas : 0,25 × hauteur
 inf_part_altitude_haute;0,75;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), § hauteur des défauts d'étanchéité;Altitude des défauts hauts : 0,75 × hauteur
@@ -233,6 +245,9 @@ inf_cp_traversant_toit;-0,6;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), t
 inf_cp_non_traversant_vent;0,05;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 24;Cp des façades au vent, zone non traversante
 inf_cp_non_traversant_sous_vent;-0,05;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 24;Cp des façades sous le vent, zone non traversante (toiture : 0)
 inf_hauteur_seuil_cp;15;m;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 23;Hauteur moyenne de la zone à partir de laquelle le Cp au vent passe de 0,25 à 0,45
+inf_ea_pression_reference;20;Pa;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 21 (différence de pression de référence des entrées d'air) et éq. 141;Pression à laquelle le module d'une entrée d'air donne son débit (m³/h)
+inf_ea_exposant;0,5;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), éq. 141 : q = C × |ΔP|^0,5;Exposant de la loi de débit d'une entrée d'air fixe
+inf_ea_position;0,92;-;Annexe III, fiche 5.6 (C_VEN_Débits_d'air_Cep), tableau 21 (rapport indiquant la position de l'entrée d'air en absence de perméabilité verticale) et § hauteur des entrées d'air : z = 0,92 × la hauteur de tirage plafonnée à 3 m (valeur lue dans un tableau mal extrait du PDF : 0,92 ou 0,68);Altitude unique des entrées d'air d'un logement, en part de la hauteur de tirage plafonnée à 3 m
 confort_theta_rm_seuil_periode;16;°C;Annexe III, fiche 3.1 (C_EEX_Climat extérieur), éq. 2;Moyenne glissante de la température extérieure à partir de laquelle un jour compte pour la période de confort adaptatif
 confort_ecart_min_max;2;°C;Annexe III, fiche 13.5 (C_CALC_Indicateur de confort d'été), nomenclature (Δθop_min_max) et éq. 2544-2545;Plafond du seuil de confort chaud au-dessus de la consigne de refroidissement en occupation
 ventilation_th_d_efficacite;0;-;HYPOTHÈSE DE L'OUTIL (le système de ventilation du projet n'est pas décrit, voir docs/audit.md, 0.8.16);Efficacité de l'échangeur de la ventilation en mode Th-D : air neuf à la température extérieure
