@@ -1725,3 +1725,94 @@ phrase « 10 % sur la semaine (stockage) » de l'hypothèse 103 était donc faus
      au logement (baies, murs, toiture) est le plus fort ; la coupe en donne chaque poste en Wh sur l'heure (soit
      sa puissance moyenne en W). Les fichiers météo Th-D comptent des heures sans direct et à fort diffus (27/06 à
      14 h : 905 W/m² diffus horizontal, direct nul) : à ces heures, toutes les façades reçoivent à peu près autant.
+
+## 0.9.27 — audit de la 0.9.25
+
+Sans changement du calcul. Audit mené dans claude.ai, sans les études (`../_RSEE`, sorties horaires du moteur) ni
+l'annexe III (site du ministère inaccessible depuis l'espace de travail) : les constats qui demandent le texte ou
+le moteur sont marqués « à vérifier ». Scripts d'essai hors dépôt ; les cas testés en mémoire n'ont rien écrit.
+
+### Non-régression
+
+| Contrôle | Attendu (0.9.15 à 0.9.25) | 0.9.25 recalculée |
+|---|---|---|
+| Logement de 70 m², DH performant / moyen / faible (°C.h) | 544 / 732 / 884 | 544,0 / 731,9 / 883,7 |
+| Logement de 70 m², Bbio | 94,1 / 119,9 / 138,9 (0.9.11 ; ± 0,4 depuis, 119,8 en 0.9.25) | 94,0 / 119,8 / 138,7 |
+| Immeuble de 9 logements, DH | 448 / 599 / 748 | 447,7 / 599,1 / 747,9 |
+| Immeuble de 9 logements, Bbio | 50,1 / 60,5 / 67,9 (0.9.11 ; ± 0,4 depuis) | 50,0 / 60,3 / 67,6 |
+| Exemple du `README.md` | Bbio 34,3, DH 1 978 | **27,8 et 1 981** : texte périmé (corrigé) |
+| `python -m pytest` | 387 réussis, 2 sautés | 386 réussis, 3 sautés (aucun RSET dans `_sources/` ici) |
+
+À relancer sur le poste qui a les études : `python -m outils.valider "..\_RSEE" "_sources" --dh` et
+`python -m outils.comparer_horaires tous`, à comparer à `_resultats/validation_0.9.15.csv` et à
+`_resultats/horaires/`.
+
+### Relecture de `dh.py`, `confort.py`, `brasseurs.py`, `enveloppe.py`
+
+Relus contre leurs propres citations, `donnees/hypotheses.csv` et les cas limites (sans l'annexe III).
+
+| Point | Constat | Suite |
+|---|---|---|
+| **R1 Inertie séquentielle** (`groupe.py`, éq. 327 à 330 ; tableau 89 des règles Th-Bât) | ΔHg = 1 / (1 / (his·Ams) − 1 / (his·Amq)) n'est positif que si Ams < Amq. Avec les Ams du tableau 89 (2 / 2,5 / 3) et les Amq du tableau 53 (2,5 / 2,5 / 2,5 / 3 / 3,5), l'effet n'est **pas monotone** : une classe séquentielle lourde ne fait rien, une moyenne baisse le DH (tableau ci-dessous). Sans effet sur la boîte et sur les RSET lus par classe (séquentielle « défaut » : Cms = Cmq) ; joue sur les RSET à inertie saisie | **à vérifier**, éq. 327-332 et tableau 89 en main (avec le point de l'éq. 332, ΔCm,a-s ou a-q) ; ne rien changer sans le texte |
+| **R2 Hystérésis des brasseurs** (éq. 1654) | Le régime maximal est gardé jusqu'au seuil d'arrêt (pas de retour à l'intermédiaire sous V2). Variante « retour à l'intermédiaire sous V2 » : DH de la boîte + 0,3 (H1a) et + 2,5 °C.h (H3), en gestion manuelle | **à vérifier** sur Sète (gestion par thermostat, écarts saisis plus serrés), avec les régimes du moteur s'ils sont dans ses sorties |
+| **R3 Heure du soleil** (fichiers météo) | La position du soleil (`Gamma`, `Psi`) de l'heure k est celle du milieu du pas [k − 1 ; k[ TU, à 1 à 3° près (21 juin, 46,5° N, 2,5° E : midi solaire 11 h 54 TU, au milieu du pas 12 du fichier), alors que l'outil lit l'heure k comme [k ; k + 1[ TU (fiche 4.1, vérifiée sur le moteur pour la température et l'occupation). Le soleil du calcul a donc une heure de retard sur l'horloge ; le dessin, lui, place le soleil astronomique (0.9.16) : à « 16 h », le calcul voit le soleil de 15 h | **à vérifier** heure par heure sur le moteur : décalage entre Fs1 de l'outil et du moteur (lag 0 ou ± 1 h, `outils/comparer_horaires.py`). Si le moteur fait comme l'outil, c'est une propriété des données conventionnelles, à dire dans le dessin |
+| **R4 Sources du confort adaptatif** | `confort.py` cite la fiche 3.1 (éq. 1-2) et la fiche 13.5 (éq. 2543-2545) ; `hypotheses.csv` cite la fiche 4.5 (éq. 57-58) pour les mêmes constantes (0,8, 0,33, 18,8) | **à vérifier**, puis harmoniser les citations |
+| R5 Conformes | DH max : tranches continues (1 600 / 1 400 ; 2 600 / 2 100). Seuil de confort : plancher 26 °C à θrm 15,8 °C, plafond 28 °C à 21,8 °C. θrm nul le premier jour : sans effet l'été (0,8ⁿ). Rsi + Rse 0,17 / 0,14 / 0,21 et interpolations des U selon l'inclinaison. Paroi à U = 0. Compteurs d'heures (θop ≥ seuil) | rien |
+| R6 Mineurs | Brasseurs : condition `hlég > 23` jamais vraie (hlég va de 0 à 23 ; sans effet). Domaine de la fiche 8.32 (hauteur sous plafond < 3 m, groupe non climatisé) non contrôlé | `ROADMAP.md` |
+
+Restent à relire : `apports.py`, `eclairage.py`, `bbio.py`, `meteo.py`, `scenarios.py`, `calendrier.py`,
+`masques.py`.
+
+R1, DH de la boîte de départ (niveau moyen) selon la classe d'inertie séquentielle (°C.h) :
+
+| Zone | Quotidienne | Séquentielle défaut | légère | moyenne | lourde |
+|---|---|---|---|---|---|
+| H1a | moyenne (Amq 2,5) | 859 | 808 (Ams 2) | 859 (Ams 2,5) | 859 (Ams 3) |
+| H1a | lourde (Amq 3) | 732 | 732 (Cms ≤ Cmq) | 611 (Ams 2,5) | 732 (Ams 3) |
+| H3 | moyenne | 1 686 | 1 653 | 1 686 | 1 686 |
+| H3 | lourde | 1 390 | 1 390 | 1 305 | 1 390 |
+
+### Tendances de la boîte
+
+Logement de 70 m² de départ (niveau moyen : inertie lourde, Sw 0,40, volets motorisés, traversant, 25 % de baies
+devant et derrière, ratio d'ouverture 0,78), une saisie changée à la fois. Écart au cas de base :
+
+| Saisie changée | H1a DH | H1a Bbio | H3 DH | H3 Bbio |
+|---|---|---|---|---|
+| Base (DH ; Bbio) | 732 ; 119,8 | | 1 390 ; 92,8 | |
+| Façade principale à l'ouest (ou à l'est) | + 4 % | + 1 % | + 7 % | + 6 % |
+| Part vitrée 15 % | **+ 16 %** | + 2 % | **+ 29 %** | + 2 % |
+| Part vitrée 40 % | **− 10 %** | − 1 % | **− 10 %** | − 2 % |
+| Sw 0,35 / 0,60 | − 2 / + 6 % | + 2 / − 8 % | − 1 / + 7 % | + 1 / − 6 % |
+| Inertie légère / moyenne / très lourde | + 35 / + 17 / − 14 % | + 3 / + 1 / 0 % | + 44 / + 21 / − 11 % | + 14 / + 8 / − 4 % |
+| Non traversant | + 15 % | − 9 % | + 66 % | − 14 % |
+| Ratio d'ouverture 0,30 | + 50 % | 0 % | + 85 % | + 6 % |
+| Baies non ouvrables | + 207 % | + 4 % | + 461 % | + 24 % |
+| Sans protection / volets automatiques | + 9 / − 24 % | − 1 / − 1 % | + 15 / − 28 % | − 3 / − 9 % |
+| Balcon de 1 m au sud | − 8 % | + 2 % | − 8 % | − 1 % |
+| Teinte claire / sombre | − 13 / + 13 % | + 2 / − 2 % | − 17 / + 19 % | − 1 / 0 % |
+| Murs U 0,15 / 0,40 | − 12 / + 6 % | − 17 / + 11 % | − 13 / + 9 % | − 16 / + 10 % |
+| Brasseurs (2 par logement) | − 16 % | 0 % | − 27 % | 0 % |
+
+Lecture :
+
+- **Sens attendu** : inertie, traversant, ouverture des baies, teinte, Sw, isolation, balcon, brasseurs, gestion
+  automatique des protections. Six de ces tendances sont désormais testées (`tests/test_tendances.py`).
+- **Plus de vitrage, moins de DH.** À ratio d'ouverture égal, la surface ouvrante suit la surface des baies, et la
+  surventilation l'emporte sur le soleil. À surface ouvrante égale, le DH monte bien avec le vitrage :
+  H1a 732 → 813 °C.h (40 %, ratio 0,49), H3 1 390 → 1 580. Baies non ouvrables : 2 067 / 2 248 / 2 567 °C.h
+  (H1a, 15 / 25 / 40 %). C'est la logique de la méthode (surface ouvrante = ratio × surface de baie), mais le
+  message pédagogique est contre-intuitif : **à confirmer sur le moteur** (un cas 15 / 25 / 40 % dans un logiciel
+  réglementaire) et à expliquer dans l'interface.
+- **Est et ouest.** Une seule façade vitrée (30 %, non traversant) : est 1 018, sud 1 006, ouest 978, nord 936 °C.h
+  en H1a (H3 : 3 056 / 2 985 / 2 965 / 2 830). L'est dépasse un peu l'ouest, à l'inverse de l'intuition. Lien
+  possible avec R3 (soleil décalé d'une heure) ou avec la fermeture des volets ; **à vérifier** sur le moteur.
+- Protections manuelles : − 9 à − 13 % seulement (écart au guide Actibaie déjà inscrit en 0.9.13).
+- Le Sw ne pèse que − 2 à + 7 % sur le DH : les volets sont fermés aux heures de soleil fort. Une baie non
+  protégée (« Sans protection ») le ferait peser davantage.
+
+### Documentation corrigée
+
+`README.md` (état, exemple, lien de la capture), fiabilité affichée (`interface/textes/accueil.md`,
+`interface/briques/bbio.py` et `dh.py` : chiffres de la 0.9.15 au lieu de ceux de la 0.9.11),
+`docs/passation.md` (la 0.9.25 a bien été poussée, commit `652b972`).

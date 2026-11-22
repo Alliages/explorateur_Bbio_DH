@@ -17,7 +17,7 @@ streamlit run app.py
 
 puis ouvrir http://localhost:8501.
 
-![La page : la boîte dessinée, ses chiffres clés et les briques](docs/capture_interface.jpg)
+![La page : la boîte dessinée, ses chiffres clés et les briques](docs/capture_interface_1.jpg)
 
 La page s'ouvre sur un **accueil** (à quoi sert l'outil, trois notions, limites, liens) ; le bouton « Explorer la
 boîte » ou « Calculer » ouvre la page de travail.
@@ -44,7 +44,7 @@ L'interface est prête pour Streamlit Community Cloud (ou tout hébergeur qui la
 sont dans `donnees/` (7 Mo). La page garde en mémoire les 24 derniers calculs (0,7 Mo chacun). La mise en ligne
 elle-même se fait sur demande explicite (voir `ROADMAP.md`).
 
-## État (0.9.0)
+## État (0.9.27)
 
 Socle (structures de projet, calendrier conventionnel, fichiers météo, scénarios du logement collectif), module
 solaire (rayonnement et éclairement reçus par une paroi orientée, masques, flux transmis par les baies et les parois
@@ -54,10 +54,20 @@ Bbio d'un projet par groupe, zone et bâtiment, comparé au Bbio max des logemen
 des baies (volets, stores enroulables), ouverture des baies pour la surventilation naturelle, infiltrations par
 les défauts d'étanchéité, et degrés-heures d'inconfort d'été (DH) sur l'année caniculaire, brasseurs d'air compris,
 comparés au DH max.
-Sur cinq études réglementaires, le chauffage est 2 à 26 % trop faible et le besoin de froid 1,7 à 4 fois trop
-fort : le Bbio calculé s'approche de celui d'une étude sans lui être encore comparable. Le DH va de 41 % sous
-les études à 28 % au-dessus. L'interface permet d'essayer une boîte de logements de bout en bout : la décrire, la
-calculer, comprendre le résultat et comparer deux variantes.
+
+L'outil a été comparé à 16 études réglementaires (46 groupes de logements, dont plusieurs variantes d'un même
+bâtiment) et, heure par heure, aux sorties d'un moteur réglementaire (COMETH 2025.E1) pour trois d'entre elles
+(mesures de la 0.9.15, inchangées depuis) :
+
+- **Bbio** : 30 groupes sur 46 à ± 10 % de l'étude, écart médian nul. Le chauffage reste trop fort dans certains
+  groupes (entrées d'air : jusqu'à + 50 % environ).
+- **DH** : 21 groupes sur 37 à ± 10 %, écart médian de 8 % en valeur absolue, mais de − 39 % (Sète) à + 27 %
+  (Nice) sur les études comparées heure par heure : la température d'été de l'outil y reste 0,3 à 0,6 °C sous
+  celle du moteur.
+- Pour l'ouverture des baies, l'outil suit le moteur plutôt que le texte de la méthode (hypothèses 91 et 100).
+
+Détail, hypothèses et écarts ouverts : `docs/audit.md`. L'interface permet d'essayer une boîte de logements de bout
+en bout : la décrire, la calculer, comprendre le résultat et comparer deux variantes.
 
 L'outil sait lire le fichier XML d'une étude réglementaire (RSET) et refaire son Bbio et son DH pour les comparer :
 
@@ -107,7 +117,7 @@ dh = calculer_dh(projet)            # mode Th-D, année caniculaire : 2 à 3 s p
 print(dh.groupes[["groupe", "dh", "dh_max", "respecte", "avertissement"]].round(0))
 ```
 
-Résultat attendu : Bbio de 34,3 points pour un maximum de 73,5 ; DH de 1 978 °C.h pour un maximum de 1 250.
+Résultat attendu : Bbio de 27,8 points pour un maximum de 73,5 ; DH de 1 981 °C.h pour un maximum de 1 250.
 
 - Orientation : 0 = sud, 90 = ouest, ± 180 = nord, − 90 = est. Les champs de chaque objet sont décrits dans
   `moteur/structures.py`.

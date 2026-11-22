@@ -3,6 +3,26 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.27 — correction (22/11/2026), audit de la 0.9.25
+
+Audit sans changement du calcul (détail : `docs/audit.md`, 0.9.27).
+
+- **Non-régression** : DH et Bbio des six bâtiments de départ identiques à la 0.9.15 (à 0,2 point près sur le
+  Bbio). Validation sur les études et comparaison horaire au moteur : à relancer sur le poste qui les a.
+- **Relecture** de `dh.py`, `confort.py`, `brasseurs.py` et `enveloppe.py` (sans l'annexe III). Quatre points à
+  vérifier, texte ou moteur en main : inertie séquentielle sans effet dès que Ams ≥ Amq, d'où un effet non
+  monotone (classe lourde sans effet, moyenne − 16 % de DH) ; hystérésis des brasseurs (régime maximal gardé
+  jusqu'à l'arrêt, effet ≤ 2,5 °C.h sur la boîte) ; **position du soleil des fichiers météo en retard d'une heure
+  sur l'heure du calcul** (l'outil suit les fichiers ; le dessin, lui, montre le soleil astronomique) ; sources du
+  confort adaptatif citées de deux façons.
+- **Tendances de la boîte** (H1a et H3, une saisie à la fois) : sens attendu pour l'inertie, le traversant,
+  l'ouverture, la teinte, le Sw, l'isolation, le balcon, les brasseurs. Deux signaux : plus de vitrage donne moins
+  de DH (la surface ouvrante suit la surface des baies ; à surface ouvrante égale, le DH monte bien) ; une façade
+  vitrée à l'est donne un peu plus de DH qu'à l'ouest. Six tendances testées (`tests/test_tendances.py`).
+- **Documentation** : `README.md` (état, résultat de l'exemple 27,8 et 1 981 au lieu de 34,3 et 1 978, lien de la
+  capture), fiabilité affichée à l'accueil et dans les briques Bbio et DH (46 groupes de 16 études, chiffres de la
+  0.9.15), `docs/passation.md`.
+
 ## 0.9.25 — correction (22/11/2026), bilan en coupe exact et heure de pointe
 
 - **Correction du bilan en coupe** : la conduction des parois et des baies est désormais celle du modèle du groupe

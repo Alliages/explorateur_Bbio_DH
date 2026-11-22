@@ -38,6 +38,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.22 | Clic sur le dessin | Étape 5 du plan « informations au clic » : cliquer sur un mur, des baies ou la toiture du dessin ouvre sa fiche (composant `interface/dessin_cliquable.py`, `st.components.v2` ; clé de paroi `data-cle` sur chaque forme) ; la liste « Paroi examinée » reste pour le clavier et les parois cachées | fait |
 | 0.9.24 | Coupe du bilan | Étape 4 du plan « informations au clic » et coupe schématique : coupe transversale de la boîte (toiture, plancher bas, façades principale et arrière avec leurs baies, pignons en une flèche), flèches proportionnelles aux kWh (soleil transmis, U × S × Δθ, rayonnement froid, ventilation et infiltrations, apports internes, ponts thermiques, besoin), hiver (Bbio) ou été et semaine la plus chaude (DH) ; part de chaque paroi dans les apports des heures qui comptent des DH ; bouton « Mesurer l'effet de cette paroi » (calcul relancé sans elle : baie remplacée par le mur de sa façade, paroi opaque rendue adiabatique ; ΔDH, ΔBbio) ; clic sur la coupe. Brique « Le bilan en coupe » (`interface/coupe.py`, `interface/briques/bilan.py`), hypothèses 103 et 104 | fait |
 | 0.9.25 | Bilan en coupe exact | Correction : conduction des parois et des baies lue dans le modèle (masse θmq, surfaces θs), bilan fermé exactement, reste = stockage de la masse (hypothèse 103 corrigée) ; lecture « Heure de pointe (Wh) » de la coupe, pic du soleil transmis dans la fiche (hypothèse 105) | fait |
+| 0.9.27 | Audit de la 0.9.25 | Non-régression des bâtiments de départ ; relecture de `dh.py`, `confort.py`, `brasseurs.py`, `enveloppe.py` (points R1 à R6 de `docs/audit.md`) ; tendances de la boîte (six testées) ; documentation et fiabilité affichée mises à jour ; calcul inchangé | fait |
 | 0.9.26 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 ; décalée de 0.9.16 le 20/11/2026, de 0.9.18, 0.9.20, 0.9.22 et 0.9.24 le 22/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
@@ -53,6 +54,25 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 
 ## Points à reprendre
 
+- **Audit de la 0.9.27, suites** (détail : `docs/audit.md`, 0.9.27) :
+  - relancer sur le poste `python -m outils.valider "..\_RSEE" "_sources" --dh` et `python -m outils.comparer_horaires
+    tous` (non-régression face à la 0.9.15) ;
+  - **R3, heure du soleil** : les fichiers météo placent le soleil de l'heure k au milieu de [k − 1 ; k[ TU, l'outil
+    lit l'heure k comme [k ; k + 1[ TU. Comparer heure par heure Fs1 de l'outil et du moteur (décalage 0 ou ± 1 h).
+    Si le moteur fait comme l'outil, le dire dans le dessin (soleil astronomique) ou dessiner le soleil du calcul ;
+  - **R1, inertie séquentielle** : effet nul dès que Ams ≥ Amq, non monotone selon la classe ; à trancher avec les
+    éq. 327 à 332 et le tableau 89 des règles Th-Bât (avec le point de l'éq. 332 plus bas) ;
+  - **vitrage et DH** : plus de vitrage, moins de DH à ratio d'ouverture égal (surface ouvrante = ratio × surface
+    de baie). À confirmer sur un logiciel réglementaire (cas 15 / 25 / 40 %), puis à expliquer dans une brique ;
+  - est et ouest : une façade vitrée à l'est donne un peu plus de DH qu'à l'ouest (+ 3 %) ; à vérifier sur le
+    moteur, peut-être lié à R3 ;
+  - R2, hystérésis des brasseurs : à vérifier sur Sète (gestion par thermostat) ;
+  - R4 : citations du confort adaptatif (fiche 3.1 et 13.5 dans le code, fiche 4.5 dans `hypotheses.csv`) à
+    harmoniser, texte en main ;
+  - R6 : domaine de la fiche 8.32 (hauteur sous plafond < 3 m, groupe non climatisé) non contrôlé dans la saisie ;
+  - relecture des modules restants : `apports.py`, `eclairage.py`, `bbio.py`, `meteo.py`, `scenarios.py`,
+    `calendrier.py`, `masques.py` ;
+  - capture du `README.md` (`docs/capture_interface_1.jpg`) : ancienne (0.9.1, DH 1 964), à refaire.
 - **Prochaine correction (version à fixer) : entrées d'air trop fortes dans certains groupes** (0.9.10 :
   Sète traversant, chauffage + 46 à + 53 % ; `rsee.xml` jusqu'à + 45 %) : coefficients de pression des zones
   traversantes, partage entre façades, autoréglage et anti-retour, bilan par zone (hypothèses 66 et 92).

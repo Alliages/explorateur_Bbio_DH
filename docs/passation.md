@@ -4,9 +4,24 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 22/11/2026
 
-- Dernière version publiée sur `travail` : **0.9.16** (commit `dee10e0`, 22/11/2026), avec la **0.9.15** dans le même
-  commit. Avant : 0.9.13 avec les 0.9.9 à 0.9.11 (`667d842`). Avant : 0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé.
-- **0.9.25** (prête, non poussée, avec les 0.9.18 à 0.9.24) : correction du bilan en coupe, devenu exact.
+- Dernière version publiée sur `travail` : **0.9.25** (commit `652b972`, 22/11/2026), avec les 0.9.18 à 0.9.24
+  dans le même commit. Avant : 0.9.16 avec la 0.9.15 (`dee10e0`), 0.9.13 avec les 0.9.9 à 0.9.11 (`667d842`),
+  0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé (0.9.4).
+- **0.9.27** (prête, non poussée) : audit de la 0.9.25, faite dans claude.ai sans les études ni l'annexe III ;
+  calcul inchangé (détail : `docs/audit.md`, 0.9.27).
+  - Non-régression : bâtiments de départ identiques à la 0.9.15. L'exemple du `README.md` était périmé
+    (Bbio 27,8, DH 1 981). **À relancer sur le poste** : `python -m outils.valider "..\_RSEE" "_sources" --dh` et
+    `python -m outils.comparer_horaires tous`.
+  - Relecture de `dh.py`, `confort.py`, `brasseurs.py`, `enveloppe.py` : R1 inertie séquentielle non monotone
+    (nulle dès que Ams ≥ Amq) ; R2 hystérésis des brasseurs (effet faible sur la boîte) ; **R3 soleil des
+    fichiers météo en retard d'une heure sur l'heure du calcul** (l'outil suit les fichiers ; le dessin montre le
+    soleil astronomique) ; R4 citations du confort adaptatif. Tous à vérifier texte ou moteur en main.
+  - Tendances de la boîte (H1a, H3) : sens attendu partout sauf deux signaux, plus de vitrage = moins de DH (la
+    surface ouvrante suit la surface des baies ; à surface ouvrante égale, le DH monte) et est un peu au-dessus de
+    l'ouest. Six tendances testées dans `tests/test_tendances.py`.
+  - Fiabilité affichée (accueil, briques Bbio et DH) et `README.md` mis aux chiffres de la 0.9.15.
+  - Tests : 392 réussis, 3 sautés ici (aucun RSET dans `_sources/`).
+- **0.9.25** (poussée avec les 0.9.18 à 0.9.24) : correction du bilan en coupe, devenu exact.
   Conduction des parois opaques et des ponts vers la masse θmq, des baies vers les surfaces θs, rayonnement
   intérieur perdu par les vitrages compris : le reste du bilan est le stockage du modèle (l'ancienne lecture
   H × (θi − θe) faisait passer 13 kWh d'erreur pour du stockage sur la semaine chaude du logement faible sans
@@ -184,7 +199,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
   Streamlit ; le dépôt est prêt (`README.md`, « Mise en ligne »).
   - Contrôle visuel fait dans Chrome ; défauts corrigés : hauteurs des graphiques (`interface/briques/
     graphiques.py` : la hauteur donnée à Streamlit comprend légende et axes), étiquettes de l'axonométrie,
-    second bouton « Calculer ». Capture : `docs/capture_interface.jpg`.
+    second bouton « Calculer ». Capture : `docs/capture_interface_1.jpg`.
   - `interface/comparaison.py` : `differences` (saisies changées), `ecarts` (sept indicateurs), `afficher`.
     Toute nouvelle saisie de `Boite` doit recevoir un libellé dans `LIBELLES` (un test le vérifie).
   - Balcons et casquettes : `Boite.debord_m`, `Boite.facades_debord` ; masque proche horizontal sur les baies ;
@@ -210,8 +225,10 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## Prochaine étape
 
-« Push » des 0.9.18 et 0.9.20, puis étape 4 du plan « informations au clic » (part de la paroi dans le DH) ;
-mise en ligne sur accord. Ensuite : entrées d'air trop fortes (chauffage de
+« Push » de la 0.9.27. Sur le poste : non-régression (validation et comparaison horaire), puis les points de
+l'audit qui demandent le moteur, dans l'ordre : R3 (décalage de Fs1 outil / moteur, 0 ou ± 1 h), écart de θop
+du calcul d'été (0,3 à 0,6 °C), vitrage 15 / 25 / 40 % dans un logiciel réglementaire ; avec l'annexe III : R1
+et R4. Diffusion en 0.9.26 ; mise en ligne sur accord. Ensuite : entrées d'air trop fortes (chauffage de
 Sète traversant, `rsee.xml`, Vélizy, Saint-Ouen), ouverture des baies en Th-D encore 16 à 32 % sous le moteur, Φsh,
 relecture des modules restants (`relecture_0.9.8.md`, § 1), chaque fois vérifiés avec
 `python -m outils.comparer_horaires tous` ; autres études ou OPEE ou les nouvelles briques (version à fixer). Écrire une brique : un fichier dans
