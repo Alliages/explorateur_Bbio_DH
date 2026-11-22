@@ -23,7 +23,7 @@
 from dataclasses import fields
 
 from interface.briques.graphiques import nombre
-from interface.saisie import FACADES, point_cardinal
+from interface.saisie import FACADES, PAROIS_ADIABATIQUES, libelle_orientation
 
 # ============================================================
 # RÉGLAGES
@@ -61,6 +61,7 @@ LIBELLES = {
     "u_toiture": ("U de la toiture", "W/m².K", 2),
     "u_plancher": ("U du plancher bas", "W/m².K", 2),
     "plancher_sur_sol": ("Plancher bas sur le sol", "", None),
+    "parois_adiabatiques": ("Parois adiabatiques", "", None),
     "teinte": ("Teinte des parois", "", None),
     "psi_planchers": ("Ponts thermiques des planchers", "W/m.K", 2),
     "inertie": ("Inertie", "", None),
@@ -86,6 +87,7 @@ INDICATEURS = (("Bbio", "bbio", "bbio", "points", 1),
                ("Heures d'inconfort", "dh", "nb_h_inconfort", "h", 0),
                ("Température la plus haute", "dh", "theta_op_max", "°C", 1))
 NOMS_FACADES = {cle: libelle.lower() for cle, libelle, _, _ in FACADES}
+NOMS_PAROIS = {cle: libelle.lower() for cle, libelle in PAROIS_ADIABATIQUES.items()}
 
 
 # ============================================================
@@ -95,9 +97,11 @@ def _ecrire(champ, valeur):
     """Valeur d'un champ de Boite, écrite pour être lue (unité, virgule décimale, oui / non)."""
     _, unite, decimales = LIBELLES[champ]
     if champ == "orientation_deg":
-        return point_cardinal(valeur)
+        return libelle_orientation(valeur)
     if champ == "facades_debord":
         return ", ".join(NOMS_FACADES[cle] for cle in valeur) or "aucune"
+    if champ == "parois_adiabatiques":
+        return ", ".join(NOMS_PAROIS[cle] for cle in valeur) or "aucune"
     if isinstance(valeur, bool):
         return "oui" if valeur else "non"
     if decimales is None:

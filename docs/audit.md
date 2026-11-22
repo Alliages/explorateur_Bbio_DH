@@ -578,9 +578,10 @@ Lecture :
 58. **Température de la veille** (éq. 175) : maximum de la température opérative de fin d'heure sur le jour légal
     précédent ; nulle le premier jour, comme le prévoit la fiche.
 59. **Ouverture des baies la nuit.** La fiche 5.13 ne décrit le réglage par les occupants qu'en journée (hlég de
-    7 h à 23 h) ; la nuit, l'outil garde le ratio du soir. Hors occupation il est nul (éq. 245).
+    7 h à 23 h) ; la nuit, l'outil garde le ratio du soir. Hors occupation il est nul (éq. 245). *Depuis la 0.9.15,
+    seulement avec la règle du texte* (`OUVERTURE_COMME_LE_MOTEUR = False`) ; voir l'hypothèse 100.
 60. **Écart de confort adaptatif** de l'éq. 242 : seuil d'inconfort chaud de la fiche 4.5 (catégorie 1) moins la
-    consigne de refroidissement de confort.
+    consigne de refroidissement de confort. *Depuis la 0.9.15, seulement avec la règle du texte* (hypothèse 100).
 61. **Protection et ouverture** (éq. 248) : la surface ouvrable d'une baie est réduite de sa part protégée,
     Aouvmax × (1 − Rprot) ; le texte ne définit pas cette surface.
 62. **Vent** : vitesse du fichier météo, sans la correction « Vvent_c » des fiches 5.9 et 5.13 (revue en 0.8.14 :
@@ -1504,3 +1505,141 @@ protection) : la fermeture de nuit coupait l'aération par les baies plus que le
   pas (6,3 → 6,7). Même cause probable que le point 2.
 - Les cas du guide sont décrits sommairement (« conformes RT 2012 », sans géométrie) : ces écarts sont des signaux,
   pas des mesures. Ils ne sont pas testés.
+
+## Diagnostic du 20/11/2026 (après la 0.9.13) : ouverture des baies et protections face au moteur
+
+Sans modification du code. Sorties horaires du moteur COMETH 2025.E1 (Paris, Sète, Nice A ; deux groupes chacun ;
+Th-B et Th-D), colonnes par baie `O_Rouv`, `O_Rouv_corrige`, `O_Rprot1_b`, `O_Part_PM1_100_Pourcent`. Scripts
+d'essai hors dépôt ; l'essai de règle a substitué les fonctions en mémoire, rien n'a été écrit dans `_resultats/`.
+
+### 1. Protections et passage d'air : l'outil est conforme au moteur
+
+- Fermeture des protections : à Paris (Th-D), 0,537 et 0,528 dans l'outil, 0,538 et 0,531 dans le moteur (moyennes
+  annuelles des baies). Sète et Nice A : écarts de 2 à 36 %, déjà connus (stores vénitiens lus sans protection,
+  seuils de la gestion automatique).
+- Passage d'air (fiche 5.12, éq. 239) : le moteur écrit `O_Rouv_corrige` = MIN(1 ; Rouv / f), avec
+  f = Rprot × τ + 1 − Rprot. Exemple, Typo_PM 1 (τ = 0,10) : rapport 4,57 à Rprot 0,87, 1,70 à 0,458, 1,23 à
+  0,208, retrouvés exactement. La surface ouverte vaut donc MIN(Rouv ; f) × Aouvmax, ce que fait l'outil
+  (`aouv = MIN(aouv_max_pm ; rouv × aouv_max)`).
+- Conséquence pour le guide Actibaie (0.9.13, « non reproduits 1 à 3 ») : les écarts ne viennent pas de l'écriture
+  de l'éq. 239. Deux limites de la comparaison au guide, notées après coup : ses écarts « entre Typo_PM » comparent
+  des produits différents (volet roulant opaque contre persienne ou store non opaques, dont le Sw protégé est plus
+  élevé), pas la seule perméabilité ; et le guide (v8, mars 2024) a pu être calculé avec un moteur qui suivait le
+  texte en Th-B (pas d'ouverture hors période de froid, éq. 244 ; voir hypothèse 91), ce qui rendrait le Bbio
+  insensible à Typo_PM. À confirmer ; l'écart « effet des volets − 13 % au lieu d'environ − 50 % » reste ouvert.
+
+### 2. Règle d'ouverture des baies : le moteur ne suit pas le texte
+
+Rejeu de la règle de l'outil (texte de la fiche 5.13) avec les températures du moteur lui-même : identique au
+moteur 72 à 84 % des heures seulement. Aux heures où le moteur ajuste une baie (BR1, Th-D), la règle se déduit
+exactement :
+
+| Élément | Texte (p. 262, éq. 242-243) = outil | Moteur (déduit, 100 % des ajustements) |
+|---|---|---|
+| θouv2 hors chauffage | θiifr + Δθconf_adapt − 1 | θiifr − 1 = 25 °C (sans Δθconf_adapt, aussi en Th-D) |
+| θouv1 | θouv2 − 2 | **θouv2 − 1** (rampe d'ouverture de 1 °C : 24 → 25 °C) |
+| θfer1, θfer2 | θouv2 − 2, θouv2 − 3 | identiques (23 et 22 °C) |
+| Heures de réglage | journée seulement (7 h < hlég < 23 h) ; la nuit, position du soir (hypothèse 59) | **toutes les heures d'occupation**, nuit comprise |
+| Température lue | θop(h−1) | θop(h−1) (hypothèse 97 confirmée) |
+
+Rejeu sur toutes les baies ouvrables (Cpr de chaque baie retrouvé : BR1, ou BR2/3 à Nice A, groupe 1) :
+
+| Heures identiques au moteur | Th-D | Th-B |
+|---|---|---|
+| Règle du texte (outil) | 72 à 84 % | 79 à 83 % |
+| Sans Δθconf_adapt seulement | 78 à 82 % | 79 à 83 % |
+| θouv1 = θouv2 − 1 seulement | 75 à 88 % | 91 à 95 % |
+| Réglage de nuit seulement | 74 à 84 % | 82 à 87 % |
+| **Les trois ensemble** | **92 à 99,7 %** (somme 0,93 à 0,99) | **96,5 à 99,9 %** (somme 0,92 à 1,00) |
+
+Le texte réserve d'ailleurs l'absence de Δθconf_adapt à la gestion automatique (p. 264) ; le moteur l'applique
+aussi à la gestion manuelle.
+
+### 3. Effet de la règle du moteur dans l'outil (essai en mémoire)
+
+| Grandeur (écart outil / moteur) | Règle du texte | Règle du moteur |
+|---|---|---|
+| Ouverture des baies, Th-B | + 5 à + 10 % | − 4 à + 3 % |
+| Ouverture des baies, Th-D | − 16 à − 32 % | − 4 à − 16 % |
+| θop moyenne, Th-B | − 0,5 à − 1,6 % | − 0,6 à + 0,2 % |
+| Froid, Th-B | − 2 à − 34 % (Paris 2 : − 33 %) | − 1 à − 34 % (Paris 2 : − 9 % ; Sète 2 inchangé, − 34 %) |
+| Chauffage | inchangé (− 6 à + 48 %) | inchangé |
+| DH | − 37 à + 30 % | − 39 à + 27 % (variation ≤ 3 points) |
+| Boîte, H3 (DH sans → avec volets motorisés) | 1 572 → 1 395 | 1 601 → 1 390 |
+
+- **L'ouverture des baies n'explique pas l'écart du DH.** Il reste à Sète (− 33 à − 39 %) et à Nice A (+ 15 à
+  + 27 %) ; à Paris il était déjà à ± 6 %. Le θop de Th-D reste 0,3 à 0,6 °C sous celui du moteur, ce qui explique
+  le reste de l'écart d'ouverture en Th-D (le rejeu avec les températures du moteur est exact). Pistes déjà
+  inscrites : brasseurs de Sète en gestion par thermostat, ventilation du calcul Th-D (hypothèse 75), Φsh.
+- La règle du moteur améliore le Th-B (ouverture, θop, froid de Paris 2) sans rien dégrader de mesuré.
+
+### Décision (20/11/2026)
+
+Suivre le moteur, comme pour l'hypothèse 91 : correction 0.9.15, ci-dessous.
+
+## 0.9.15 — ouverture des baies comme le moteur réglementaire
+
+Réglage `OUVERTURE_COMME_LE_MOTEUR = True` dans `moteur/ouvertures.py` (False : texte de la fiche 5.13) ; clé
+`ouv_moteur_ecart_ouv1` (1 °C) dans `donnees/hypotheses.csv`.
+
+### Hypothèse
+
+100. **Profil d'ouverture des baies en gestion manuelle : celui du moteur, pas celui du texte** (fiche 5.13,
+     éq. 242-243, figure 62 ; constaté sur COMETH 2025.E1, diagnostic ci-dessus). θouv2 = consigne de
+     refroidissement de confort ± 1 °C, sans Δθconf_adapt (en Th-D aussi) ; θouv1 = θouv2 − 1 °C (texte : 2 °C) ;
+     θfer1 et θfer2 comme le texte ; réglage à toutes les heures d'occupation, nuit comprise (texte : 7 h < hlég <
+     23 h, d'où l'hypothèse 59). Le reste ne change pas : θop(h−1), remise à zéro hors occupation en Th-B
+     (éq. 245), position gardée hors occupation en Th-D, Mod_ext, Cpr. Remplace les hypothèses 59 et 60, gardées
+     pour la règle du texte.
+
+### Résultats
+
+Face au moteur, heure par heure (`python -m outils.comparer_horaires tous`, identique à l'essai du diagnostic) :
+
+| Écart outil / moteur | 0.9.13 | 0.9.15 |
+|---|---|---|
+| Ouverture des baies, Th-B | + 5 à + 10 % | − 4 à + 3 % |
+| Ouverture des baies, Th-D | − 16 à − 32 % | − 4 à − 16 % |
+| θop moyenne, Th-B | − 0,5 à − 1,6 % | − 0,6 à + 0,2 % |
+| Froid, Th-B | − 2 à − 34 % | − 1 à − 34 % (Paris 2 : − 33 → − 9 %) |
+| Chauffage | − 6 à + 48 % | inchangé |
+| DH | − 37 à + 30 % | − 39 à + 27 % |
+
+Validation (`python -m outils.valider --dh`, 16 études, 46 groupes ; table `_resultats/validation_0.9.15.csv`,
+référence `_resultats/mesures_0.9.11/final/validation.csv`, inchangée en 0.9.13) :
+
+| | 0.9.11 / 0.9.13 | 0.9.15 |
+|---|---|---|
+| Groupes dans ± 10 % (Bbio) | 29 | 30 (strasbourg_varianteNice, Sud : − 11,3 → − 0,2 %) |
+| Écart du Bbio, médiane | − 1,5 % | 0,0 % |
+| Froid, outil / étude (médiane) | 0,78 | 0,94 (H1a 0,71 → 0,95 ; H1b 0,18 → 0,88 ; H3 0,90 → 0,97) |
+| DH dans ± 10 % | 17 sur 37 | 21 sur 37 |
+| Écart du DH, médiane des valeurs absolues | 11,1 % | 8,0 % |
+| DH de H2a, médiane | − 29 % | − 35 % (DH faibles, 33 à 308 °C.h) |
+
+- Par groupe, le Bbio bouge de − 0,3 à + 11 points (médiane + 1) : le froid remonte vers celui des études. Les plus
+  fortes hausses touchent des groupes déjà hors de la cible (Vélizy, dont le froid de l'étude est nul).
+- Bâtiments de départ (DH, °C.h ; Bbio à ± 0,1 point) : logement de 70 m² 559 / 728 / 883 → 544 / 732 / 884,
+  immeuble 454 / 601 / 744 → 448 / 599 / 748 (performant / moyen / faible).
+- Reste ouvert : DH de Sète (− 33 à − 39 %) et de Nice A (+ 15 à + 27 %), θop de Th-D 0,3 à 0,6 °C sous le moteur
+  (bilan du calcul Th-D, voir `ROADMAP.md`).
+
+## 0.9.16 — parois adiabatiques et soleil du dessin
+
+### Hypothèse
+
+101. **Paroi adiabatique de la boîte = paroi absente du groupe** (`interface/saisie.construire_projet`, champ
+     `parois_adiabatiques`). Une façade, la toiture ou le plancher bas sur un local chauffé (logement voisin,
+     mitoyenneté) n'échange ni chaleur, ni air, ni rayonnement : la paroi n'est pas créée (même effet qu'une paroi
+     à U = 0, hypothèse 90, mais sa surface sort aussi de la perméabilité à l'air, `infiltrations.
+     surfaces_permeables`, comme une paroi entre locaux chauffés). Une façade adiabatique n'a pas de baie (la part
+     vitrée saisie est gardée, sans effet) et sa longueur sort des rives de planchers ; une toiture ou un plancher
+     bas adiabatique garde sa rive (la dalle reste liée aux façades, comme un plancher intermédiaire). L'inertie
+     ne change pas : elle vient de la classe saisie, pas des parois. Limites : pas de coefficient b (local non
+     chauffé), pas d'échange avec un voisin plus chaud ou plus froid.
+
+### Dessin (sans effet sur le calcul)
+
+Soleil du 21 juin à 46,5° N et 2,5° E, déclinaison 23,44°, équation du temps − 1,7 min : 16 h légale = 14 h 08
+solaire, soleil à 55,5° de hauteur et à 59° à l'ouest du sud (convention du moteur). Les mêmes
+constantes sont en tête de `interface/axonometrie.py` (réglages du dessin, pas des hypothèses du moteur).

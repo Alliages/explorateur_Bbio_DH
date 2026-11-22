@@ -158,15 +158,31 @@ if page == PAGE_ACCUEIL:                                    # l'accueil ne lance
     accueil.afficher(lambda: st.session_state.update(page=PAGE_EXPLORER))
     st.stop()
 
-colonne_dessin, colonne_chiffres = st.columns([3, 2], gap="large")
-with colonne_dessin:
+@st.fragment
+def _dessin(boite):
+    """Axonométrie, avec le choix de la vue au-dessus et l'heure du soleil au-dessous. Fragment : changer de vue
+    ou d'heure ne redessine que lui, sans repasser par le calcul ni par les graphiques."""
     vue = st.segmented_control("Vue depuis le", list(axonometrie.VUES), default="sud-ouest", required=True,
                                key="vue")
-    st.image(axonometrie.dessiner(boite, axonometrie.VUES[vue]), width="stretch",
-             alt=f"Axonométrie de la boîte, façade principale au {point_cardinal(boite.orientation_deg)}")
-    st.caption("Dessin à l'échelle : les baies ont la surface saisie. En prune, la protection mobile ; "
-               "en pointillé au bord du sol, la course du soleil le 21 juin, du lever au nord-est au coucher au "
-               "nord-ouest, et le soleil de 16 h.")
+    dessin = st.container()                                 # le dessin au-dessus du curseur qui le règle
+    heure = st.select_slider("Heure du soleil, le 21 juin (heure légale)", options=axonometrie.HEURES_SOLEIL,
+                             value=int(axonometrie.SOLEIL_HEURE), key="heure_soleil",
+                             format_func=lambda h: f"{h} h", help=aide("heure_soleil"))
+    dessin.image(axonometrie.dessiner(boite, axonometrie.VUES[vue], heure), width="stretch",
+                 alt=f"Axonométrie de la boîte, façade principale au {point_cardinal(boite.orientation_deg)}, "
+                     f"soleil du 21 juin à {heure} h")
+    plancher = " Le plancher bas, adiabatique, n'est pas visible." if "plancher_bas" in boite.parois_adiabatiques \
+        else ""
+    st.caption("Dessin à l'échelle : les baies ont la surface saisie. En prune, la protection mobile ; en gris, "
+               "les parois adiabatiques. En pointillé, la course du soleil le 21 juin, du lever au nord-est au "
+               "coucher au nord-ouest (un point toutes les deux heures), dans le ciel et portée au bord du sol ; "
+               "le soleil de l'heure choisie est à sa hauteur, avec l'ombre de la boîte et ses façades à "
+               "l'ombre, plus sombres." + plancher)
+
+
+colonne_dessin, colonne_chiffres = st.columns([3, 2], gap="large")
+with colonne_dessin:
+    _dessin(boite)
 
 with colonne_chiffres:
     st.subheader("Chiffres clés")

@@ -203,6 +203,7 @@ ouv_thb_marge_consigne;1;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation nature
 ouv_decalage_hors_chauffage;-1;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), éq. 242;θouv2 = consigne de confort + écart de confort adaptatif − 1 °C, hors saison de chauffage
 ouv_decalage_chauffage;1;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), éq. 243;θouv2 = consigne de confort + écart de confort adaptatif + 1 °C, en saison de chauffage
 ouv_ecart_ouv1;2;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), éq. 242-243;θouv1 = θouv2 − 2 °C
+ouv_moteur_ecart_ouv1;1;°C;HYPOTHÈSE DE L'OUTIL (hypothèse 100 de docs/audit.md) : constaté sur le moteur COMETH 2025.E1, sorties horaires de Paris, Sète et Nice A (le texte, éq. 242-243, donne 2 °C);θouv1 = θouv2 − 1 °C, règle du moteur réglementaire (OUVERTURE_COMME_LE_MOTEUR)
 ouv_ecart_fer1;2;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), éq. 242-243;θfer1 = θouv2 − 2 °C
 ouv_ecart_fer2;3;°C;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), éq. 242-243;θfer2 = θouv2 − 3 °C
 ouv_heure_debut_journee;7;h;Annexe III, fiche 5.13 (C_BAT_Surventilation naturelle par ouverture des baies), § 5.13.3.1.1 : journée si hlég > 7 h et hlég < 23 h;Début de la journée où les occupants règlent l'ouverture

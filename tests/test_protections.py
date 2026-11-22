@@ -173,7 +173,14 @@ def test_moderation_par_la_temperature_exterieure():
     assert moderation_exterieure(22.0, 20.0, 26.0) == 1.0 and moderation_exterieure(24.0, 20.0, 26.0) == 0.0
 
 
-def test_hysteresis_d_ouverture():
+def test_hysteresis_d_ouverture(monkeypatch):
+    # Règle du moteur réglementaire (hypothèse 100) : θouv1 = θouv2 − 1 °C, sans Δθconf_adapt
+    assert seuils_ouverture(ETE, 26.0, 0.0) == (24.0, 25.0, 23.0, 22.0)
+    assert seuils_ouverture(ETE, 26.0, 1.5) == (24.0, 25.0, 23.0, 22.0)
+    assert seuils_ouverture(HIVER, 26.0, 1.5)[1] == 27.0
+    assert ratio_selon_temperature(0.0, 24.5, seuils_ouverture(ETE, 26.0, 0.0)) == pytest.approx(0.5)
+    # Règle du texte (éq. 242-243)
+    monkeypatch.setattr(ouvertures, "OUVERTURE_COMME_LE_MOTEUR", False)
     assert seuils_ouverture(ETE, 26.0, 0.0) == (23.0, 25.0, 23.0, 22.0)
     assert seuils_ouverture(HIVER, 26.0, 1.5)[1] == 28.5
     seuils = seuils_ouverture(ETE, 26.0, 0.0)
@@ -211,7 +218,7 @@ def test_debit_par_les_baies_ouvertes():
     assert debit_surventilation(np.zeros(2), sud_nord, facade, True, 1.5, 5.0, 20.0, 24.0) == 0.0
 
 
-def test_ouverture_d_une_heure(meteo):
+def test_ouverture_d_une_heure(meteo, monkeypatch):
     g = groupe([baie(ouvrable=True, ratio_ouverture_max=0.5), baie("Nord", 180, ouvrable=True,
                                                                    ratio_ouverture_max=0.5)])
     o = OuverturesGroupe(g, meteo)
@@ -231,8 +238,13 @@ def test_ouverture_d_une_heure(meteo):
     assert o.pas(h, ETE, True, True, 12, rprot=np.array([0.8, 0.8]), **arguments)["aouv_m2"] == pytest.approx(4.0)
     # Rouv brut de l'éq. 240 (O_Rouv du moteur) : 0,7 sur chaque baie, quelles que soient les protections
     assert o.pas(h, ETE, True, True, 12, rprot=np.array([0.8, 0.8]), **arguments)["rouv_brut_moyen"]         == pytest.approx(0.7)
-    # La nuit, la position du soir est gardée ; l'extérieur trop chaud (25,5 °C) fait tout refermer
+    # La nuit, comme le moteur réglementaire : les occupants referment si la pièce s'est rafraîchie (22 °C)
+    assert o.pas(h, ETE, True, True, 2, **dict(arguments, theta_op_prec=22.0))["aouv_m2"] == 0.0
+    # Règle du texte : la nuit, la position du soir est gardée
+    monkeypatch.setattr(ouvertures, "OUVERTURE_COMME_LE_MOTEUR", False)
+    o.pas(h, ETE, True, True, 12, **arguments)
     assert o.pas(h, ETE, True, True, 2, **dict(arguments, theta_op_prec=22.0))["aouv_m2"] == pytest.approx(14.0)
+    # L'extérieur trop chaud (25,5 °C) fait tout refermer
     o.te[h] = 25.5
     assert o.pas(h, ETE, True, True, 12, **arguments)["debit_m3h"] == 0.0
 

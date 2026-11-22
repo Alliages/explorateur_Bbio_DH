@@ -30,6 +30,22 @@ r"""
               entre θouv1 et θouv2, on referme entre θfer1 et
               θfer2, plus bas.
 
+    !! Ce profil suit le MOTEUR réglementaire, PAS le texte
+    !! (0.9.15, hypothèse 100, constaté sur Paris, Sète et Nice A,
+    !! 92 à 99,9 % des heures identiques), hors saison de chauffage :
+    !!
+    !!   consigne de 26 °C, Rouv_op en fonction de θop(h−1) :
+    !!     en montant  0 jusqu'à 24 °C (θouv1), 1 à 25 °C (θouv2) ;
+    !!     en descendant  1 jusqu'à 23 °C (θfer1), 0 à 22 °C (θfer2) ;
+    !!     entre les deux, la baie garde sa position.
+    !!
+    !!   texte : θouv2 = consigne + Δθconf_adapt − 1, θouv1 = θouv2
+    !!           − 2, réglage de jour (7 h < hlég < 23 h) seulement ;
+    !!   moteur : θouv2 = consigne − 1 (sans Δθconf_adapt, Th-D
+    !!           compris), θouv1 = θouv2 − 1, réglage à toute heure
+    !!           d'occupation, nuit comprise.
+    !! Réglage OUVERTURE_COMME_LE_MOTEUR ci-dessous (False : texte).
+
     En mode Th-B (§ 5.13.3.1.2), les baies ne s'ouvrent qu'en
     occupation (éq. 245). En période de refroidissement, jamais
     quand l'air extérieur approche la consigne de refroidissement
@@ -67,9 +83,9 @@ r"""
     ajourée) ; puis Aouv = MIN(Aouvmax_ac_PM ; Rouv × Aouvmax)
     (éq. 248-249).
 
- Hypothèses de l'outil (docs/audit.md, 0.8.12) : la nuit, les
- occupants laissent les baies dans la position du soir ;
- gestion automatique de l'ouverture non traitée.
+ Hypothèses de l'outil (docs/audit.md) : gestion automatique de
+ l'ouverture non traitée (0.8.12) ; position du soir gardée la
+ nuit (hypothèse 59) seulement avec la règle du texte.
  Lectures du texte (docs/audit.md, 0.9.11) : l'hystérésis lit
  θop(h−1), comme la figure 62 (la nomenclature, tableau 41,
  cite θop,fin(h−2)) ; une baie est en façade si β ≥ 60°, comme
@@ -89,6 +105,11 @@ SECTEURS = 4                    # quatre orientations globales, pour deux roses 
 # de la gestion manuelle ; False = comme le texte de l'annexe (éq. 244), aucune ouverture. Voir l'en-tête du module
 # et docs/audit.md (0.9.9, hypothèse 91).
 OUVERTURE_TH_B_COMME_LE_MOTEUR = True
+# Profil à hystérésis de la gestion manuelle (figure 62), Th-B et Th-D : True = comme le moteur réglementaire
+# (COMETH 2025.E1) : θouv2 sans Δθconf_adapt, θouv1 = θouv2 − 1 °C, réglage à toutes les heures d'occupation, nuit
+# comprise ; False = comme le texte (éq. 242-243, réglage de jour seulement, position du soir gardée la nuit). Voir
+# l'en-tête du module et docs/audit.md (0.9.15, hypothèse 100).
+OUVERTURE_COMME_LE_MOTEUR = True
 
 
 # ============================================================
@@ -113,10 +134,19 @@ def moderation_exterieure(te, theta_op_prec, consigne_fr=None):
 
 
 def seuils_ouverture(saison, consigne_fr_confort, ecart_confort_adaptatif):
-    """(θouv1, θouv2, θfer1, θfer2) du profil à hystérésis (éq. 242-243)."""
+    """(θouv1, θouv2, θfer1, θfer2) du profil à hystérésis (éq. 242-243).
+
+    Règle du moteur réglementaire (OUVERTURE_COMME_LE_MOTEUR, hypothèse 100) : Δθconf_adapt ignoré et θouv1 à 1 °C
+    sous θouv2 ; θfer1 et θfer2 comme le texte. Règle du texte : θouv2 = consigne + Δθconf_adapt ± 1, θouv1 à 2 °C.
+    """
     decalage = hyp("ouv_decalage_chauffage") if saison == SAISON_CHAUFFAGE else hyp("ouv_decalage_hors_chauffage")
-    ouv2 = consigne_fr_confort + ecart_confort_adaptatif + decalage
-    return ouv2 - hyp("ouv_ecart_ouv1"), ouv2, ouv2 - hyp("ouv_ecart_fer1"), ouv2 - hyp("ouv_ecart_fer2")
+    if OUVERTURE_COMME_LE_MOTEUR:
+        ouv2 = consigne_fr_confort + decalage
+        ouv1 = ouv2 - hyp("ouv_moteur_ecart_ouv1")
+    else:
+        ouv2 = consigne_fr_confort + ecart_confort_adaptatif + decalage
+        ouv1 = ouv2 - hyp("ouv_ecart_ouv1")
+    return ouv1, ouv2, ouv2 - hyp("ouv_ecart_fer1"), ouv2 - hyp("ouv_ecart_fer2")
 
 
 def ratio_selon_temperature(ratio_prec, theta_op_prec, seuils):
@@ -230,12 +260,13 @@ class OuverturesGroupe:
         de la surface ouvrable) et rouv_brut_moyen (Rouv de l'éq. 240, moyenne simple de toutes les baies).
         """
         te = self.te[h]
-        # Rouv_op : le jour et en occupation, hystérésis ; la nuit, position du soir conservée. Hors occupation, il
-        # est remis à zéro en Th-B (éq. 245) ; en Th-D il garde sa valeur, mais les baies sont fermées (éq. 240)
+        # Rouv_op : en occupation, hystérésis, à toute heure comme le moteur réglementaire, ou de jour seulement
+        # (texte), la position du soir étant alors gardée la nuit. Hors occupation, il est remis à zéro en Th-B
+        # (éq. 245) ; en Th-D il garde sa valeur, mais les baies sont fermées (éq. 240)
         if not occupe:
             if th_b:
                 self.ratio_temperature = 0.0
-        elif hyp("ouv_heure_debut_journee") < hleg < hyp("ouv_heure_fin_journee"):
+        elif OUVERTURE_COMME_LE_MOTEUR or hyp("ouv_heure_debut_journee") < hleg < hyp("ouv_heure_fin_journee"):
             seuils = seuils_ouverture(saison, consigne_fr_confort, ecart_confort_adaptatif)
             self.ratio_temperature = ratio_selon_temperature(self.ratio_temperature, theta_op_prec, seuils)
         # Mod_ext : en Th-B et en période de refroidissement, plafonné à la consigne − 1 °C (§ 5.13.3.1.2). En Th-B

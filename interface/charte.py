@@ -9,7 +9,10 @@
  Un rôle par couleur, le même partout (schéma, graphiques) :
    chauffage   prune         froid      bleu ciel
    éclairage   jaune         inconfort  orange
-   limite      noir          extérieur  gris
+   limite      noir
+ Températures (0.9.16) : extérieur noir, seuil de confort orange
+ (comme les degrés-heures qu'il fait compter), intérieur jaune.
+ Dessin : paroi adiabatique en gris.
 ============================================================
 """
 
@@ -27,6 +30,7 @@ BLEU_NUIT = "#283246"       # Deep Space Blue
 FOND_SCHEMA = "#FFF6E3"     # jaune très pâle : fond de l'axonométrie
 GRIS = "#8A8F99"            # grandeurs extérieures, repères secondaires
 SOL = "#EFE3C8"             # disque du sol, sous la boîte
+GRIS_ADIABATIQUE = "#C4C6CC"    # paroi adiabatique (sur un local chauffé) dans le dessin
 
 # ============================================================
 # RÔLES
@@ -36,7 +40,8 @@ COULEUR_FROID = BLEU_CIEL
 COULEUR_ECLAIRAGE = JAUNE
 COULEUR_INCONFORT = ORANGE
 COULEUR_LIMITE = NOIR
-COULEUR_EXTERIEUR = GRIS
-COULEUR_INTERIEUR = BLEU_NUIT
+COULEUR_EXTERIEUR = NOIR
+COULEUR_INTERIEUR = JAUNE
+COULEUR_SEUIL = ORANGE
 COULEUR_PROTECTION = PRUNE
 COULEUR_OUVERTURE = BLEU_CIEL

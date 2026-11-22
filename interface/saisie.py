@@ -53,6 +53,12 @@ FACADES = (("principale", "Façade principale", 0.0, "longueur"),
            ("pignon_a", "Pignon A", 90.0, "profondeur"),
            ("arriere", "Façade arrière", 180.0, "longueur"),
            ("pignon_b", "Pignon B", -90.0, "profondeur"))
+# Parois que l'on peut rendre adiabatiques (sur un local chauffé : mitoyenneté, logement voisin), dans l'ordre de la
+# saisie : les quatre façades, puis la toiture et le plancher bas (clé → libellé)
+PAROIS_ADIABATIQUES = {**{cle: libelle for cle, libelle, _, _ in FACADES}, "toiture": "Toiture",
+                       "plancher_bas": "Plancher bas"}
+# Orientation saisie en azimut géographique (0 = nord, 90 = est, 180 = sud, 270 = ouest), par pas de :
+PAS_ORIENTATION_DEG = 10
 # Points cardinaux : (azimut du moteur, nom) — 0 = sud, 90 = ouest, ± 180 = nord, − 90 = est
 POINTS_CARDINAUX = ((0, "sud"), (45, "sud-ouest"), (90, "ouest"), (135, "nord-ouest"), (180, "nord"),
                     (-135, "nord-est"), (-90, "est"), (-45, "sud-est"))
@@ -136,6 +142,7 @@ class Boite:
     u_toiture: float = 0.15
     u_plancher: float = 0.25
     plancher_sur_sol: bool = True           # sinon : plancher sur l'extérieur
+    parois_adiabatiques: tuple = ()         # parois sur un local chauffé, sans échange (clés de PAROIS_ADIABATIQUES)
     teinte: str = "moyenne"                 # absorption solaire des murs et de la toiture
     psi_planchers: float = 0.3              # W/m.K : liaison de chaque plancher avec la façade
     inertie: str = "moyenne"                # classe d'inertie quotidienne
@@ -172,14 +179,16 @@ class Boite:
 
     def facades(self):
         """Les quatre façades : cle, libelle, orientation_deg, largeur_m, recul_m (distance au centre de la
-        boîte), surface_m2, part_vitree, surface de baies et surface de mur (m²)."""
+        boîte), surface_m2, part_vitree, surface de baies et surface de mur (m²), adiabatique (vrai si la façade
+        donne sur un local chauffé : elle n'a alors aucune baie, quelle que soit la part vitrée saisie)."""
         liste = []
         for cle, libelle, ecart, dimension in FACADES:
             largeur, autre = (self.longueur_m, self.profondeur_m) if dimension == "longueur" \
                 else (self.profondeur_m, self.longueur_m)
             surface = largeur * self.hauteur_m
-            part = getattr(self, f"part_vitree_{cle}")
-            liste.append({"cle": cle, "libelle": libelle,
+            adiabatique = cle in self.parois_adiabatiques
+            part = 0.0 if adiabatique else getattr(self, f"part_vitree_{cle}")
+            liste.append({"cle": cle, "libelle": libelle, "adiabatique": adiabatique,
                           "orientation_deg": ramener_azimut(self.orientation_deg + ecart),
                           "largeur_m": largeur, "recul_m": autre / 2.0, "surface_m2": surface, "part_vitree": part,
                           "baies_m2": surface * part, "mur_m2": surface * (1.0 - part)})
@@ -383,6 +392,23 @@ def point_cardinal(orientation_deg):
     return min(POINTS_CARDINAUX, key=ecart)[1]
 
 
+# Deux conventions d'orientation : le moteur compte depuis le sud vers l'ouest (0 = sud, 90 = ouest, − 90 = est) ;
+# la saisie montre l'azimut géographique, compté depuis le nord vers l'est (0 = nord, 90 = est, 180 = sud).
+def azimut_geographique(orientation_deg):
+    """Azimut géographique (0 à 360°, 0 = nord, 90 = est) d'une orientation du moteur."""
+    return (orientation_deg + 180.0) % 360.0
+
+
+def orientation_moteur(azimut_geo_deg):
+    """Orientation du moteur (− 180 à 180°, 0 = sud, 90 = ouest) d'un azimut géographique."""
+    return ramener_azimut(azimut_geo_deg - 180.0)
+
+
+def libelle_orientation(orientation_deg):
+    """Orientation du moteur écrite pour être lue : azimut géographique et point cardinal, « 190° · sud »."""
+    return f"{azimut_geographique(orientation_deg):.0f}° · {point_cardinal(orientation_deg)}"
+
+
 # ============================================================
 # DE LA BOÎTE AU PROJET
 # ============================================================
@@ -417,12 +443,20 @@ def construire_projet(boite):
     inconnues = set(boite.facades_debord) - {cle for cle, *_ in FACADES}
     if inconnues:
         raise ValueError(f"Façades inconnues pour les balcons : {', '.join(sorted(inconnues))}")
+    inconnues = set(boite.parois_adiabatiques) - set(PAROIS_ADIABATIQUES)
+    if inconnues:
+        raise ValueError(f"Parois adiabatiques inconnues : {', '.join(sorted(inconnues))} "
+                         f"(au choix : {', '.join(PAROIS_ADIABATIQUES)})")
     alpha = hyp(TEINTES[boite.teinte])
     avec_protection = boite.protection != SANS_PROTECTION
 
     # --- Façades : un mur et, si elle est vitrée, une baie par façade ---
+    # Une paroi adiabatique (sur un local chauffé) n'entre pas dans le groupe : ni échange de chaleur, ni soleil, ni
+    # perméabilité à l'air ; l'inertie, donnée par sa classe, ne change pas (hypothèse 101 de docs/audit.md)
     parois, baies = [], []
     for facade in boite.facades():
+        if facade["adiabatique"]:
+            continue
         nom = f"{facade['libelle']} ({point_cardinal(facade['orientation_deg'])})"
         parois.append(Paroi(f"Mur — {nom}", "mur", facade["mur_m2"], u=boite.u_mur,
                             orientation_deg=facade["orientation_deg"], alpha=alpha))
@@ -444,13 +478,18 @@ def construire_projet(boite):
                               ouvrable=boite.ouvrable,
                               ratio_ouverture_max=boite.ratio_ouverture_max if boite.ouvrable else None))
     # --- Toiture et plancher bas : l'emprise de la boîte ---
-    parois.append(Paroi("Toiture", "toiture", boite.emprise_m2, u=boite.u_toiture, alpha=alpha))
-    parois.append(Paroi("Plancher bas", "plancher_bas", boite.emprise_m2, u=boite.u_plancher,
-                        contact="sol" if boite.plancher_sur_sol else "exterieur"))
-    # --- Ponts thermiques : la rive de chaque plancher (bas, intermédiaires et toiture) sur tout le périmètre ---
+    if "toiture" not in boite.parois_adiabatiques:
+        parois.append(Paroi("Toiture", "toiture", boite.emprise_m2, u=boite.u_toiture, alpha=alpha))
+    if "plancher_bas" not in boite.parois_adiabatiques:
+        parois.append(Paroi("Plancher bas", "plancher_bas", boite.emprise_m2, u=boite.u_plancher,
+                            contact="sol" if boite.plancher_sur_sol else "exterieur"))
+    # --- Ponts thermiques : la rive de chaque plancher (bas, intermédiaires et toiture) le long des façades sur
+    # l'extérieur. Une toiture ou un plancher bas adiabatique garde sa rive : la dalle reste liée à la façade,
+    # comme un plancher intermédiaire ---
     ponts = []
-    if boite.psi_planchers > 0:
-        ponts.append(PontThermique("Rives des planchers", boite.perimetre_m * (boite.nb_niveaux + 1),
+    perimetre_exterieur = sum(f["largeur_m"] for f in boite.facades() if not f["adiabatique"])
+    if boite.psi_planchers > 0 and perimetre_exterieur > 0:
+        ponts.append(PontThermique("Rives des planchers", perimetre_exterieur * (boite.nb_niveaux + 1),
                                    boite.psi_planchers))
     # --- Brasseurs d'air : un seul type, la surface desservie plafonnée comme dans la fiche 8.32 ---
     brasseurs = []

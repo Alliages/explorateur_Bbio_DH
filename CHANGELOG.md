@@ -3,6 +3,93 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.16 — évolution (20/11/2026), soleil, orientation, parois adiabatiques, zoom
+
+- **Dessin** (`interface/axonometrie.py`) :
+  - course du soleil le 21 juin dessinée dans le ciel (un point toutes les deux heures légales), en plus de sa
+    trace au bord du sol ;
+  - soleil de 16 h en heure légale, à sa hauteur (environ 55° au sud-ouest). L'heure solaire vient de la
+    longitude (2,5° E) et de l'équation du temps (− 1,7 min), avec 46,5° N comme avant. Un trait vertical relie
+    le soleil au sol ;
+  - ombre portée de la boîte au sol (enveloppe des coins bas et des coins hauts glissés au sol) ;
+  - façades assombries selon le soleil de 16 h, et non plus selon leur rang à l'écran ;
+  - flèche du nord sur le bord du sol ;
+  - disque du sol plus large (0,95 diagonale au lieu de 0,7), pour que lever et coucher tombent sur son bord ;
+  - **heure du soleil réglable** : curseur sous le dessin, de 6 à 20 h par pas de 2 h (16 h par défaut). Le
+    soleil, l'ombre au sol et les façades à l'ombre suivent l'heure. Le curseur, le choix de la vue et le dessin
+    sont dans un `st.fragment` : ils se redessinent seuls, sans relancer la page.
+    - À 6 h pile, le soleil est encore 0,4° sous l'horizon (lever à 6 h 03 à 46,5° N). Il est dessiné à 2° de
+      hauteur, sous l'étiquette « lever (6 h 15) » (`heure_dessinee`, `HAUTEUR_MIN_SOLEIL_DEG`).
+    - L'ombre est coupée au bord du sol (`couper`, Sutherland-Hodgman). Sans cela, le soleil bas l'étire sur
+      plus de 200 m et le cadrage change d'une heure à l'autre.
+    - Un soleil placé derrière la boîte reçoit en plus un contour pointillé par-dessus elle, pour rester visible
+      (vue du sud-ouest à 6 h). L'étiquette se place du côté du centre pour ne pas sortir du cadre.
+- **Orientation par pas de 10°** : la saisie affiche l'azimut géographique (« 190° · sud » ; 0 = nord, 90 = est).
+  Le moteur et les CSV gardent leur convention (0 = sud, 90 = ouest). Nouvelles fonctions `azimut_geographique`,
+  `orientation_moteur` et `libelle_orientation` dans `interface/saisie.py`. Une orientation hors du pas, venue
+  d'un CSV, est arrondie au pas dans le curseur.
+- **Parois adiabatiques** (champ `parois_adiabatiques` de `Boite`, choix dans le volet « Forme », ligne ajoutée aux
+  deux CSV de `donnees/batiments/`) : les quatre façades, la toiture et le plancher bas.
+  - Une paroi cochée n'entre pas dans le groupe : ni échange, ni soleil, ni perméabilité.
+  - Une façade cochée n'a pas de baie, et sa rive de plancher sort des ponts thermiques.
+  - La toiture et le plancher bas gardent leur rive.
+  - Dans le dessin, ces parois sont grises ; dans la saisie, les curseurs devenus sans effet sont désactivés.
+  - Hypothèse 101 de `docs/audit.md`.
+- **Couleurs des températures** (`interface/charte.py`) : extérieur en noir, seuil de confort en orange (en
+  pointillé), intérieur en jaune ; dans les briques « DH » et « Semaine chaude ».
+- **Brique DH** : graphique heure par heure sur la période de confort adaptatif, avec les degrés-heures comptés en
+  orange, à la place des maximums du jour.
+  - Trois boutons : « Été entier », « Semaine la plus chaude », « Jour le plus chaud ».
+  - En dessous, les DH de chaque jour : un cadre tracé à la souris montre ces jours-là au-dessus (liaison par
+    `on_select` de Streamlit), et la molette zoome.
+  - Deux graphiques séparés : réunis dans un `alt.vconcat` de couches, ils s'élargissaient sans fin dans
+    Streamlit 1.66.
+- **Feuille de route** : plan de bataille « informations au clic sur une paroi ou un vitrage » (cinq étapes) ;
+  « Diffusion » passe en 0.9.18.
+
+Résultats : les bâtiments de départ n'ont pas changé (aucune paroi adiabatique ; même longueur de rives).
+Logement de 70 m², enveloppe moyenne :
+
+| Parois adiabatiques | DH (°C.h) | Bbio |
+|---|---|---|
+| aucune (départ) | 732 | 119,8 |
+| deux pignons | 607 | 71,1 |
+| deux pignons et toiture | 505 | 49,2 |
+| deux pignons, toiture et plancher bas | 499 | 28,6 |
+
+Tests : 375 réussis, 2 sautés (3 nouveaux : parois adiabatiques, orientation, soleil et ombre ; fenêtres du DH
+dans le test de la semaine chaude). Vu dans Chrome : dessin vu du sud-ouest et du nord-est, parois grises, boutons et cadre
+de zoom du DH.
+
+## 0.9.15 — correction (20/11/2026), ouverture des baies comme le moteur réglementaire
+
+Diagnostic heure par heure sur les sorties du moteur COMETH (Paris, Sète, Nice A) : le moteur ne suit pas le texte
+de la fiche 5.13 pour le réglage des fenêtres par les occupants. Détail dans `docs/audit.md` (diagnostic du
+20/11/2026 et 0.9.15, hypothèse 100).
+
+- **Correction : profil d'ouverture des baies** (`moteur/ouvertures.py`, réglage `OUVERTURE_COMME_LE_MOTEUR`,
+  False : texte). Seuil d'ouverture θouv2 = consigne − 1 °C, sans l'écart de confort adaptatif (Th-D compris) ;
+  ouverture de θouv2 − 1 à θouv2 (texte : − 2) ; réglage à toutes les heures d'occupation, la nuit aussi (texte :
+  de jour, position du soir gardée la nuit). Cette règle reproduit l'ouverture du moteur 92 à 99,9 % des heures
+  (texte : 72 à 84 %).
+- Constat sans correction : fermeture des protections et passage d'air à travers une protection fermée
+  (fiche 5.12, éq. 239) sont déjà ceux du moteur.
+- Nouvelle clé `ouv_moteur_ecart_ouv1` dans `donnees/hypotheses.csv` ; tests de `tests/test_protections.py` pour
+  les deux règles.
+
+Résultats
+
+| | 0.9.13 | 0.9.15 |
+|---|---|---|
+| Ouverture face au moteur, Th-B / Th-D | + 5 à + 10 % / − 16 à − 32 % | − 4 à + 3 % / − 4 à − 16 % |
+| Validation : groupes dans ± 10 % (46) | 29 | 30 |
+| Bbio, écart médian ; froid outil / étude | − 1,5 % ; 0,78 | 0,0 % ; 0,94 |
+| DH dans ± 10 % (37 groupes) ; écart absolu médian | 17 ; 11,1 % | 21 ; 8,0 % |
+| Logement de 70 m², DH (performant / moyen / faible) | 559 / 728 / 883 | 544 / 732 / 884 |
+| Immeuble de 9 logements, DH | 454 / 601 / 744 | 448 / 599 / 748 |
+
+Le DH de Sète (− 33 à − 39 %) et de Nice A (+ 15 à + 27 %) ne bouge pas : la cause est dans le bilan du calcul Th-D.
+
 ## 0.9.13 — correction (20/11/2026), protections de la boîte d'après le guide Actibaie
 
 Lecture du guide *Les protections solaires dans la RE 2020* (Actibaie, v8, 2024 ; hors dépôt). Détail, tableaux et

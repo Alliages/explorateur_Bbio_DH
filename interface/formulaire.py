@@ -28,7 +28,8 @@ import streamlit as st
 from config.reglages import ZONES_CLIMATIQUES
 from interface.aides import aide
 from interface.saisie import (BATIMENTS_DE_DEPART, DEBORD_MAX_M, FACADES, NIVEAU_D_OUVERTURE, NIVEAUX_ENVELOPPE,
-                              PART_VITREE_MAX, POINTS_CARDINAUX, SANS_PROTECTION, TEINTES, Boite, boite_de_depart,
+                              PAROIS_ADIABATIQUES, PART_VITREE_MAX, PAS_ORIENTATION_DEG, SANS_PROTECTION, TEINTES,
+                              Boite, azimut_geographique, boite_de_depart, libelle_orientation, orientation_moteur,
                               point_cardinal)
 from moteur.structures import EXPOSITIONS_BRUIT, GESTIONS_PROTECTION, INERTIES_QUOTIDIENNES, PROTECTIONS_MOBILES
 
@@ -38,13 +39,14 @@ from moteur.structures import EXPOSITIONS_BRUIT, GESTIONS_PROTECTION, INERTIES_Q
 # Calculs proposés : libellé → calculs lancés (voir interface/calcul.py) ; le premier est le choix par défaut
 CHOIX_CALCULS = {"DH": ("dh",), "Bbio": ("bbio",), "Bbio et DH": ("bbio", "dh")}
 # Widgets de saisie : chacun a pour clé le nom de son champ de Boite, sauf l'orientation (clé « orientation »,
-# saisie par son nom de point cardinal). Champs sans widget, et champs dont le widget montre une autre forme :
+# saisie en azimut géographique, en degrés entiers). Champs sans widget, et champs dont le widget montre une autre
+# forme :
 CHAMPS_NON_SAISIS = ("orientation_deg", "part_habitable", "hauteur_etage_m")
 CHAMPS_EN_POURCENT = ("part_vitree_principale", "part_vitree_pignon_a", "part_vitree_arriere", "part_vitree_pignon_b",
                       "ratio_ouverture_max")
 CHAMPS_ENTIERS = ("altitude_m", "brasseur_debit_m3h", "brasseur_puissance_w")
-# Orientations proposées, d'est en ouest par le sud puis retour par le nord : nom → azimut du moteur
-ORIENTATIONS = {nom: azimut for azimut, nom in sorted(POINTS_CARDINAUX, key=lambda p: (p[0] + 90) % 360)}
+# Orientations proposées : azimut géographique, du nord (0°) par l'est (90°), le sud (180°) et l'ouest (270°)
+ORIENTATIONS = list(range(0, 360, PAS_ORIENTATION_DEG))
 LIBELLES_PROTECTION = {SANS_PROTECTION: "Aucune", "volet": "Volets", "store_enroulable": "Stores enroulables"}
 LIBELLES_GESTION = {"manuelle_non_motorisee": "Manuelle", "manuelle_motorisee": "Manuelle motorisée",
                     "automatique": "Automatique"}
@@ -56,10 +58,10 @@ assert set(LIBELLES_GESTION) == set(GESTIONS_PROTECTION) and set(LIBELLES_BRUIT)
 assert set(LIBELLES_INERTIE) <= set(INERTIES_QUOTIDIENNES)
 
 
-def _pourcent(libelle, valeur, cle, maxi=1.0, pas=5):
+def _pourcent(libelle, valeur, cle, maxi=1.0, pas=5, desactive=False):
     """Curseur en pour cent, rendu en part (0 à 1)."""
     return st.slider(libelle, 0, round(maxi * 100), round(valeur * 100), step=pas, format="%d %%", key=cle,
-                     help=aide(cle)) / 100.0
+                     help=aide(cle), disabled=desactive) / 100.0
 
 
 # ============================================================
@@ -82,26 +84,41 @@ def _forme(defaut):
     profondeur = st.slider("Profondeur (m)", 6.0, 30.0, defaut.profondeur_m, step=1.0, key="profondeur_m",
                            help=aide("profondeur_m"))
     niveaux = st.slider("Niveaux", 1, 10, defaut.nb_niveaux, key="nb_niveaux", help=aide("nb_niveaux"))
-    orientation = st.select_slider("Orientation de la façade principale", list(ORIENTATIONS),
-                                   value=point_cardinal(defaut.orientation_deg), key="orientation",
-                                   help=aide("orientation"))
+    azimut = st.select_slider("Orientation de la façade principale", ORIENTATIONS,
+                              value=_azimut_du_curseur(defaut.orientation_deg), key="orientation",
+                              format_func=lambda a: libelle_orientation(orientation_moteur(a)),
+                              help=aide("orientation"))
+    orientation_deg = orientation_moteur(azimut)
+    # Parois sur un local chauffé (mitoyenneté, logement voisin) : sans échange, grises dans le dessin
+    noms = {cle: f"{libelle} ({point_cardinal(orientation_deg + ecart)})" for cle, libelle, ecart, _ in FACADES}
+    noms.update({cle: libelle for cle, libelle in PAROIS_ADIABATIQUES.items() if cle not in noms})
+    adiabatiques = st.pills("Parois adiabatiques (sur un local chauffé)", list(noms), selection_mode="multi",
+                            default=list(defaut.parois_adiabatiques), format_func=noms.get,
+                            key="parois_adiabatiques", help=aide("parois_adiabatiques"))
     logements = st.number_input("Logements", 1, 400, defaut.nb_logements, key="nb_logements", help=aide("nb_logements"))
     traversant = st.toggle("Logements traversants", defaut.traversant, key="traversant", help=aide("traversant"))
     hsp = st.slider("Hauteur sous plafond (m)", 2.3, 3.5, defaut.hauteur_sous_plafond_m, step=0.05,
                     key="hauteur_sous_plafond_m", help=aide("hauteur_sous_plafond_m"))
     return {"longueur_m": longueur, "profondeur_m": profondeur, "nb_niveaux": niveaux,
-            "orientation_deg": float(ORIENTATIONS[orientation]), "nb_logements": int(logements),
+            "orientation_deg": orientation_deg, "nb_logements": int(logements),
+            "parois_adiabatiques": tuple(cle for cle in noms if cle in adiabatiques),   # dans l'ordre des parois
             "traversant": traversant, "hauteur_sous_plafond_m": hsp,
             "hauteur_etage_m": max(defaut.hauteur_etage_m, hsp + 0.3)}
 
 
-def _baies(defaut, orientation_deg):
+def _azimut_du_curseur(orientation_deg):
+    """Position du curseur d'orientation la plus proche d'une orientation du moteur : azimut géographique arrondi
+    au pas du curseur (un bâtiment de départ peut donner une orientation hors du pas)."""
+    return round(azimut_geographique(orientation_deg) / PAS_ORIENTATION_DEG) * PAS_ORIENTATION_DEG % 360
+
+
+def _baies(defaut, orientation_deg, adiabatiques):
     champs = {}
-    st.caption("Part vitrée de chaque façade")
+    st.caption("Part vitrée de chaque façade (aucune baie sur une façade adiabatique)")
     for cle, libelle, ecart, _ in FACADES:
         nom = f"{libelle} ({point_cardinal(orientation_deg + ecart)})"
         champs[f"part_vitree_{cle}"] = _pourcent(nom, getattr(defaut, f"part_vitree_{cle}"), f"part_vitree_{cle}",
-                                                 PART_VITREE_MAX)
+                                                 PART_VITREE_MAX, desactive=cle in adiabatiques)
     # Pas des curseurs : assez fins pour les valeurs des niveaux d'enveloppe (donnees/typologies_logements.csv)
     champs["uw"] = st.slider("Uw des baies (W/m².K)", 0.7, 3.0, defaut.uw, step=0.05, key="uw", help=aide("uw"))
     champs["sw"] = st.slider("Facteur solaire Sw", 0.1, 0.8, defaut.sw, step=0.01, key="sw", help=aide("sw"))
@@ -135,14 +152,15 @@ def _baies(defaut, orientation_deg):
     return champs
 
 
-def _parois(defaut):
+def _parois(defaut, adiabatiques):
+    # Une toiture ou un plancher bas adiabatique n'échange rien : ses saisies restent visibles mais sans effet
     u_mur = st.slider("U des murs (W/m².K)", 0.10, 1.50, defaut.u_mur, step=0.05, key="u_mur", help=aide("u_mur"))
     u_toiture = st.slider("U de la toiture (W/m².K)", 0.08, 1.00, defaut.u_toiture, step=0.01, key="u_toiture",
-                          help=aide("u_toiture"))
+                          help=aide("u_toiture"), disabled="toiture" in adiabatiques)
     u_plancher = st.slider("U du plancher bas (W/m².K)", 0.10, 1.50, defaut.u_plancher, step=0.01, key="u_plancher",
-                           help=aide("u_plancher"))
+                           help=aide("u_plancher"), disabled="plancher_bas" in adiabatiques)
     sur_sol = st.toggle("Plancher bas sur le sol", defaut.plancher_sur_sol, key="plancher_sur_sol",
-                        help=aide("plancher_sur_sol"))
+                        help=aide("plancher_sur_sol"), disabled="plancher_bas" in adiabatiques)
     teinte = st.segmented_control("Teinte des murs et de la toiture", list(TEINTES), default=defaut.teinte,
                                   format_func=str.capitalize, required=True, key="teinte", help=aide("teinte"))
     psi = st.slider("Ponts thermiques des planchers (W/m.K)", 0.0, 1.0, defaut.psi_planchers, step=0.01,
@@ -197,7 +215,7 @@ def valeurs_des_widgets(boite):
         elif isinstance(valeur, tuple):
             valeur = list(valeur)
         valeurs[champ.name] = valeur
-    valeurs["orientation"] = point_cardinal(boite.orientation_deg)
+    valeurs["orientation"] = _azimut_du_curseur(boite.orientation_deg)
     return valeurs
 
 
@@ -249,9 +267,9 @@ def saisir(defaut=boite_de_depart()):
     with st.expander("Forme", icon=":material/deployed_code:", expanded=True):
         champs.update(_forme(defaut))
     with st.expander("Baies", icon=":material/window:"):
-        champs.update(_baies(defaut, champs["orientation_deg"]))
+        champs.update(_baies(defaut, champs["orientation_deg"], champs["parois_adiabatiques"]))
     with st.expander("Parois", icon=":material/layers:"):
-        champs.update(_parois(defaut))
+        champs.update(_parois(defaut, champs["parois_adiabatiques"]))
     with st.expander("Air", icon=":material/air:"):
         champs.update(_air(defaut))
     with st.expander("Confort d'été", icon=":material/mode_fan:"):

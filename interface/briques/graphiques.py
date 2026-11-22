@@ -37,3 +37,16 @@ def echelle_couleurs(roles):
 
 def legende(titre=None):
     return alt.Legend(title=titre, orient="top", direction="horizontal", symbolStrokeWidth=3)
+
+
+def traits(roles, pointilles=()):
+    """Trait de chaque série : plein, ou pointillé pour les séries nommées (un seuil se distingue ainsi d'une
+    mesure de même couleur). Sans légende propre : celle des couleurs suffit."""
+    return alt.StrokeDash("serie:N", legend=None, scale=alt.Scale(
+        domain=list(roles), range=[[6, 4] if nom in pointilles else [1, 0] for nom in roles]))
+
+
+def etiquettes_heures():
+    """Axe du temps lisible à toutes les échelles du zoom : la date à minuit, l'heure sinon (« 14h »)."""
+    return alt.Axis(labelExpr="hours(datum.value) == 0 ? timeFormat(datum.value, '%d/%m') "
+                              ": timeFormat(datum.value, '%Hh')")

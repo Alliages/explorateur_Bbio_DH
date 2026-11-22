@@ -22,6 +22,7 @@ ouvrable;oui;;baies ouvrables : oui ou non
 debord_m;0;m;profondeur des balcons ou casquettes au-dessus des baies (0 : aucun ; 3 m au plus)
 facades_debord;principale;;façades qui portent les balcons, séparées par une virgule : principale, pignon_a, arriere, pignon_b
 plancher_sur_sol;oui;;plancher bas sur le sol (oui) ou sur l'extérieur (non)
+parois_adiabatiques;;;parois sur un local chauffé, sans échange, séparées par une virgule : principale, pignon_a, arriere, pignon_b, toiture, plancher_bas (vide : aucune)
 teinte;moyenne;;teinte des murs et de la toiture : claire, moyenne, sombre ou noire
 climatise;non;;logements climatisés : oui ou non (change le DH max ; le DH se calcule toujours sans climatisation)
 brasseurs;non;;brasseurs d'air : oui ou non

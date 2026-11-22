@@ -8,7 +8,8 @@ exposition_bruit;Près d'une voie bruyante, on ouvre moins les fenêtres la nuit
 longueur_m;Longueur de la façade principale et de la façade arrière.
 profondeur_m;Longueur des pignons. Une boîte profonde a moins de façade, donc moins de baies, par m² habitable.
 nb_niveaux;Le premier niveau porte le plancher bas, le dernier la toiture : plus il y a de niveaux, moins ces deux parois pèsent par m².
-orientation;Orientation de la façade principale ; les trois autres suivent. Le dessin tourne avec elle.
+orientation;Azimut de la façade principale, compté depuis le nord dans le sens des aiguilles d'une montre (0° nord, 90° est, 180° sud, 270° ouest), par pas de 10° ; les trois autres façades suivent. Le dessin tourne avec elle.
+parois_adiabatiques;Paroi sur un local chauffé (logement voisin, mitoyenneté) : elle n'échange ni chaleur ni air avec l'extérieur et ne reçoit pas de soleil. Une façade adiabatique n'a pas de baie ; une toiture ou un plancher bas adiabatique décrit un logement entre deux étages. En gris dans le dessin.
 nb_logements;Donne la surface moyenne d'un logement, qui module le Bbio max et le DH max. Ne change pas les besoins.
 traversant;Un logement traversant ouvre sur deux façades : l'air le balaie mieux (voir [[Ventilation]]).
 hauteur_sous_plafond_m;Plus de volume à ventiler et à chauffer ; au-delà de 2,50 m, le Bbio max est relevé.
@@ -38,4 +39,6 @@ brasseur_debit_m3h;Débit d'air brassé à la vitesse maximale, donné par le fa
 brasseur_puissance_w;Puissance électrique à la vitesse maximale, donnée par le fabricant.
 garder_reference;Garde ce calcul en mémoire : après une nouvelle saisie et un nouveau calcul, la page montre l'écart avec lui.
 semaine_chaude_decalage;0 : les sept jours qui comptent le plus de degrés-heures.
+dh_fenetre;Ouvre le graphique sur l'été entier, sur les sept jours qui comptent le plus de degrés-heures ou sur le jour qui en compte le plus. On peut ensuite tracer un cadre à la souris sur la bande du dessous pour choisir d'autres jours.
 telecharger_batiment;Enregistre la forme, le site, les baies et le confort d'été saisis dans un CSV de bâtiment. Déposé dans le dossier donnees/batiments/, il s'ajoute à la liste « Bâtiment de départ ». L'enveloppe n'y est pas : elle vient du niveau choisi (performant, moyen ou faible).
+heure_soleil;Place le soleil du 21 juin à l'heure légale choisie, avec l'ombre de la boîte au sol et ses façades à l'ombre. Le dessin seul change : le calcul suit le soleil heure par heure toute l'année. À 6 h, le soleil n'est pas encore levé (lever à 6 h 03 à 46,5° N) : il est dessiné juste au-dessus de l'horizon, vers 6 h 15.

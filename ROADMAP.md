@@ -31,7 +31,9 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.12 | Types de protection | Liste « type de protection » dans l'interface (volet roulant, persienne, store toile extérieur ou intérieur ; clair ou sombre) qui remplit Sw1, Sw2, Sw3, ΔR (d'où le U protégé), Tl protégée et Typo_PM, d'après le guide Actibaie (pp. 27, 45-48 ; `donnees/protections_types.csv`, double vitrage σ 0,70) ; les valeurs de la baie nue restent saisies (le guide ne les donne pas) | à faire |
 | 0.9.13 | Protections de la boîte | Correction d'après le guide Actibaie : volets et stores perméables à 10 % (Typo_PM 1), Sw protégé d'un volet tout en Sw2 ; test de tendance des gestions sur le DH ; DH des bâtiments de départ − 9 à − 13 % (hypothèse 99) | fait |
 | 0.9.14 | Maison individuelle | Second usage. Cas du guide Actibaie à reprendre : Bbio max d'une maison de 100 m² par ville (p. 6), DH et Bbio de la maison H3 (pp. 7, 28), maison de plain-pied H2b de l'AICVF (p. 33 : inertie, casquette, brasseurs) | à faire |
-| 0.9.16 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 | à faire |
+| 0.9.15 | Ouverture des baies comme le moteur | Correction : profil d'ouverture du moteur COMETH (θouv2 sans Δθconf_adapt, θouv1 à 1 °C, réglage la nuit aussi ; hypothèse 100), retrouvé 92 à 99,9 % des heures. Ouverture face au moteur − 4 à + 3 % en Th-B, − 4 à − 16 % en Th-D ; validation 30 groupes sur 46 dans ± 10 %, froid 0,94 fois l'étude, DH à ± 10 % dans 21 groupes sur 37 | fait |
+| 0.9.16 | Soleil, orientation, parois adiabatiques, zoom | Dessin : course du 21 juin dans le ciel, soleil à sa hauteur à l'heure choisie (curseur 6 à 20 h, 16 h légale par défaut), ombre portée au sol coupée au bord, façades à l'ombre assombries, flèche du nord. Orientation par pas de 10° (azimut géographique). Parois adiabatiques (façades, toiture, plancher bas ; grises dans le dessin ; hypothèse 101). Graphiques : extérieur noir, seuil orange, intérieur jaune ; brique DH heure par heure, zoomable (été entier, semaine ou jour le plus chaud, cadre tracé sur les DH de chaque jour) | fait |
+| 0.9.18 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 ; décalée de 0.9.16 le 20/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
 ## En attente
@@ -49,19 +51,24 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 - **Prochaine correction (version à fixer) : entrées d'air trop fortes dans certains groupes** (0.9.10 :
   Sète traversant, chauffage + 46 à + 53 % ; `rsee.xml` jusqu'à + 45 %) : coefficients de pression des zones
   traversantes, partage entre façades, autoréglage et anti-retour, bilan par zone (hypothèses 66 et 92).
-- **Protections face au guide Actibaie** (0.9.13, `docs/audit.md`) : sur la boîte en H3, les volets ne gagnent que
-  11 % de DH (guide : environ la moitié) ; la typologie Typo_PM pèse fort (1 605 à 1 007 °C.h de 0 à 4 ; guide :
-  10 à 60 °C.h, Bbio identique) ; les volets manuels augmentent le Bbio en H3 (guide : le baissent). Piste
-  commune : la fermeture de nuit réduit trop l'ouverture des baies (éq. 239). À rapprocher du ratio d'ouverture
-  en Th-D ci-dessous : comparer ouverture et Rprot heure par heure sur Paris, Sète, Nice A.
+- Ouverture des baies (0.9.15) : l'outil suit le moteur, pas le texte de la fiche 5.13 (hypothèse 100), comme en
+  0.9.9 (hypothèse 91). À revoir si une version du moteur ou de la méthode change : `OUVERTURE_COMME_LE_MOTEUR`.
+  Reste en Th-D 4 à 16 % sous le moteur, faute de la bonne température (θop 0,3 à 0,6 °C trop bas). DH de H2a :
+  − 29 → − 35 % en médiane (DH faibles).
+- **Protections face au guide Actibaie** (0.9.13) : sur la boîte en H3, les volets ne gagnent que 11 à 13 % de DH
+  (guide : environ la moitié). Ni la fermeture des protections (identique au moteur à Paris) ni le passage d'air
+  (éq. 239, même forme que le moteur) ni la règle d'ouverture n'en sont la cause. Les écarts « Typo_PM » et
+  « Bbio » du guide comparent des produits différents, ou un moteur plus ancien : à ne pas corriger sans autre
+  source.
 - Guide Actibaie, plus tard : indicateur « Sw maximal » des baies (exigence de moyens, p. 44 : le guide écrit « au
   moins », c'est sûrement un maximum, à vérifier dans l'arrêté du 4 août 2021, absent de `_sources/`) ; aide à la
   saisie de la classe BR selon la distance à l'infrastructure (pp. 24-25), avec la saisie BR ; tendances de
   l'immeuble de 48 logements de Nantes (p. 29), à tester sur l'immeuble de départ en H2b, BR3, traversant ou non ; revue de
   l'enchaînement des calculs de baie avec le schéma des pp. 54-55. Stores vénitiens et BSO : voir plus bas.
-- Ratio d'ouverture des baies : en Th-B, 5 à 10 % au-dessus du moteur depuis la 0.9.11 (froid 2 à 34 % sous le
-  sien) ; en Th-D, encore 16 à 32 % en dessous (DH de − 37 à + 30 %) : l'écart de confort adaptatif y est celui
-  du texte, la cause est ailleurs. Vérifier avec `python -m outils.comparer_horaires tous`.
+- **DH face au moteur** : Sète − 33 à − 39 %, Nice A + 15 à + 27 %, Paris ± 6 %, avec ou sans la règle
+  d'ouverture du moteur. Le θop de Th-D reste 0,3 à 0,6 °C sous celui du moteur : la cause est dans le bilan
+  thermique du calcul Th-D (brasseurs de Sète par thermostat, ventilation Th-D, hypothèse 75 ; Φsh), pas dans
+  l'ouverture des baies. Vérifier avec `python -m outils.comparer_horaires tous`.
 - Ouverture en Th-B en saison de chauffage (groupe surchauffé) : non vérifiée sur le moteur (hypothèse 91).
 - Φsh : flux solaire et voûte céleste des ponts thermiques (`O_Fsh_s_pt`, `O_Fsh_vc_pt` du moteur ; fiche 5.19).
 - Th-D : débit de ventilation hors occupation du moteur plus faible (hypothèse 75).
@@ -71,10 +78,10 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 - **Interface, suites de la 0.9.0** :
   - fait en 0.9.0 : contrôle visuel dans un navigateur et capture du `README.md` ; balcons et casquettes ;
     comparaison de deux variantes ;
-  - **appartement dans un immeuble** (vu en 0.9.1) : le logement de 70 m² est aujourd'hui un petit bâtiment
-    isolé (quatre façades, toiture et plancher bas sur l'extérieur). Un appartement demande des parois mitoyennes
-    et un plancher et un plafond sur d'autres logements (parois sans échange, ou coefficient b), et une saisie
-    pour choisir les façades sur l'extérieur ;
+  - **appartement dans un immeuble** (vu en 0.9.1) : **fait en partie en 0.9.16**, parois adiabatiques (façades,
+    toiture, plancher bas ; hypothèse 101). Reste : coefficient b (local non chauffé, cage d'escalier), inertie
+    propre des parois adiabatiques (aujourd'hui donnée par la classe), et un bâtiment de départ « appartement
+    intermédiaire » dans `donnees/batiments/` ;
   - saisies restantes : masque lointain (immeuble en face), joues et loggias, Sw2, gestion des brasseurs par
     thermostat (à attendre le calage du DH de Sète, voir plus bas), plusieurs groupes (traversant et non
     traversant). Le Uw horizontal ne concerne pas la boîte (pas de baie en toiture) ;
@@ -107,8 +114,18 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
     groupe (éq. 333, 0,34 par m³/h, comme l'outil) ;
   - DH de H2a : 31 à 37 % sous l'étude dans quatre groupes sur six, aux DH faibles (77 à 308 °C.h).
 - **Pédagogie, suites de la 0.9.6** :
-  - course solaire : latitude fixe (46,5° N) ; la prendre selon la zone climatique ; vue du sud, la vraie course en
-    hauteur se projette presque en un trait, d'où le tracé au bord du sol ;
+  - course solaire : latitude et longitude fixes (46,5° N, 2,5° E) ; les prendre selon la zone climatique. Depuis
+    la 0.9.16, la course est aussi dessinée dans le ciel ; vue du sud-ouest ou du sud-est (sous 30°), son plan est
+    vu presque par la tranche : elle se projette en un trait étroit et le soleil de 16 h paraît posé sur la toiture
+    (géométrie exacte, peu lisible). Vues du nord : arc bien ouvert. Pistes : regard plus haut (45 à 60°) pour le
+    seul soleil, ou étiquettes d'heures sur la course ;
+  - dessin (0.9.16, suites) : ombre des balcons et casquettes sur les baies (aujourd'hui : ombre de la boîte au
+    sol seulement) ; heure du soleil dessiné réglable : **fait en 0.9.16** (curseur 6 h à 20 h, pas de 2 h) ;
+    ombre portée seulement sur le sol, pas sur un bâtiment voisin ;
+  - brique DH (0.9.16, suites) : le zoom passe par Streamlit (`on_select`), donc un nouveau calcul de la page à
+    chaque cadre tracé (rapide : les résultats sont en cache) ; un graphique Altair composé (`alt.vconcat` de
+    couches) se lierait sans aller-retour, mais Streamlit le fait grandir sans fin (version 1.66) : à reprendre
+    si une version de Streamlit le corrige. La molette zoome encore à l'intérieur de la fenêtre ;
   - le glossaire Notion est lié par l'identifiant de chaque page (`interface/textes/glossaire.csv`) : une page
     ajoutée dans Notion doit y être ajoutée à la main ;
   - écart avec le calcul précédent : gardé pour la session seulement, sur le Bbio et le DH (pas sur les autres
@@ -196,6 +213,24 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   | Complémentaire | Fresh Sky | `#00B0F0` |
   | Complémentaire | Wine Plum | `#6D2E46` |
   | Complémentaire | Deep Space Blue | `#283246` |
+
+## Plan de bataille : informations au clic sur une paroi ou un vitrage (demandé le 20/11/2026, version à fixer)
+
+But : cliquer sur une façade, la toiture ou une baie du dessin et lire ce qu'elle fait au bilan (pourquoi cette
+paroi pèse sur le DH ou le Bbio). Le dessin est aujourd'hui une image SVG (`st.image`) : rien n'en remonte à Python.
+
+| Étape | Contenu | Où | Difficulté |
+|---|---|---|---|
+| 1. Fiche par paroi, sans clic | Liste « Paroi examinée » (`st.selectbox` : 4 façades, toiture, plancher bas, baies de chaque façade) ; la paroi choisie est surlignée dans le dessin ; fiche : surface, U (ou Uw, Sw, Tl, protection), orientation, part vitrée, masque (balcon), adiabatique ou non | `interface/axonometrie.py` (argument `surlignee`), nouveau `interface/fiche_paroi.py` | faible |
+| 2. Infobulles au survol | Chaque polygone du SVG reçoit un `<title>` (nom, surface, U ou Uw/Sw) : le navigateur l'affiche au survol, sans aller-retour. Contrôler que `st.image` garde les `<title>` (sinon `st.html` ou `st.markdown(unsafe_allow_html=True)`) | `axonometrie._Scene.polygone` (attribut `titre`) | faible |
+| 3. Grandeurs calculées par paroi | Pour la paroi choisie, sur l'année et sur la semaine la plus chaude : rayonnement reçu (kWh/m², `solaire.environnement_proche`), flux solaires transmis (`solaire.flux_solaires_baie`, `flux_solaires_paroi`), déperditions H × (θi − θe), part des protections baissées et des baies ouvertes. Calcul à part, après celui du groupe, avec les séries horaires déjà produites (θi), mis en cache par boîte | nouveau `moteur/bilan_paroi.py` (sans dépendre de l'interface) ; colonnes ajoutées à `interface/calcul.py` | moyenne |
+| 4. Part dans le DH | Apports de la paroi pendant les heures qui comptent des DH, rapportés aux apports totaux de ces heures (une part, pas une décomposition exacte : le modèle n'est pas linéaire) ; à défaut, DH recalculé sans la paroi (paroi adiabatique ou baie protégée) : écart exact, un calcul par paroi | `moteur/bilan_paroi.py`, brique « Ce que fait cette paroi » | moyenne à forte |
+| 5. Clic dans le dessin | Composant Streamlit (`st.components.v2`, HTML + JS) qui affiche le SVG et renvoie l'identifiant du polygone cliqué ; remplace la liste de l'étape 1 (gardée pour le clavier et l'accessibilité) | nouveau `interface/composants/dessin_cliquable/` | moyenne (composant à maintenir) |
+
+Ordre proposé : 1 et 2 ensemble (une version), puis 3, puis 4 et 5. Contrôles : somme des flux par paroi = flux du
+groupe à 0,1 % près ; test de l'identifiant cliqué ; capture avant / après dans Chrome. Points à trancher : afficher
+la fiche sous le dessin ou dans une brique ; grandeurs du Bbio (année moyenne) ou du DH (année caniculaire), ou les
+deux selon le calcul choisi.
 
 ## Relecture indépendante de la 0.9.8 : points inscrits en 0.9.11 (sans action immédiate)
 

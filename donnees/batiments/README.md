@@ -22,6 +22,7 @@ Séparateur `;`, virgule décimale, UTF-8. Quatre colonnes : `champ;valeur;unite
 | Entier | sans décimale | `3` |
 | Oui / non | `oui` ou `non` | `traversant;oui` |
 | Liste de façades | clés séparées par une virgule | `principale, arriere` |
+| Liste de parois (`parois_adiabatiques`, 0.9.16) | clés séparées par une virgule, vide pour aucune | `pignon_a, pignon_b, toiture` |
 | Texte | tel quel | `H1a`, `volet` |
 
 - La ligne `nom` est obligatoire.

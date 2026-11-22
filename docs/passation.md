@@ -4,9 +4,39 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 20/11/2026
 
-- Dernière version publiée sur `travail` : **0.9.8**, avec la **0.9.6** dans le même commit (les fichiers de la
-  0.9.6 et de la 0.9.8 se mêlent dans `app.py`, `formulaire.py`, `saisie.py`). **0.9.9 à 0.9.13** prêtes, non poussées.
-- **0.9.13** (prête, non poussée) : lecture du guide Actibaie *Les protections solaires dans la RE 2020* (PDF et
+- Dernière version publiée sur `travail` : **0.9.13** (commit `667d842`, 20/11/2026), avec les **0.9.9 à 0.9.11**
+  dans le même commit. Avant : 0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé.
+- **0.9.16** (prête, non poussée, dans la même copie de travail que la 0.9.15) :
+  - **dessin** : course du 21 juin dans le ciel et au bord du sol, soleil de 16 h légale à sa hauteur (55,5°,
+    59° à l'ouest du sud ; 46,5° N, 2,5° E), ombre de la boîte au sol, façades à l'ombre assombries, flèche du
+    nord. Vu du sud-ouest, le plan de la course est vu par la tranche : un trait étroit, avec le soleil posé sur
+    la toiture (exact mais peu lisible, pistes dans `ROADMAP.md`) ;
+  - **heure du soleil** : curseur sous le dessin (6 à 20 h, pas de 2 h, 16 h par défaut), dans un `st.fragment`
+    avec la vue. Le soleil de 6 h, encore sous l'horizon, est dessiné à 2° (« lever (6 h 15) »). L'ombre est
+    coupée au bord du sol. Le soleil caché derrière la boîte est redessiné en contour pointillé ;
+  - **orientation** par pas de 10° en azimut géographique (`libelle_orientation`, « 190° · sud ») ;
+  - **parois adiabatiques** : les quatre façades, la toiture et le plancher bas (`Boite.parois_adiabatiques`,
+    hypothèse 101). La paroi est absente du groupe et grise dans le dessin. Logement de 70 m² moyen : DH 732 →
+    607 (pignons) → 499 (pignons, toiture et plancher bas) ;
+  - **graphiques** : extérieur noir, seuil orange en pointillé, intérieur jaune. Brique DH heure par heure :
+    boutons « Été entier », « Semaine la plus chaude », « Jour le plus chaud », et cadre tracé sur la bande des
+    DH de chaque jour (`on_select` de Streamlit). Un `alt.vconcat` de couches s'élargissait sans fin dans
+    Streamlit 1.66, et un domaine imposé à l'axe du temps n'était pas suivi : le graphique du dessus reçoit les
+    seules heures de la fenêtre ;
+  - **plan de bataille** « informations au clic sur une paroi ou un vitrage » (cinq étapes) dans `ROADMAP.md` ;
+    « Diffusion » passe en 0.9.18 ;
+  - vu dans Chrome (vues sud-ouest et nord-est ; boutons et cadre du DH ; curseur de l'heure, de 6 à 20 h).
+    Tests : 376 réussis, 2 sautés.
+- **0.9.15** (prête, non poussée) : ouverture des baies comme le moteur COMETH (`OUVERTURE_COMME_LE_MOTEUR`,
+  hypothèse 100) : θouv2 sans Δθconf_adapt, θouv1 = θouv2 − 1, réglage la nuit aussi ; règle reproduite 92 à
+  99,9 % des heures (diagnostic dans `docs/audit.md`). Protections et passage d'air (éq. 239) : déjà conformes au
+  moteur. Face au moteur : ouverture Th-B − 4 à + 3 %, Th-D − 4 à − 16 % ; froid de Paris 2 − 33 → − 9 %.
+  Validation (`_resultats/validation_0.9.15.csv`) : 30 groupes sur 46 dans ± 10 % (29 avant), Bbio médian 0,0 %,
+  froid 0,94 fois l'étude, DH à ± 10 % dans 21 groupes sur 37 (17 avant) ; DH de Sète et Nice A inchangé (bilan
+  Th-D, θop 0,3 à 0,6 °C trop bas). Bâtiments de départ : DH − 15 à + 5 °C.h. Sorties de
+  `comparer_horaires` réécrites dans `_resultats/horaires/` (copie des précédentes, de la 0.9.10, dans
+  `_resultats/horaires_avant_0.9.15/`). Tests : 372 réussis, 2 sautés.
+- **0.9.13** : lecture du guide Actibaie *Les protections solaires dans la RE 2020* (PDF et
   note d'analyse dans `_sources/guide_protections_solaires_re2020.*`, hors dépôt). Correction des protections de la
   boîte (`saisie._conventions_protection`, hypothèse 99) : Typo_PM 1 au lieu de 0, Sw protégé d'un volet tout en
   Sw2 (store : 40 %). DH des bâtiments de départ − 9 à − 13 % (logement 70 m² 559 / 728 / 883, immeuble 454 / 601

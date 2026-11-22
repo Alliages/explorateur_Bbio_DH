@@ -22,13 +22,13 @@ from interface import charte
 from interface.aides import aide
 from interface.briques.base import Brique
 from interface.briques.graphiques import (FORMAT_HEURE, FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs,
-                                          legende, nombre)
+                                          legende, nombre, traits)
 from moteur.confort import moyenne_glissante_exterieure, seuil_confort_chaud
 from moteur.hypotheses import hyp
 
 DECALAGE_MAX_JOURS = 45         # course du curseur, de part et d'autre de la semaine la plus chaude
 TEMPERATURES = {"Extérieur": charte.COULEUR_EXTERIEUR, "Intérieur (opérative)": charte.COULEUR_INTERIEUR,
-                "Seuil de confort": charte.COULEUR_LIMITE}
+                "Seuil de confort": charte.COULEUR_SEUIL}
 GESTES = {"Protections baissées": charte.COULEUR_PROTECTION, "Fenêtres ouvertes": charte.COULEUR_OUVERTURE}
 
 
@@ -54,7 +54,8 @@ def _temperatures(semaine):
         id_vars="date", value_vars=list(TEMPERATURES), var_name="serie", value_name="temperature")
     base = alt.Chart(longue).encode(
         x=axe_x, y=alt.Y("temperature:Q", title="Température (°C)", scale=alt.Scale(zero=False)),
-        color=alt.Color("serie:N", scale=echelle_couleurs(TEMPERATURES), legend=legende()))
+        color=alt.Color("serie:N", scale=echelle_couleurs(TEMPERATURES), legend=legende()),
+        strokeDash=traits(TEMPERATURES, pointilles=("Seuil de confort",)))
     lignes = base.mark_line(strokeWidth=2)
     survol = base.mark_circle(size=60, opacity=0).encode(
         tooltip=[alt.Tooltip("date:T", title="Heure", format=FORMAT_HEURE), alt.Tooltip("serie:N", title="Série"),

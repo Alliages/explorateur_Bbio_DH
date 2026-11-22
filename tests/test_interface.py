@@ -234,6 +234,55 @@ def test_balcons_masque_et_gabarit():
         construire_projet(replace(IMMEUBLE, debord_m=1.0, facades_debord=("toit",)))
 
 
+def test_parois_adiabatiques():
+    """0.9.16 : une paroi sur un local chauffé n'entre pas dans le groupe (hypothèse 101) ; une façade adiabatique
+    n'a ni baie ni rive de plancher ; toiture et plancher bas gardent leur rive."""
+    boite = replace(QUATRE_FACADES, parois_adiabatiques=("pignon_a", "toiture"))
+    groupe = _groupe(boite)
+    assert [p.nom.split(" — ")[0] for p in groupe.parois] == ["Mur", "Mur", "Mur", "Plancher bas"]
+    assert all("Pignon A" not in p.nom for p in groupe.parois) and len(groupe.baies) == 3
+    facade = next(f for f in boite.facades() if f["cle"] == "pignon_a")
+    assert facade["adiabatique"] and facade["part_vitree"] == 0.0 and facade["baies_m2"] == 0.0
+    assert boite.part_vitree_pignon_a == 0.10                   # la saisie est gardée pour le jour où on décoche
+    # Rives : 64 m de périmètre moins les 12 m du pignon, sur les quatre planchers (toiture comprise)
+    assert groupe.ponts_thermiques[0].longueur_m == pytest.approx((64.0 - 12.0) * 4)
+    # Perméabilité : la façade et la toiture adiabatiques sortent des surfaces perméables
+    from moteur.infiltrations import surfaces_permeables
+    facade_m2, toit_m2 = surfaces_permeables(groupe)
+    assert toit_m2 == 0.0 and facade_m2 == pytest.approx((64.0 - 12.0) * boite.hauteur_m)
+    # Logement entre deux étages, entre deux voisins : façades avant et arrière seules
+    milieu = replace(IMMEUBLE, parois_adiabatiques=("pignon_a", "pignon_b", "toiture", "plancher_bas"))
+    assert {p.type for p in _groupe(milieu).parois} == {"mur"}
+    with pytest.raises(ValueError, match="adiabatiques inconnues"):
+        construire_projet(replace(IMMEUBLE, parois_adiabatiques=("cave",)))
+    # Lu et écrit dans un CSV de bâtiment ; dessiné en gris, nommé dans le titre
+    from interface import charte
+    from interface.saisie import ecrire_batiment
+    assert "parois_adiabatiques;pignon_a, toiture;" in ecrire_batiment(boite, "X")
+    svg = dessiner(replace(boite, orientation_deg=0.0), VUES["sud-ouest"])
+    assert charte.GRIS_ADIABATIQUE in svg                   # pignon A, à l'ouest, au soleil de 16 h
+    racine = ET.fromstring(svg)
+    textes = [t.text for t in racine.iter("{http://www.w3.org/2000/svg}text")]
+    assert any(t.startswith("Pignon A") and t.endswith("adiabatique") for t in textes)
+    assert "parois adiabatiques : pignon a, toiture" in racine.find("{http://www.w3.org/2000/svg}title").text
+
+
+def test_orientation_par_pas_de_10_degres():
+    """0.9.16 : saisie en azimut géographique (0 nord, 90 est), le moteur garde 0 = sud, 90 = ouest."""
+    from interface.formulaire import ORIENTATIONS, _azimut_du_curseur, valeurs_des_widgets
+    from interface.saisie import azimut_geographique, libelle_orientation, orientation_moteur
+    assert len(ORIENTATIONS) == 36 and ORIENTATIONS[18] == 180
+    for moteur, geo in ((0.0, 180.0), (90.0, 270.0), (-90.0, 90.0), (180.0, 0.0), (20.0, 200.0)):
+        assert azimut_geographique(moteur) == geo and orientation_moteur(geo) == pytest.approx(
+            moteur if moteur != 180.0 else -180.0)
+    assert libelle_orientation(20.0) == "200° · sud" and libelle_orientation(-90.0) == "90° · est"
+    assert _azimut_du_curseur(-176.0) == 0 and _azimut_du_curseur(13.0) == 190
+    assert valeurs_des_widgets(replace(IMMEUBLE, orientation_deg=-30.0))["orientation"] == 150
+    # Une orientation hors des huit points cardinaux tourne les quatre façades
+    groupe = _groupe(replace(QUATRE_FACADES, orientation_deg=20.0))
+    assert [b.orientation_deg for b in groupe.baies] == [20.0, 110.0, -160.0, -70.0]
+
+
 def test_boite_figee_et_comparable():
     """Deux boîtes égales sont la même clé de cache ; une boîte ne se modifie pas en place."""
     assert IMMEUBLE == IMMEUBLE and hash(IMMEUBLE) == hash(IMMEUBLE)
@@ -310,6 +359,66 @@ def test_course_du_soleil_d_ete():
     assert "21 juin, 16 h" in textes
 
 
+def test_soleil_de_16_h_et_ombre_portee():
+    """0.9.16 : 16 h légale ≈ 14 h 08 solaire à 2,5° E : soleil au sud-ouest, à 55° ; ombre au nord-est de la boîte,
+    longue de hauteur / tan(55°) ; façades à l'ombre plus sombres."""
+    from interface.axonometrie import (MURS, angle_horaire, couleur_facade, direction_soleil, enveloppe_convexe,
+                                       ombre_au_sol)
+    assert angle_horaire(14.0) == pytest.approx(2.08, abs=0.01)             # 14 h légale : presque midi solaire
+    soleil = direction_soleil(angle_horaire(16.0))
+    hauteur = math.degrees(math.asin(soleil[2]))
+    azimut = math.degrees(math.atan2(-soleil[0], -soleil[1]))               # moteur : 0 = sud, 90 = ouest
+    assert 54.0 < hauteur < 57.0 and 50.0 < azimut < 65.0
+    # Enveloppe convexe d'un carré et de son centre : le carré
+    carre = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    assert sorted(enveloppe_convexe(carre + [(0.5, 0.5)])) == sorted(carre)
+    # Ombre d'une boîte au sud, sous ce soleil : elle déborde au nord et à l'est de l'emprise, de la bonne longueur
+    boite = replace(IMMEUBLE, orientation_deg=0.0)
+    ombre = ombre_au_sol(boite, soleil)
+    longueur = boite.hauteur_m / math.tan(math.radians(hauteur))
+    assert max(y for _, y in ombre) == pytest.approx(boite.profondeur_m / 2 - longueur * soleil[1] / math.hypot(
+        soleil[0], soleil[1]))
+    assert max(x for x, _ in ombre) > boite.longueur_m / 2 and min(x for x, _ in ombre) == -boite.longueur_m / 2
+    # Façades : au soleil le sud et l'ouest, à l'ombre le nord et l'est
+    couleurs = {f["cle"]: couleur_facade(boite, f, soleil) for f in boite.facades()}
+    mur = MURS[boite.teinte]
+    assert couleurs["principale"] == couleurs["pignon_a"] == mur and couleurs["arriere"] == couleurs["pignon_b"] != mur
+    # Nord : une flèche (polygone sombre) et la lettre N
+    from interface import charte
+    svg = dessiner(boite)
+    assert svg.count(f"fill='{charte.BLEU_NUIT}' stroke='none'") >= 1 and ">N</text>" in svg
+
+
+def test_heure_du_soleil():
+    """0.9.16 : soleil de 6 à 20 h, pas de 2 h. Toujours visible (à 6 h, remonté à son lever, vers 6 h 15) ;
+    l'ombre reste dans le sol, et le dessin garde son cadrage d'une heure à l'autre."""
+    from interface.axonometrie import (HAUTEUR_MIN_SOLEIL_DEG, HEURES_SOLEIL, RAYON_SOL, angle_horaire, couper,
+                                       direction_soleil, heure_dessinee, libelle_heure, ombre_au_sol, tour_du_sol)
+    assert HEURES_SOLEIL == (6, 8, 10, 12, 14, 16, 18, 20)
+    assert direction_soleil(angle_horaire(6))[2] < 0                         # 6 h pile : encore sous l'horizon
+    for heure in HEURES_SOLEIL:
+        hauteur = math.degrees(math.asin(direction_soleil(angle_horaire(heure_dessinee(heure)))[2]))
+        assert hauteur >= HAUTEUR_MIN_SOLEIL_DEG - 1e-9
+    assert heure_dessinee(6) == pytest.approx(6.28, abs=0.02) and libelle_heure(6) == "21 juin, lever (6 h 15)"
+    assert heure_dessinee(20) == 20 and libelle_heure(20) == "21 juin, 20 h"
+    # Découpe d'un polygone par une fenêtre convexe
+    assert sorted(couper([(0, 0), (2, 0), (2, 2), (0, 2)], [(1, -5), (5, -5), (5, 5), (1, 5)])) == \
+        sorted([(1, 0), (2, 0), (2, 2), (1, 2)])
+    espace = "{http://www.w3.org/2000/svg}"
+    sol_16h = None
+    for heure in HEURES_SOLEIL:
+        soleil = direction_soleil(angle_horaire(heure_dessinee(heure)))
+        rayon = RAYON_SOL * math.hypot(IMMEUBLE.longueur_m, IMMEUBLE.profondeur_m)
+        ombre = couper(ombre_au_sol(IMMEUBLE, soleil), tour_du_sol(rayon))
+        assert ombre and all(math.hypot(x, y) <= rayon + 1e-6 for x, y in ombre)
+        svg = ET.fromstring(dessiner(IMMEUBLE, heure=heure))
+        assert libelle_heure(heure) in [t.text for t in svg.iter(f"{espace}text")]
+        sol = [float(v) for v in svg.find(f"{espace}polygon").get("points").replace(",", " ").split()]
+        sol_16h = sol_16h or [float(v) for v in ET.fromstring(dessiner(IMMEUBLE)).find(
+            f"{espace}polygon").get("points").replace(",", " ").split()]
+        assert sol == pytest.approx(sol_16h, abs=2.0)                       # même cadrage, à 2 px près
+
+
 # ============================================================
 # TEXTES : aides, glossaire, accueil (0.9.6)
 # ============================================================
@@ -318,7 +427,8 @@ def test_aides_hors_du_code_et_glossaire_complet():
     from interface.briques import BRIQUES
     # Plus aucune aide écrite dans le code : toutes viennent de interface/textes/aides.csv
     sources = {nom: open(os.path.join(RACINE, nom), encoding="utf-8").read()
-               for nom in ("app.py", "interface/formulaire.py", "interface/briques/semaine_chaude.py")}
+               for nom in ("app.py", "interface/formulaire.py", "interface/briques/semaine_chaude.py",
+                           "interface/briques/dh.py")}
     assert all('help="' not in texte for texte in sources.values())
     # Chaque aide sert : sa clé est celle d'un widget de la page
     tout = "".join(sources.values())
@@ -348,7 +458,7 @@ def test_differences_de_saisie():
     assert differences(IMMEUBLE, IMMEUBLE) == []
     variante = replace(IMMEUBLE, uw=1.1, orientation_deg=90.0, traversant=False, part_vitree_arriere=0.35)
     assert differences(IMMEUBLE, variante) == [
-        ("Orientation de la façade principale", "sud", "ouest"), ("Logements traversants", "oui", "non"),
+        ("Orientation de la façade principale", "180° · sud", "270° · ouest"), ("Logements traversants", "oui", "non"),
         ("Part vitrée, façade arrière", "25 %", "35 %"), ("Uw des baies", "1,40 W/m².K", "1,10 W/m².K")]
     # Un réglage sans effet des deux côtés n'est pas listé ; il l'est dès que son option est allumée
     assert differences(IMMEUBLE, replace(IMMEUBLE, brasseur_debit_m3h=9000.0)) == []
@@ -421,6 +531,30 @@ def test_semaine_la_plus_chaude(resultats):
     # Le décalage reste dans l'année
     assert len(extraire_semaine(resultats.ete, 400)) == 168 and len(extraire_semaine(resultats.ete, -400)) == 168
     assert par_jour(resultats.ete)["dh"].sum() == pytest.approx(resultats.dh["dh"])
+    # 0.9.16 : fenêtres du graphique zoomable de la brique DH (bornes en millisecondes, comme Vega)
+    import altair as alt
+    import pandas as pd
+    from interface.briques.dh import ETE_ENTIER, JOUR, SEMAINE, apercu, bornes_selectionnees, fenetre, temperatures
+    en_date = lambda ms: pd.to_datetime(ms, unit="ms")
+    assert fenetre(resultats.ete, ETE_ENTIER) is None
+    bornes_semaine = fenetre(resultats.ete, SEMAINE)
+    assert tuple(map(en_date, bornes_semaine)) == (semaine["date"].iloc[0], semaine["date"].iloc[-1])
+    debut, fin = map(en_date, fenetre(resultats.ete, JOUR))
+    jours = par_jour(resultats.ete)
+    assert debut.date() == fin.date() == jours.loc[jours["dh"].idxmax(), "date"].date()
+    # Cadre tracé sur la bande du dessous : rendu par Streamlit en millisecondes (ou en dates) ; absent : None
+    assert bornes_selectionnees({"selection": {"zoom": {"date": list(bornes_semaine)}}}) == bornes_semaine
+    assert bornes_selectionnees({"selection": {"zoom": {"date": ["2023-08-06T02:00:00", "2023-08-07"]}}})[1]         == int(pd.Timestamp("2023-08-07").value // 1_000_000)
+    assert bornes_selectionnees({"selection": {"zoom": {}}}) is None and bornes_selectionnees(None) is None
+    # Les deux graphiques s'écrivent : la bande porte la sélection « zoom » posée sur la semaine, le graphique du
+    # dessus ne reçoit que les heures de la fenêtre (Streamlit ne suit pas un domaine imposé à l'axe du temps)
+    with alt.data_transformers.disable_max_rows():          # Streamlit, lui, passe les données sans limite
+        bande = apercu(resultats.ete, bornes_semaine).to_dict()
+        dessus = temperatures(resultats.ete, bornes_semaine).to_dict()
+        ete_entier = temperatures(resultats.ete).to_dict()
+    assert bande["params"][0]["name"] == "zoom" and bande["params"][0]["value"]["x"] == list(bornes_semaine)
+    lignes = lambda spec: sorted(len(donnees) for donnees in spec["datasets"].values())
+    assert lignes(dessus) == [168, 3 * 168] and lignes(ete_entier)[0] > 10 * 168      # surface, puis courbes
 
 
 def test_ecarts_entre_deux_calculs(resultats):

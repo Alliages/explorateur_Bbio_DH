@@ -2,25 +2,38 @@
 ============================================================
  BRIQUE « DH » — durée et intensité de l'inconfort d'été
 ============================================================
- Niveau 1 : le DH face à son maximum, puis, jour par jour sur la
- période de confort adaptatif, la température la plus haute
- dehors et dedans face au seuil de confort, et les degrés-heures
- que chaque jour ajoute.
+ Niveau 1 : le DH face à son maximum, puis, heure par heure sur
+ la période de confort adaptatif, la température dehors et
+ dedans face au seuil de confort, avec les degrés-heures comptés.
+ En dessous, les degrés-heures de chaque jour : on y trace un
+ cadre à la souris pour zoomer sur ces jours (comme le curseur de
+ zoom de l'onglet Analyse de Météo et Chaleur) ; trois boutons
+ ouvrent l'été entier, la semaine la plus chaude ou le jour le
+ plus chaud ; la molette zoome aussi sur le graphique du dessus.
  Niveau 2 : éq. 2551 de la fiche 13.5, moteur/dh.py.
 ============================================================
 """
 
 import altair as alt
+import pandas as pd
 import streamlit as st
 
+from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE
 from interface import charte
+from interface.aides import aide
 from interface.briques.base import Brique
-from interface.briques.graphiques import FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs, legende, nombre
+from interface.briques.graphiques import (FORMAT_HEURE, FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs,
+                                          etiquettes_heures, legende, nombre, traits)
+from interface.briques.semaine_chaude import debut_semaine_la_plus_chaude
 from moteur.dh import degres_heures, dh_max
 from moteur.hypotheses import hyp
 
 SERIES = {"Extérieur": charte.COULEUR_EXTERIEUR, "Intérieur (opérative)": charte.COULEUR_INTERIEUR,
-          "Seuil de confort": charte.COULEUR_LIMITE}
+          "Seuil de confort": charte.COULEUR_SEUIL}
+# Fenêtres proposées au-dessus du graphique ; la première est celle de l'ouverture
+ETE_ENTIER, SEMAINE, JOUR = "Été entier", "Semaine la plus chaude", "Jour le plus chaud"
+FENETRES = (ETE_ENTIER, SEMAINE, JOUR)
+ZOOM = "zoom"                   # nom de la sélection tracée sur la bande des DH de chaque jour
 
 
 def par_jour(ete):
@@ -31,28 +44,86 @@ def par_jour(ete):
         dh=("dh_horaire", "sum")).reset_index()
 
 
-def _temperatures(jours):
-    """Maximum du jour, dehors et dedans, et seuil de confort de jour."""
-    longue = jours.rename(columns={"exterieur": "Extérieur", "interieur": "Intérieur (opérative)",
-                                   "seuil": "Seuil de confort"}).melt(
+def _ms(instant):
+    """Instant en millisecondes depuis 1970, comme Vega lit les dates des données (heure lue sans fuseau)."""
+    return int(pd.Timestamp(instant).value // 1_000_000)
+
+
+def fenetre(ete, choix):
+    """Bornes (première et dernière heure, en millisecondes) de la fenêtre choisie, ou None pour l'été entier.
+
+    Semaine la plus chaude : les sept jours qui comptent le plus de degrés-heures (comme la brique « Semaine
+    chaude ») ; jour le plus chaud : le jour qui en compte le plus.
+    """
+    if choix == SEMAINE:
+        debut = debut_semaine_la_plus_chaude(ete)
+        heures = ete["date"].iloc[debut:debut + JOURS_PAR_SEMAINE * HEURES_PAR_JOUR]
+    elif choix == JOUR:
+        jours = par_jour(ete)
+        jour = jours.loc[jours["dh"].idxmax(), "date"]
+        heures = ete["date"][ete["date"].dt.normalize() == jour]
+    else:
+        return None
+    return _ms(heures.iloc[0]), _ms(heures.iloc[-1])
+
+
+def bornes_selectionnees(evenement):
+    """Bornes (en millisecondes) du cadre tracé sur la bande des DH de chaque jour, ou None s'il n'y en a pas.
+
+    evenement : ce que rend st.altair_chart(…, on_select="rerun") ; la sélection « zoom » porte sur « date ».
+    """
+    try:
+        valeurs = evenement["selection"][ZOOM]["date"]
+    except (KeyError, TypeError):
+        return None
+    if not valeurs or len(valeurs) != 2:
+        return None
+    return tuple(v if isinstance(v, (int, float)) else _ms(v) for v in valeurs)
+
+
+def temperatures(ete, bornes=None):
+    """Heure par heure : température dehors et dedans, seuil de confort, et en orange les degrés-heures comptés
+    (la surface entre le seuil et la température intérieure, aux heures retenues).
+
+    bornes : jours montrés (millisecondes), None pour l'été entier. Seules ces heures sont envoyées à la page (un
+    domaine imposé à l'axe du temps n'est pas suivi par Streamlit). La molette zoome encore, le glisser déplace,
+    le double-clic revient aux bornes.
+    """
+    periode = ete[ete["confort_adaptatif"] > 0]
+    if bornes:
+        debut, fin = (pd.to_datetime(b, unit="ms") for b in bornes)
+        periode = periode[(periode["date"] >= debut) & (periode["date"] <= fin)]
+    axe_x = alt.X("date:T", title=None, axis=etiquettes_heures())
+    longue = periode.rename(columns={"te": "Extérieur", "theta_op": "Intérieur (opérative)",
+                                     "seuil_confort_corrige": "Seuil de confort"}).melt(
         id_vars="date", value_vars=list(SERIES), var_name="serie", value_name="temperature")
+    longue["temperature"] = longue["temperature"].round(1)          # page plus légère, même lecture
     base = alt.Chart(longue).encode(
-        x=alt.X("date:T", title=None, axis=alt.Axis(format=FORMAT_JOUR)),
-        y=alt.Y("temperature:Q", title="Maximum du jour (°C)", scale=alt.Scale(zero=False)),
-        color=alt.Color("serie:N", scale=echelle_couleurs(SERIES), legend=legende()))
-    lignes = base.mark_line(strokeWidth=2, interpolate="step-after")
-    survol = base.mark_circle(size=70, opacity=0).encode(
-        tooltip=[alt.Tooltip("date:T", title="Jour", format=FORMAT_JOUR), alt.Tooltip("serie:N", title="Série"),
-                 alt.Tooltip("temperature:Q", title="Maximum (°C)", format=".1f")])
-    return (lignes + survol).properties(height=HAUTEUR)
+        x=axe_x, y=alt.Y("temperature:Q", title="Température (°C)", scale=alt.Scale(zero=False)),
+        color=alt.Color("serie:N", scale=echelle_couleurs(SERIES), legend=legende()),
+        strokeDash=traits(SERIES, pointilles=("Seuil de confort",)))
+    lignes = base.mark_line(strokeWidth=2, clip=True).add_params(
+        alt.selection_interval(bind="scales", encodings=["x"]))
+    survol = base.mark_circle(size=50, opacity=0, clip=True).encode(
+        tooltip=[alt.Tooltip("date:T", title="Heure", format=FORMAT_HEURE), alt.Tooltip("serie:N", title="Série"),
+                 alt.Tooltip("temperature:Q", title="°C", format=".1f")])
+    comptes = periode[["date"]].assign(seuil_confort_corrige=periode["seuil_confort_corrige"].round(2),
+                                       haut=(periode["seuil_confort_corrige"] + periode["dh_horaire"]).round(2))
+    surface = alt.Chart(comptes).mark_area(color=charte.COULEUR_INCONFORT, opacity=0.45, interpolate="step",
+                                           clip=True).encode(x=axe_x, y="seuil_confort_corrige:Q", y2="haut:Q")
+    return (surface + lignes + survol).properties(height=HAUTEUR)
 
 
-def _dh_par_jour(jours):
-    return alt.Chart(jours).mark_bar(color=charte.COULEUR_INCONFORT).encode(
+def apercu(ete, bornes=None):
+    """Degrés-heures de chaque jour, avec la sélection « zoom » : un cadre (celui des bornes au départ) que l'on
+    trace ou déplace à la souris pour choisir les jours montrés au-dessus."""
+    zoom = alt.selection_interval(encodings=["x"], name=ZOOM, **({"value": {"x": list(bornes)}} if bornes else {}))
+    return alt.Chart(par_jour(ete)).mark_bar(color=charte.COULEUR_INCONFORT).encode(
         x=alt.X("date:T", title=None, axis=alt.Axis(format=FORMAT_JOUR)),
         y=alt.Y("dh:Q", title="DH du jour (°C.h)"),
         tooltip=[alt.Tooltip("date:T", title="Jour", format=FORMAT_JOUR),
-                 alt.Tooltip("dh:Q", title="Degrés-heures (°C.h)", format=".1f")]).properties(height=HAUTEUR_BANDE)
+                 alt.Tooltip("dh:Q", title="Degrés-heures (°C.h)", format=".1f")]).add_params(
+        zoom).properties(height=HAUTEUR_BANDE)
 
 
 def afficher(r, boite):
@@ -65,14 +136,25 @@ def afficher(r, boite):
     colonnes[1].metric("DH max", nombre(r.dh["dh_max"], 0, "°C.h"))
     colonnes[2].metric("Heures d'inconfort", nombre(r.dh["nb_h_inconfort"], 0, "h"))
     colonnes[3].metric("Température la plus haute", nombre(r.dh["theta_op_max"], 1, "°C"))
-    jours = par_jour(r.ete)
-    if jours.empty:
+    if par_jour(r.ete).empty:
         st.info("Ce climat n'a pas de période de confort adaptatif : aucun degré-heure n'est compté.")
         return
-    st.caption("Chaque jour de la période de confort adaptatif : la température la plus haute dehors et "
-               "dedans, et le seuil de confort de la journée. En dessous, les degrés-heures que le jour ajoute.")
-    st.altair_chart(_temperatures(jours), alt="Températures maximales du jour, dehors et dedans, et seuil de confort")
-    st.altair_chart(_dh_par_jour(jours), alt="Degrés-heures d'inconfort de chaque jour")
+    choix = st.segmented_control("Montrer", FENETRES, default=ETE_ENTIER, required=True, key="dh_fenetre",
+                                 help=aide("dh_fenetre"))
+    st.caption("Heure par heure sur la période de confort adaptatif : la température dehors (noir) et dedans "
+               "(jaune), le seuil de confort (orange, en pointillé) et, en orange, les degrés-heures comptés. "
+               "En dessous, les degrés-heures de chaque jour : y tracer un cadre à la souris montre ces jours-là, "
+               "le déplacer fait avancer ; la molette zoome sur le graphique du dessus. Heure légale.")
+    bornes = fenetre(r.ete, choix)
+    haut = st.container()       # le graphique du dessus attend le cadre tracé sur celui du dessous
+    # Deux graphiques séparés, liés par Streamlit (on_select) : réunis dans un alt.vconcat de couches, ils
+    # s'élargissent sans fin dans la page. La clé suit le bouton choisi : changer de bouton efface le cadre tracé.
+    evenement = st.altair_chart(apercu(r.ete, bornes), on_select="rerun", selection_mode=ZOOM,
+                                key=f"dh_apercu_{FENETRES.index(choix)}",
+                                alt="Degrés-heures de chaque jour de la période de confort adaptatif")
+    with haut:
+        st.altair_chart(temperatures(r.ete, bornes_selectionnees(evenement) or bornes),
+                        alt="Températures dehors et dedans et seuil de confort, heure par heure")
 
 
 def reperes():
