@@ -1865,3 +1865,54 @@ Un écart infime franchit un seuil (hystérésis de l'ouverture, fermeture des p
 propage aux heures suivantes : le DH porte un « bruit » de l'ordre de 0,2 %. Sans effet sur la validation (± 10 %),
 mais deux variantes proches ne se départagent pas en dessous ; et une optimisation n'est sans effet que si elle
 garde les résultats au bit près.
+
+## 0.9.30 — audit du code (relecture d'ensemble), constats 1 à 3 et 5 à 7 corrigés
+
+Audit du dépôt entier fait dans Claude Code le 22/11/2026, sur la 0.9.27, avec la grille « ponytail-audit » :
+justesse, sûreté, tenue à la charge, tests, vitesse, code en trop. Chaque constat repose sur un cas concret ; ceux
+qui n'en avaient pas ont été écartés. Charge supposée : une personne à la fois, en local ou sur Streamlit
+Community Cloud (calcul en Python pur, lié au processeur : sur un serveur partagé, des calculs lancés en même temps
+passent l'un après l'autre ; c'est une limite de conception, pas un défaut à cette charge). Tests à l'audit :
+393 réussis, 2 sautés.
+
+### Constats
+
+| N° | Constat | Où | Suite |
+|---|---|---|---|
+| 1 | Aucun test ne fige les résultats : la non-régression se faisait à la main à chaque audit (l'exemple du README était passé de 34,3 à 27,8 points sans qu'aucun test n'échoue) | `tests/` | **0.9.30** : `tests/test_non_regression.py` |
+| 2 | Deux boucles annuelles : `groupe.simuler_groupe()` ne servait qu'aux tests, le Bbio et le DH passant par `besoins.calculer_besoins()` ; les tests du bilan d'énergie annuel, des inerties longues, de l'échangeur et des brasseurs vérifiaient la copie | `moteur/groupe.py` | **0.9.30** : supprimée, tests reportés |
+| 3 | Versions des dépendances sans borne haute (`pandas>=2.1`, `streamlit>=1.57`) : l'hébergeur installe la dernière à chaque redémarrage ; pandas 2.1 jamais testé (tests sous pandas 3.1.1) | `requirements.txt` | **0.9.30** : versions épinglées |
+| 4 | Équilibre des infiltrations : environ un tiers du temps du calcul du DH | `moteur/infiltrations.py` | Déjà traité en 0.9.29 (− 9 %) ; la piste proposée par l'audit, partir de la Pib de l'heure précédente, y a été essayée et écartée (aucun essai gagné, résultats changés) |
+| 5 | `besoins.temperature_sonde()` n'est appelée nulle part (le calcul appelle `_sonde`) | `moteur/besoins.py` | **0.9.30** : corrigé |
+| 6 | `calcul.calculer()` refait `app._calculer()` et ne sert qu'à un fixture de `tests/test_interface.py` | `interface/calcul.py` | **0.9.30** : corrigé |
+| 7 | La docstring de `lister_etudes()` annonce des couples (chemin, empreinte) ; la fonction rend les chemins | `outils/valider.py` | **0.9.30** : corrigé |
+
+Vérifiés et écartés : seuils d'altitude à 400 m différents entre le Bbio max et la météo (voulu, hypothèse 43,
+testé) ; période de confort adaptatif vide (impossible dans l'interface : essayé à 2 500 m dans les 8 zones) ;
+boîte entièrement adiabatique (le calcul se fait, avec l'avertissement) ; infobulles du dessin (texte échappé).
+Non relus en détail : `outils/lire_rset.py`, `comparer_reference.py`, `comparer_horaires.py`, `outils/typologies/`,
+`interface/axonometrie.py`, `interface/coupe.py`, les briques ; équations de `groupe.py`, `solaire.py`,
+`masques.py`, `protections.py`, `ouvertures.py`, `brasseurs.py`, `enveloppe.py` non confrontées à l'annexe III ;
+interface non lancée ; validation sur les études non relancée (fichiers hors du dépôt). Remarque d'environnement :
+le Python du `.venv` vient d'une distribution Anaconda (Python 3.11.16), alors que la règle du projet l'exclut.
+
+### Corrections de la 0.9.30
+
+- **Non-régression** (`tests/test_non_regression.py`) : Bbio et DH des six boîtes de départ (valeurs de la 0.9.29,
+  celles de la table de la 0.9.27) et de l'exemple du `README.md`. Tolérances : 0,05 point de Bbio, 0,5 % de DH,
+  au-dessus du bruit numérique de 0,2 % mesuré en 0.9.29. Une modification voulue des résultats met à jour ces
+  valeurs. Quatorze calculs annuels, une cinquantaine de secondes.
+- **Une seule boucle annuelle** : `simuler_groupe()`, `COLONNES_APPORTS` et `COLONNES_BRASSEURS` supprimés de
+  `moteur/groupe.py`. Le contrôle de l'efficacité de l'échangeur (entre 0 et 1), qui n'existait que là, passe dans
+  `calculer_besoins()`. Dans `tests/test_groupe.py` : bilan d'énergie annuel, inerties longues et brasseurs passent
+  par `calculer_besoins()` (scénarios du logement collectif ; brasseurs : leur consommation se retrouve heure par
+  heure dans les apports) ; l'équilibre analytique de l'échangeur (éq. 382) se vérifie sur `pas_groupe()` à
+  température constante, et l'air soufflé de la boucle du moteur (éq. 378) heure par heure ; le test des apports
+  mal formés, propre à l'ancienne fonction, disparaît. Résultats du moteur inchangés.
+- **Versions épinglées** (`requirements.txt`) : numpy 2.4.6, pandas 3.1.1, streamlit 1.67.0, altair 6.3.0
+  (importé directement par les briques), pytest 9.2.0, openpyxl 3.1.5, celles des tests.
+- **Constats 5 à 7** : `besoins.temperature_sonde()` et `calcul.calculer()` supprimées (le fixture de
+  `tests/test_interface.py` écrit `Resultats(**resultats_bbio(b), **resultats_dh(b))`) ; docstring de
+  `valider.lister_etudes()` corrigée.
+- `python -m pytest` : 400 réussis, 2 sautés (un test des apports retiré, un de l'air soufflé et sept de
+  non-régression ajoutés).

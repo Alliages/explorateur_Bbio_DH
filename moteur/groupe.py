@@ -30,7 +30,9 @@
  Le calcul d'une heure est coupé en deux : preparer_pas() fait
  une fois tout ce qui ne dépend pas de la puissance émise par
  le système, resoudre_pas() donne les températures pour une
- puissance. pas_groupe() enchaîne les deux.
+ puissance. pas_groupe() enchaîne les deux. L'année, heure par
+ heure, se déroule dans moteur.besoins.calculer_besoins (seule
+ boucle annuelle du moteur depuis la 0.9.30).
 
  Calcul d'une heure (fiche 5.21, § 5.21.3.1) :
    1. coefficients Hg_ei, Hg_es, Hg_em, Hg_is, Hg_ms (éq. 323 à 341) ;
@@ -77,8 +79,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE, USAGES_HABITATION
-from moteur.brasseurs import ARRET, pas_brasseurs, preparer_brasseurs
+from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE
 from moteur.enveloppe import transmission_baies, transmission_parois, transmission_ponts
 from moteur.hypotheses import hyp
 from moteur.solaire import _controler_jeu, flux_solaires_baie, flux_solaires_paroi
@@ -89,13 +90,6 @@ KJ_PAR_WH = 3.6     # 1 Wh = 3,6 kJ : les capacités saisies en kJ/K sont conver
 TEMPERATURES = ("theta_i", "theta_s", "theta_mq", "theta_rm", "theta_op")
 # Flux du bilan d'énergie d'une heure (W) : leur somme est la chaleur prise par la masse (colonne « stockage »)
 FLUX_DU_BILAN = ["flux_ventilation", "flux_baies", "flux_parois", "flux_apports", "flux_inerties_longues"]
-# Colonnes facultatives du tableau « apports » de simuler_groupe() (W)
-COLONNES_APPORTS = ("phi_conv",         # apports internes convectifs (occupants, usages, éclairage…)
-                    "phi_rad",          # apports internes radiatifs
-                    "phi_sys_conv",     # puissance convective émise par le système (négative en refroidissement)
-                    "phi_sys_rad")      # puissance radiative émise par le système
-# Colonnes exigées dans « entrees_brasseurs » quand le groupe a des brasseurs d'air (voir moteur/brasseurs.py)
-COLONNES_BRASSEURS = ("hleg", "actif", "occupe", "theta_ifr", "ecart_conf_adapt")
 
 
 # ============================================================
@@ -516,86 +510,3 @@ def debit_ventilation(groupe):
         return base
     part_pointe = hyp("dugd_bbio") / (JOURS_PAR_SEMAINE * HEURES_PAR_JOUR)
     return base + (groupe.debit_ventilation_pointe_m3h - base) * part_pointe
-
-
-# ============================================================
-# 5. SIMULATION SUR TOUTES LES HEURES
-# ============================================================
-def simuler_groupe(groupe, meteo, jeu, apports=None, confort_adaptatif=None, efficacite_echangeur=None,
-                   entrees_brasseurs=None, usage_zone="logement_collectif"):
-    """Déroule le modèle du groupe sur toutes les heures de « meteo » (moteur.meteo.charger_meteo).
-
-    apports               tableau facultatif, une ligne par heure, colonnes parmi COLONNES_APPORTS (W) ;
-                          une colonne absente vaut zéro. Sans puissance de système, c'est l'évolution libre.
-    confort_adaptatif     période de confort adaptatif (Th-D, parois opaques : voir moteur/solaire.py)
-    efficacite_echangeur  efficacité de la récupération sur l'air extrait ; par défaut celle de la
-                          ventilation conventionnelle du Bbio (0,5, fiche 6.1)
-    entrees_brasseurs     exigé si le groupe a des brasseurs d'air : colonnes COLONNES_BRASSEURS
-
-    Ventilation (fiche 6.1) : débit moyen du groupe (debit_ventilation), Hg_ei = 0,34 × débit ; l'air entre à
-    θeieq = te + efficacité × (θi de fin d'heure précédente − te) (éq. 378).
-    Brasseurs d'air (fiche 8.32) : leur régime suit les températures de l'heure précédente ; leur chaleur
-    est ajoutée aux apports convectifs de l'heure.
-
-    Sortie : une ligne par heure, avec les colonnes de pas_groupe(), puis theta_eieq, chaleur_brasseurs_w,
-    energie_brasseurs_wh et ecart_ba (ΔθopBA, °C).
-    """
-    modele = preparer_modele(groupe, jeu)
-    sol = sollicitations_groupe(groupe, meteo, jeu, confort_adaptatif)
-    n = len(meteo)
-
-    # Apports internes et puissances du système : colonnes absentes à zéro
-    if apports is not None:
-        inconnues = [c for c in apports.columns if c not in COLONNES_APPORTS]
-        if inconnues or len(apports) != n:
-            raise ValueError(f"apports : {n} lignes et colonnes parmi {COLONNES_APPORTS} attendues "
-                             f"(colonnes inconnues : {inconnues}, lignes : {len(apports)})")
-    a = {c: (apports[c].to_numpy(float) if apports is not None and c in apports.columns else np.zeros(n))
-         for c in COLONNES_APPORTS}
-
-    # Ventilation
-    hg_ei = hyp("chaleur_volumique_air") * debit_ventilation(groupe)
-    if efficacite_echangeur is None:
-        efficacite_echangeur = hyp("ventilation_bbio_efficacite")
-    if not 0.0 <= efficacite_echangeur <= 1.0:
-        raise ValueError(f"Efficacité de l'échangeur hors de [0 ; 1] : {efficacite_echangeur}")
-
-    # Brasseurs d'air
-    types = preparer_brasseurs(groupe, usage_zone)
-    if types:
-        if entrees_brasseurs is None or any(c not in entrees_brasseurs.columns for c in COLONNES_BRASSEURS):
-            raise ValueError(f"Groupe « {groupe.nom} » : brasseurs d'air présents, entrees_brasseurs doit "
-                             f"porter les colonnes {COLONNES_BRASSEURS}")
-        b = {c: entrees_brasseurs[c].to_numpy() for c in COLONNES_BRASSEURS}
-    regimes = [ARRET] * len(types)
-    habitation = usage_zone in USAGES_HABITATION
-
-    # Colonnes en tableaux numpy : boucle horaire plus rapide qu'avec pandas
-    s = {c: sol[c].to_numpy() for c in ("te", "fs1", "fs3", "phi_sl", "phi_sh")}
-    etat = etat_initial()
-    lignes = []
-    for h in range(n):
-        # Brasseurs : à l'arrêt à la première heure (pas d'heure précédente), puis pilotés par l'heure h−1
-        chaleur = energie = ecart_ba = 0.0
-        if types and h > 0:
-            res_b = pas_brasseurs(types, regimes, groupe.volume_m3, hleg=int(b["hleg"][h]),
-                                  actif=bool(b["actif"][h]), occupe=bool(b["occupe"][h]),
-                                  theta_op_prec=etat.theta_op, theta_i_prec=etat.theta_i,
-                                  theta_rm_prec=etat.theta_rm, theta_ifr=b["theta_ifr"][h],
-                                  ecart_conf_adapt=b["ecart_conf_adapt"][h], habitation=habitation)
-            regimes = res_b["regimes"]
-            chaleur, energie, ecart_ba = res_b["chaleur_wh"], res_b["energie_wh"], res_b["ecart"]
-
-        # Air soufflé après l'échangeur (éq. 378), puis calcul de l'heure
-        theta_eieq = s["te"][h] + efficacite_echangeur * (etat.theta_i - s["te"][h])
-        r = pas_groupe(modele, etat, te=s["te"][h], hg_ei=hg_ei, theta_eieq=theta_eieq, fs1=s["fs1"][h],
-                       fs3=s["fs3"][h], phi_sl=s["phi_sl"][h], phi_sh=s["phi_sh"][h],
-                       phi_conv=a["phi_conv"][h] + chaleur, phi_rad=a["phi_rad"][h],
-                       phi_sys_conv=a["phi_sys_conv"][h], phi_sys_rad=a["phi_sys_rad"][h])
-        avancer_etat(modele, etat, r)
-        r["theta_eieq"] = theta_eieq
-        r["chaleur_brasseurs_w"] = chaleur
-        r["energie_brasseurs_wh"] = energie
-        r["ecart_ba"] = ecart_ba
-        lignes.append(r)
-    return pd.DataFrame(lignes, index=meteo.index)

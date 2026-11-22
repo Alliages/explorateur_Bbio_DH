@@ -4,6 +4,34 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 22/11/2026
 
+- **0.9.34** (poussée sur `travail` avec les 0.9.30 et 0.9.32 ; tests : 403 réussis, 2 sautés) : note de conception
+  validée le 22/11/2026. Variantes A à D (`interface/variantes.py` ; session « variantes », « lettre_reference »,
+  « depart_calcule ») à la place de la référence unique : « Garder en A », pastilles dans la barre des résultats,
+  un clic remet la saisie (`formulaire.remettre`) et le calcul, menu de la référence et des retraits. Synthèse
+  « Bbio et DH ensemble » (`interface/synthese.py`). Saisies de la paroi dans sa fiche (`formulaire.
+  saisir_dans_la_fiche`, clés « fiche_<champ> » recopiées dans le menu, puis `st.rerun()` du fragment). Résultats
+  du moteur inchangés. Vu dans Chrome (A puis B gardées, retour à A, synthèse face à A, Uw changé dans la fiche,
+  menu des variantes). Le serveur Streamlit ne recharge pas les modules importés modifiés : le relancer.
+- **0.9.32** (poussée avec la 0.9.34) : page « Explorer » reprise après
+  une critique de conception (25/40 ; rapport dans `.impeccable/critique/`, hors dépôt à décider). « Calculer »
+  collé en bas du menu ; barre des résultats collée en haut (`barre_resultats` : Bbio, DH, écart à la référence ou
+  au calcul précédent, état périmé, boutons) ; résultats périmés pâlis (`STYLE_PERIME`) ; surface, paroi examinée et
+  fiche à droite du dessin (deux colonnes dans le fragment `_dessin`), « Ce qu'elle fait » dessous ; titres des
+  volets résumés (`formulaire.resumes`, volets à clé), « Baies » ouvert. Styles dans `app.py` (`STYLE`) : le
+  `sticky` se pose sur l'enveloppe `stLayoutWrapper` du conteneur (sélecteur `:has`). Résultats du moteur inchangés.
+  Vu dans Chrome (1440 × 900 : défilement, saisie périmée, référence puis calcul, Bbio et DH, clic sur les baies).
+  **Suite : 0.9.34**, à concevoir avant de coder (bande de variantes, briques côte à côte, saisies dans la fiche) ;
+  points P2 de la critique dans `ROADMAP.md`, « Idées ».
+- **0.9.30** (poussée avec la 0.9.34) : audit du code entier (sept constats,
+  `docs/audit.md`, 0.9.30) ; résultats du moteur inchangés.
+  - Constat 1 : `tests/test_non_regression.py` fige le Bbio et le DH des six boîtes de départ et de l'exemple du
+    README (± 0,05 point, ± 0,5 % de DH). Une modification voulue des résultats doit y mettre à jour les valeurs.
+  - Constat 2 : `simuler_groupe()` supprimée de `moteur/groupe.py` ; ses tests passent par `calculer_besoins()`
+    ou `pas_groupe()` ; contrôle de l'efficacité de l'échangeur ajouté à `calculer_besoins()`.
+  - Constat 3 : `requirements.txt` épinglé sur les versions des tests.
+  - Constat 4 déjà traité par la 0.9.29. Constats 5 à 7 : `besoins.temperature_sonde()` et `calcul.calculer()`
+    supprimées, docstring de `valider.lister_etudes()` corrigée.
+  - Tests : 400 réussis, 2 sautés (3 min 17).
 - **0.9.29** (poussée sur `travail`) : calcul 1,16 fois plus rapide, résultats identiques au bit près
   (`moteur/infiltrations.py` : bilans des bornes gardés ; `moteur/ouvertures.py` : secteurs traversants, Cpr,
   hystérésis). Vectorisation numpy essayée et écartée (la boucle horaire lit l'heure précédente ; numpy plus lent

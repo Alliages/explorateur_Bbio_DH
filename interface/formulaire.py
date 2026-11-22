@@ -4,8 +4,9 @@
 ============================================================
  En tête, trois choix : le bâtiment de départ (la forme), le
  niveau de l'enveloppe (performant, moyen ou faible) et le calcul
- à lancer (DH, Bbio ou les deux). Puis un volet par thème ;
- chaque volet lit ses widgets et rend les champs de Boite
+ à lancer (DH, Bbio ou les deux). Puis un volet par thème, dont
+ le titre résume les valeurs (resumes) ; chaque volet lit ses
+ widgets et rend les champs de Boite
  (interface/saisie.py) qu'il renseigne. Les valeurs de départ
  sont celles de boite_de_depart(bâtiment, niveau) :
    - changer de bâtiment donne à chaque widget sa valeur de départ ;
@@ -27,6 +28,7 @@ import streamlit as st
 
 from config.reglages import ZONES_CLIMATIQUES
 from interface.aides import aide
+from interface.axonometrie import PREFIXE_BAIES
 from interface.saisie import (BATIMENTS_DE_DEPART, DEBORD_MAX_M, FACADES, NIVEAU_D_OUVERTURE, NIVEAUX_ENVELOPPE,
                               PAROIS_ADIABATIQUES, PART_VITREE_MAX, PAS_ORIENTATION_DEG, SANS_PROTECTION, TEINTES,
                               Boite, azimut_geographique, boite_de_depart, libelle_orientation, orientation_moteur,
@@ -56,12 +58,39 @@ LIBELLES_BRUIT = {"BR1": "BR1 (calme)", "BR2": "BR2", "BR3": "BR3 (bruyant)"}
 assert set(LIBELLES_PROTECTION) == {SANS_PROTECTION, *PROTECTIONS_MOBILES}
 assert set(LIBELLES_GESTION) == set(GESTIONS_PROTECTION) and set(LIBELLES_BRUIT) == set(EXPOSITIONS_BRUIT)
 assert set(LIBELLES_INERTIE) <= set(INERTIES_QUOTIDIENNES)
+# Curseurs repris dans la fiche de la paroi : champ → (libellé, minimum, maximum, pas). Les pas sont assez fins
+# pour les valeurs des niveaux d'enveloppe (donnees/typologies_logements.csv)
+CURSEURS = {"uw": ("Uw des baies (W/m².K)", 0.7, 3.0, 0.05),
+            "sw": ("Facteur solaire Sw", 0.1, 0.8, 0.01),
+            "u_mur": ("U des murs (W/m².K)", 0.10, 1.50, 0.05),
+            "u_toiture": ("U de la toiture (W/m².K)", 0.08, 1.00, 0.01),
+            "u_plancher": ("U du plancher bas (W/m².K)", 0.10, 1.50, 0.01)}
+# Saisies de la fiche, par sorte de paroi (« {facade} » : la façade de la paroi), et ce que couvre une saisie
+# commune à plusieurs parois (la boîte n'a qu'un Uw, qu'un U de mur…)
+SAISIES_FICHE = {"baies": ("part_vitree_{facade}", "uw", "sw", "protection"),
+                 "facade": ("part_vitree_{facade}", "u_mur", "teinte"),
+                 "toiture": ("u_toiture", "teinte"),
+                 "plancher_bas": ("u_plancher", "plancher_sur_sol")}
+SAISIES_COMMUNES = {"uw": "toutes les baies", "sw": "toutes les baies", "protection": "toutes les baies",
+                    "u_mur": "tous les murs", "teinte": "murs et toiture"}
+CLES_FACADES = tuple(cle for cle, _, _, _ in FACADES)
+PREFIXE_FICHE = "fiche_"        # clé d'une saisie de la fiche : « fiche_uw » (celle du menu : « uw »)
+# Volets du menu, dans l'ordre : titre → suffixe de leur clé (« volet_baies »)
+VOLETS = {"Site": "site", "Forme": "forme", "Baies": "baies", "Parois": "parois", "Air": "air",
+          "Confort d'été": "confort"}
 
 
 def _pourcent(libelle, valeur, cle, maxi=1.0, pas=5, desactive=False):
     """Curseur en pour cent, rendu en part (0 à 1)."""
     return st.slider(libelle, 0, round(maxi * 100), round(valeur * 100), step=pas, format="%d %%", key=cle,
                      help=aide(cle), disabled=desactive) / 100.0
+
+
+def _curseur(champ, defaut, desactive=False):
+    """Curseur d'un champ de CURSEURS, dans le menu (clé : le nom du champ)."""
+    libelle, mini, maxi, pas = CURSEURS[champ]
+    return st.slider(libelle, mini, maxi, getattr(defaut, champ), step=pas, key=champ, help=aide(champ),
+                     disabled=desactive)
 
 
 # ============================================================
@@ -119,9 +148,8 @@ def _baies(defaut, orientation_deg, adiabatiques):
         nom = f"{libelle} ({point_cardinal(orientation_deg + ecart)})"
         champs[f"part_vitree_{cle}"] = _pourcent(nom, getattr(defaut, f"part_vitree_{cle}"), f"part_vitree_{cle}",
                                                  PART_VITREE_MAX, desactive=cle in adiabatiques)
-    # Pas des curseurs : assez fins pour les valeurs des niveaux d'enveloppe (donnees/typologies_logements.csv)
-    champs["uw"] = st.slider("Uw des baies (W/m².K)", 0.7, 3.0, defaut.uw, step=0.05, key="uw", help=aide("uw"))
-    champs["sw"] = st.slider("Facteur solaire Sw", 0.1, 0.8, defaut.sw, step=0.01, key="sw", help=aide("sw"))
+    champs["uw"] = _curseur("uw", defaut)
+    champs["sw"] = _curseur("sw", defaut)
     champs["tl"] = st.slider("Transmission lumineuse", 0.1, 0.9, defaut.tl, step=0.01, key="tl", help=aide("tl"))
     protection = st.segmented_control("Protection mobile", list(LIBELLES_PROTECTION), default=defaut.protection,
                                       format_func=LIBELLES_PROTECTION.get, required=True, key="protection",
@@ -154,11 +182,9 @@ def _baies(defaut, orientation_deg, adiabatiques):
 
 def _parois(defaut, adiabatiques):
     # Une toiture ou un plancher bas adiabatique n'échange rien : ses saisies restent visibles mais sans effet
-    u_mur = st.slider("U des murs (W/m².K)", 0.10, 1.50, defaut.u_mur, step=0.05, key="u_mur", help=aide("u_mur"))
-    u_toiture = st.slider("U de la toiture (W/m².K)", 0.08, 1.00, defaut.u_toiture, step=0.01, key="u_toiture",
-                          help=aide("u_toiture"), disabled="toiture" in adiabatiques)
-    u_plancher = st.slider("U du plancher bas (W/m².K)", 0.10, 1.50, defaut.u_plancher, step=0.01, key="u_plancher",
-                           help=aide("u_plancher"), disabled="plancher_bas" in adiabatiques)
+    u_mur = _curseur("u_mur", defaut)
+    u_toiture = _curseur("u_toiture", defaut, desactive="toiture" in adiabatiques)
+    u_plancher = _curseur("u_plancher", defaut, desactive="plancher_bas" in adiabatiques)
     sur_sol = st.toggle("Plancher bas sur le sol", defaut.plancher_sur_sol, key="plancher_sur_sol",
                         help=aide("plancher_sur_sol"), disabled="plancher_bas" in adiabatiques)
     teinte = st.segmented_control("Teinte des murs et de la toiture", list(TEINTES), default=defaut.teinte,
@@ -255,23 +281,119 @@ def choisir_calculs():
     return CHOIX_CALCULS[choix]
 
 
+def resumes(defaut):
+    """Résumé de chaque volet en une ligne, pour son titre : le volet fermé montre ses valeurs principales.
+
+    Lu dans la session (la saisie en cours, avant que les widgets ne s'affichent), sinon dans la boîte de départ :
+    volet → texte, par exemple « Baies » → « 25/0/15/0 % · volets ».
+    """
+    from interface.briques.graphiques import nombre     # import ici : les briques importent ce module
+    depart = valeurs_des_widgets(defaut)
+
+    def valeur(cle):
+        return st.session_state.get(cle, depart[cle])
+
+    point = point_cardinal(orientation_moteur(valeur("orientation")))
+    niveaux = valeur("nb_niveaux")
+    parts = "/".join(str(valeur(f"part_vitree_{cle}")) for cle, _, _, _ in FACADES)
+    confort = ("climatisés" if valeur("climatise") else "brasseurs d'air" if valeur("brasseurs")
+               else "ni climatisation ni brasseurs")
+    return {"Site": f"{valeur('zone_climatique')} · {nombre(valeur('altitude_m'), 0, 'm')} · "
+                    f"{valeur('exposition_bruit')}",
+            "Forme": f"{nombre(valeur('longueur_m'), 0)} × {nombre(valeur('profondeur_m'), 0, 'm')} · "
+                     f"{niveaux} niveau{'x' if niveaux > 1 else ''} · {point}",
+            "Baies": f"{parts} % · {LIBELLES_PROTECTION[valeur('protection')].lower()}",
+            "Parois": f"U murs {nombre(valeur('u_mur'), 2)} · toiture {nombre(valeur('u_toiture'), 2)}",
+            "Air": f"{nombre(valeur('debit_ventilation_m3h_m2'), 1, 'm³/h.m²')} · "
+                   f"Q4Pa {nombre(valeur('permeabilite_q4pa'), 1)}",
+            "Confort d'été": confort}
+
+
 def saisir(defaut=boite_de_depart()):
     """Affiche les volets de saisie (à appeler dans le menu de gauche) et rend la Boite décrite.
 
     defaut : la boîte de départ (choisir_depart), qui donne la valeur initiale de chaque widget et les champs non
     saisis (part habitable).
+    Chaque volet a une clé : son titre porte le résumé de ses valeurs, qui change à chaque saisie, sans que le
+    volet ne se referme. « Baies » est ouvert à l'ouverture : c'est le levier le plus essayé.
     """
     champs = {}
-    with st.expander("Site", icon=":material/location_on:"):
+    resume = resumes(defaut)
+
+    def volet(nom, icone, ouvert=False):
+        return st.expander(f"{nom} · {resume[nom]}", expanded=ouvert, icon=icone, key=f"volet_{VOLETS[nom]}")
+
+    with volet("Site", ":material/location_on:"):
         champs.update(_site(defaut))
-    with st.expander("Forme", icon=":material/deployed_code:", expanded=True):
+    with volet("Forme", ":material/deployed_code:"):
         champs.update(_forme(defaut))
-    with st.expander("Baies", icon=":material/window:"):
+    with volet("Baies", ":material/window:", ouvert=True):
         champs.update(_baies(defaut, champs["orientation_deg"], champs["parois_adiabatiques"]))
-    with st.expander("Parois", icon=":material/layers:"):
+    with volet("Parois", ":material/layers:"):
         champs.update(_parois(defaut, champs["parois_adiabatiques"]))
-    with st.expander("Air", icon=":material/air:"):
+    with volet("Air", ":material/air:"):
         champs.update(_air(defaut))
-    with st.expander("Confort d'été", icon=":material/mode_fan:"):
+    with volet("Confort d'été", ":material/mode_fan:"):
         champs.update(_confort(defaut))
     return replace(defaut, **champs)
+
+
+# ============================================================
+# SAISIES DANS LA FICHE DE LA PAROI (0.9.34)
+# ============================================================
+# La fiche de la paroi examinée reprend les saisies de cette paroi. Un widget n'a qu'une clé : celui de la fiche a la
+# sienne (« fiche_uw »), recopiée dans celle du menu (« uw ») quand on le change. Le menu reste la seule source de
+# la boîte : saisir() le lit au passage suivant, qui doit être celui de toute la page (la fiche est dans un fragment,
+# voir app.py : saisie_par_la_fiche()).
+def saisies_de_la_paroi(boite, cle_paroi):
+    """Champs de la boîte que la fiche de cette paroi fait saisir, dans l'ordre (SAISIES_FICHE)."""
+    facade = None
+    if cle_paroi.startswith(PREFIXE_BAIES):
+        sorte, facade = "baies", cle_paroi[len(PREFIXE_BAIES):]
+    elif cle_paroi in CLES_FACADES:
+        sorte, facade = "facade", cle_paroi
+    else:
+        sorte = cle_paroi
+    return [champ.format(facade=facade) for champ in SAISIES_FICHE.get(sorte, ())]
+
+
+
+def _recopier_dans_le_menu(champ):
+    """Rappel d'une saisie de la fiche : sa valeur passe dans le widget du menu, et la page entière sera relancée."""
+    st.session_state[champ] = st.session_state[PREFIXE_FICHE + champ]
+    st.session_state["saisie_par_la_fiche"] = True
+
+
+def saisir_dans_la_fiche(boite, cle_paroi):
+    """Widgets de la fiche pour les saisies de cette paroi, à la valeur du menu ; changer l'un change le menu."""
+    valeurs = valeurs_des_widgets(boite)
+    for champ in saisies_de_la_paroi(boite, cle_paroi):
+        cle = PREFIXE_FICHE + champ
+        # La valeur du menu, posée avant le widget (pas de « value » : la session la donne)
+        st.session_state[cle] = st.session_state.get(champ, valeurs[champ])
+        commune = f" — {SAISIES_COMMUNES[champ]}" if champ in SAISIES_COMMUNES else ""
+        options = {"key": cle, "on_change": _recopier_dans_le_menu, "args": (champ,), "help": aide(champ)}
+        if champ.startswith("part_vitree_"):
+            facade = champ[len("part_vitree_"):]
+            st.slider("Part vitrée de la façade", 0, round(PART_VITREE_MAX * 100), step=5, format="%d %%",
+                      disabled=facade in boite.parois_adiabatiques, **options)
+        elif champ in CURSEURS:
+            libelle, mini, maxi, pas = CURSEURS[champ]
+            adiabatique = {"u_toiture": "toiture", "u_plancher": "plancher_bas"}.get(champ)
+            st.slider(libelle + commune, mini, maxi, step=pas, disabled=adiabatique in boite.parois_adiabatiques,
+                      **options)
+        elif champ == "protection":
+            st.segmented_control("Protection mobile" + commune, list(LIBELLES_PROTECTION),
+                                 format_func=LIBELLES_PROTECTION.get, required=True, **options)
+        elif champ == "teinte":
+            st.segmented_control("Teinte" + commune, list(TEINTES), format_func=str.capitalize, required=True,
+                                 **options)
+        elif champ == "plancher_sur_sol":
+            st.toggle("Plancher bas sur le sol", disabled="plancher_bas" in boite.parois_adiabatiques, **options)
+
+
+def remettre(boite, batiment, niveau):
+    """Remet dans la saisie une boîte gardée (variante) : chaque widget prend sa valeur, avec le bâtiment de départ
+    et le niveau d'enveloppe d'où elle venait (ils donnent les champs non saisis, comme la part habitable)."""
+    st.session_state.update(valeurs_des_widgets(boite))
+    st.session_state.update({"batiment_depart": batiment, "niveau_enveloppe": niveau})

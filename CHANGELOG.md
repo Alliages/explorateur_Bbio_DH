@@ -3,6 +3,67 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.34 — évolution (22/11/2026), variantes A à D, Bbio et DH ensemble, saisies dans la fiche
+
+Résultats du moteur inchangés. Suite de la 0.9.32, d'après la note de conception validée le 22/11/2026.
+
+- **Variantes A à D** (`interface/variantes.py`) à la place de la référence unique : « Garder en A » (puis B…)
+  range le calcul affiché, quatre au plus ; une pastille par variante dans la barre des résultats
+  (« A · 119,8 · 732 °C.h ») ; un clic remet sa saisie dans le menu et affiche son calcul aussitôt (en mémoire),
+  avec son bâtiment de départ et son niveau d'enveloppe. La première gardée est la référence (signet) ; le menu
+  à côté des pastilles change la référence ou retire une variante. Les écarts se lisent face à elle
+  (« −9 °C.h face à A »), la comparaison s'intitule « B face à la référence A ».
+- **Synthèse « Bbio et DH ensemble »** (`interface/synthese.py`), avant les briques, quand les deux calculs sont
+  lancés : les trois besoins pondérés en une barre, la référence en pâle dessous ; les degrés-heures de chaque jour,
+  la référence en trait noir ; une phrase des écarts (« Face à A, en kWh/m² : chauffage − 2,2… ; DH − 9 °C.h »).
+- **Saisies dans la fiche de la paroi** (`formulaire.saisir_dans_la_fiche`) : baies (part vitrée de la façade, Uw,
+  Sw, protection), façade (part vitrée, U des murs, teinte), toiture (U, teinte), plancher bas (U, sur le sol). Les
+  saisies communes le disent (« toutes les baies », « tous les murs »). Chacune a sa clé (« fiche_uw ») et se
+  recopie dans celle du menu, qui reste la seule source de la boîte ; la page entière est alors relancée.
+- Curseurs du menu repris dans la fiche : définis une fois (`formulaire.CURSEURS`).
+
+## 0.9.32 — évolution (22/11/2026), page « Explorer » : boucle saisie → calcul → lecture, résultats resserrés
+
+Résultats du moteur inchangés. Suite de la critique de conception de la page (score 25/40 ; boucle cassée au
+défilement, résultats étalés sur deux à trois écrans).
+
+- **« Calculer » toujours visible** : collé en bas du menu de gauche, sous les volets, avec l'état (« Résultats à
+  jour » ou « Saisie modifiée : 2 à 8 s par calcul »). Il était en haut et disparaissait quand on faisait défiler.
+- **Barre des résultats collée en haut de la page** (`barre_resultats`) : Bbio et DH, écart et part du max ; à
+  droite, l'état périmé et le second « Calculer », ou « Garder comme référence ». Elle remplace « Chiffres clés » et
+  reste visible en lisant les briques.
+- **Écart à la référence** : la référence gardée, l'écart des chiffres clés se lit face à elle (« −9 °C.h face à
+  la référence ») ; sans référence, face au calcul précédent, comme avant.
+- **Résultats périmés** : la saisie changée, les chiffres, la comparaison et les briques sont pâlis (encore lisibles) ;
+  « Garder comme référence » devient « Garder le calcul affiché comme référence » (il gardait déjà le calcul
+  affiché, sans le dire).
+- **La boîte à droite du dessin** : surface habitable et part des baies (en texte, plus en chiffres clés), paroi
+  examinée et sa fiche ; « Ce qu'elle fait » sous le dessin, sur toute la largeur. Le dessin et la fiche restent
+  dans un même fragment.
+- **Volets résumés** : le titre de chaque volet donne ses valeurs principales (« Baies · 25/0/25/0 % · volets »),
+  sans se refermer quand elles changent (volets à clé) ; « Baies » est ouvert à l'ouverture, plus « Forme ».
+- **Hauteur rendue aux résultats** : sous-titre sur l'accueil seulement (« Outil pédagogique » passe en pied de
+  menu), marge haute réduite, légende du dessin ramenée à deux lignes (la course du soleil et l'ombre dans l'aide de
+  « Vue depuis le »).
+
+## 0.9.30 — évolution (22/11/2026), audit du code : non-régression, une seule boucle annuelle, versions épinglées
+
+Résultats du moteur inchangés. Audit du dépôt entier (sept constats) et suite donnée à chacun : `docs/audit.md`,
+0.9.30.
+
+- **Test de non-régression** (`tests/test_non_regression.py`) : Bbio et DH des six boîtes de départ et de
+  l'exemple du `README.md`, comparés aux valeurs de la 0.9.29 (± 0,05 point, ± 0,5 % de DH). Le contrôle fait à
+  la main à chaque audit devient automatique.
+- **`simuler_groupe()` supprimée** (`moteur/groupe.py`, avec `COLONNES_APPORTS` et `COLONNES_BRASSEURS`) : seconde
+  boucle annuelle que ni le Bbio ni le DH n'utilisaient. Ses tests passent par `calculer_besoins()` ou
+  `pas_groupe()` (`tests/test_groupe.py`) ; le contrôle de l'efficacité de l'échangeur passe dans
+  `calculer_besoins()`.
+- **Versions épinglées** (`requirements.txt`) : celles des tests (numpy 2.4.6, pandas 3.1.1, streamlit 1.67.0,
+  altair 6.3.0, pytest 9.2.0, openpyxl 3.1.5), pour que l'hébergeur n'installe pas une version non testée.
+- **Nettoyages** : `moteur/besoins.temperature_sonde()` supprimée (jamais appelée) ; `interface/calcul.calculer()`
+  supprimée (elle refaisait `app._calculer()`, le fixture de `tests/test_interface.py` assemble lui-même les
+  résultats) ; docstring de `outils/valider.lister_etudes()` corrigée (elle rend des chemins).
+
 ## 0.9.29 — correction (22/11/2026), calcul plus rapide
 
 Résultats identiques au bit près (sorties horaires de 22 calculs annuels : 6 boîtes de départ et 5 variantes, Th-B

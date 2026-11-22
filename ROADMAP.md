@@ -40,6 +40,9 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.25 | Bilan en coupe exact | Correction : conduction des parois et des baies lue dans le modèle (masse θmq, surfaces θs), bilan fermé exactement, reste = stockage de la masse (hypothèse 103 corrigée) ; lecture « Heure de pointe (Wh) » de la coupe, pic du soleil transmis dans la fiche (hypothèse 105) | fait |
 | 0.9.27 | Audit de la 0.9.25 | Non-régression des bâtiments de départ ; relecture de `dh.py`, `confort.py`, `brasseurs.py`, `enveloppe.py` (points R1 à R6 de `docs/audit.md`) ; tendances de la boîte (six testées) ; documentation et fiabilité affichée mises à jour ; calcul inchangé | fait |
 | 0.9.29 | Calcul plus rapide | Infiltrations (bilans des bornes gardés) et ouverture des baies (secteurs, Cpr, hystérésis) : 1,16 fois plus rapide, résultats identiques au bit près ; vectorisation numpy essayée et écartée ; sensibilité du DH de 0,2 % à une perturbation de 1e-12 (`docs/audit.md`, 0.9.29) | fait |
+| 0.9.30 | Audit du code | Relecture d'ensemble (`docs/audit.md`, 0.9.30, constats 1 à 7) : test de non-régression des six boîtes de départ et de l'exemple du README, `simuler_groupe()` supprimée (une seule boucle annuelle, tests reportés sur `calculer_besoins()`), versions des dépendances épinglées ; nettoyages des constats 5 à 7 ; résultats inchangés | fait |
+| 0.9.32 | Page « Explorer » resserrée | Critique de conception (25/40) : « Calculer » collé en bas du menu, barre des résultats collée en haut (écart à la référence, état périmé), résultats périmés pâlis, la boîte et la fiche à droite du dessin, volets résumés dans leur titre, « Baies » ouvert | fait |
+| 0.9.34 | Variantes et lecture côte à côte | Variantes A à D (pastilles dans la barre des résultats, un clic remet la saisie, référence au choix) à la place de la référence unique ; synthèse « Bbio et DH ensemble » face à la référence ; saisies de la paroi dans sa fiche, liées au menu | fait |
 | 0.9.26 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 ; décalée de 0.9.16 le 20/11/2026, de 0.9.18, 0.9.20, 0.9.22 et 0.9.24 le 22/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
@@ -55,6 +58,8 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 
 ## Points à reprendre
 
+- **Montée de version des dépendances** (0.9.30) : les versions de `requirements.txt` sont épinglées ; pour en
+  monter une, relancer `python -m pytest` (non-régression comprise) et le noter au CHANGELOG.
 - **Vitesse du calcul, suites** (0.9.29, détail : `docs/audit.md`) : la boucle horaire dépend de l'heure
   précédente et ne se vectorise pas sur le temps. Pistes restantes, seulement si l'interface paraît lente ou pour
   les balayages (« Mesurer l'effet de cette paroi », tendances, validation) : calculer plusieurs variantes à la fois
@@ -307,6 +312,17 @@ Détail dans `docs/audit.md`, 0.9.11.
   serait plus proche des études.
 
 ## Idées
+
+- Suites de la critique de la page (0.9.32), priorité basse : virgule décimale et unité sur les curseurs
+  (« 1.30 » → « 1,30 W/m².K ») ; contraste de l'orange `#FA9600` en texte (1,9 à 2,2:1 sur blanc ou crème) et de
+  la courbe jaune de la température intérieure ; jauge du Bbio et du DH face à leur max ; référence en fantôme dans
+  les graphiques des briques ; « −0,0 (−0 %) » écrit « inchangé » dans la comparaison ; bouton « Deploy » masqué
+  (`client.toolbarMode`).
+- Suites de la 0.9.34 : export de la comparaison des variantes (rendu d'atelier) ; balayage d'une saisie
+  (« DH selon l'orientation ») ; plus de quatre variantes.
+- Import circulaire ancien : importer `interface.fiche_paroi` en premier échoue (`fiche_paroi` → `briques` →
+  `bilan` → `fiche_paroi`) ; `app.py` importe dans un ordre qui passe. À défaire en sortant `nombre` de
+  `interface/briques/`.
 
 - Masques lointains constitués d'arbres à feuilles caduques (fiche 3.2) : non traités en 0.8.2.
 - Valeurs par défaut de l'absorption des parois opaques (règles Th-Bât, tableau 66 : 0,4 clair, 0,6 moyen, 0,8

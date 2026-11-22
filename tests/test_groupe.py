@@ -3,12 +3,12 @@
 import math
 
 import numpy as np
-import pandas as pd
 import pytest
 
-from moteur.calendrier import construire_calendrier
+from moteur.besoins import calculer_besoins
 from moteur.groupe import (FLUX_DU_BILAN, TEMPERATURES, avancer_etat, etat_initial, inertie_groupe, matrice_groupe,
-                           pas_groupe, preparer_modele, simuler_groupe, sollicitations_groupe)
+                           pas_groupe, preparer_modele, sollicitations_groupe)
+from moteur.hypotheses import hyp
 from moteur.meteo import charger_meteo
 from moteur.structures import Baie, Brasseur, Groupe, Paroi, PontThermique
 
@@ -17,12 +17,6 @@ from moteur.structures import Baie, Brasseur, Groupe, Paroi, PontThermique
 # ------------------------------------------------------------------
 # Outils
 # ------------------------------------------------------------------
-def meteo_constante(te, heures=2000):
-    """Météo sans soleil ni rayonnement froid, à température extérieure constante."""
-    return pd.DataFrame({"dirN": 0.0, "diff": 0.0, "Gamma": 0.0, "Psi": 0.0, "Teciel": te, "te": te},
-                        index=range(heures))
-
-
 def groupe_test(**options):
     """Logement de 50 m² : 2 murs, 2 baies, des ponts thermiques, une ventilation."""
     options.setdefault("parois", [Paroi("Sud", "mur", 20.0, u=0.25, orientation_deg=0, alpha=0.6),
@@ -32,6 +26,14 @@ def groupe_test(**options):
     options.setdefault("ponts_thermiques", [PontThermique("Planchers", 30.0, 0.3)])
     options.setdefault("debit_ventilation_m3h", 75.0)
     return Groupe("Logement", 50.0, volume_m3=125.0, **options)
+
+
+def groupe_annuel(**options):
+    """Le même logement, complété pour la boucle annuelle du moteur : un logement (apports internes) et la
+    transmission lumineuse des baies (éclairage)."""
+    options.setdefault("baies", [Baie("Sud", 6.0, 0, uw=1.3, sw_e=0.5, tl=0.6),
+                                 Baie("Nord", 3.0, 180, uw=1.3, sw_e=0.5, tl=0.6)])
+    return groupe_test(nb_logements=1, **options)
 
 
 def regime_permanent(modele, heures=3000, **sollicitations):
@@ -229,15 +231,24 @@ def test_matrice_du_groupe():
 
 
 # ------------------------------------------------------------------
-# Année entière : bilan d'énergie (à 0,1 %)
+# Année entière, par la boucle du moteur (moteur.besoins.calculer_besoins, scénarios du logement collectif) :
+# bilan d'énergie (à 0,1 %). Jusqu'à la 0.9.29, ces tests passaient par simuler_groupe(), une seconde boucle
+# annuelle que ni le Bbio ni le DH n'utilisaient.
 # ------------------------------------------------------------------
+MODES = {"th_bc": "th_b", "th_d": "th_d"}       # jeu météo → mode du calcul (Bbio, DH)
+
+
+def annee(groupe, meteo, jeu, **options):
+    """L'année du groupe, heure par heure, calculée comme pour le Bbio (jeu th_bc) ou le DH (jeu th_d)."""
+    return calculer_besoins(groupe, meteo, mode=MODES[jeu], **options)
+
+
 @pytest.mark.parametrize("zone, jeu", [("H1a", "th_bc"), ("H3", "th_bc"), ("H2d", "th_d")])
 def test_bilan_energie_annuel(zone, jeu):
-    groupe = groupe_test(inertie_quotidienne="tres_lourde", inertie_sequentielle="lourde",
+    groupe = groupe_annuel(inertie_quotidienne="tres_lourde", inertie_sequentielle="lourde",
                          inertie_annuelle="personnalisee", ama_surf=1.0, cma_surf=6000.0)
     meteo = charger_meteo(zone, jeu, 100.0)
-    apports = pd.DataFrame({"phi_conv": np.full(len(meteo), 150.0), "phi_rad": np.full(len(meteo), 130.0)})
-    r = simuler_groupe(groupe, meteo, jeu, apports=apports, confort_adaptatif=np.zeros(len(meteo)))
+    r = annee(groupe, meteo, jeu)
     assert len(r) == len(meteo) and not r.isna().any().any()
     # Chaque heure : chaleur prise par la masse = somme des flux
     assert (r["stockage"] - r[FLUX_DU_BILAN].sum(axis=1)).abs().max() < 1e-6
@@ -253,10 +264,9 @@ def test_bilan_energie_annuel(zone, jeu):
 
 def test_inerties_longues_amortissent_l_ete():
     meteo = charger_meteo("H2d", "th_d", 100.0)
-    options = {"confort_adaptatif": np.zeros(len(meteo))}
-    sans = simuler_groupe(groupe_test(inertie_quotidienne="tres_lourde"), meteo, "th_d", **options)
-    avec = simuler_groupe(groupe_test(inertie_quotidienne="tres_lourde", inertie_sequentielle="lourde"), meteo,
-                          "th_d", **options)
+    sans = annee(groupe_annuel(inertie_quotidienne="tres_lourde"), meteo, "th_d")
+    avec = annee(groupe_annuel(inertie_quotidienne="tres_lourde", inertie_sequentielle="lourde"), meteo,
+                 "th_d")
     assert avec["theta_op"].max() < sans["theta_op"].max()
     # Initialisation : pendant les 24 premières heures, la masse séquentielle suit une moyenne fixée à 18 °C
     assert avec["theta_ms"].iloc[0] == pytest.approx(18.0)
@@ -280,25 +290,33 @@ def test_sollicitations_du_groupe():
 # Ventilation (fiche 6.1)
 # ------------------------------------------------------------------
 def test_echangeur_de_ventilation():
-    # À l'équilibre, un échangeur d'efficacité ε réduit la déperdition par l'air à (1 − ε).Hv (éq. 382)
+    # À l'équilibre, un échangeur d'efficacité ε réduit la déperdition par l'air à (1 − ε).Hv (éq. 382) : 2 000
+    # heures à 5 °C dehors, 500 W d'apports, air soufflé à θe + ε (θi de l'heure précédente − θe) (éq. 378)
     groupe = groupe_test(baies=[])
     modele = preparer_modele(groupe, "th_bc")
     hv = 0.34 * 75.0
     paroi = 1 / (1 / modele.hg_is + 1 / modele.h_th)
-    apports = pd.DataFrame({"phi_conv": np.full(2000, 500.0)})
-    for efficacite, attendu in ((None, 5.0 + 500.0 / (0.5 * hv + paroi)), (0.0, 5.0 + 500.0 / (hv + paroi))):
-        r = simuler_groupe(groupe, meteo_constante(5.0), "th_bc", apports=apports,
-                           efficacite_echangeur=efficacite)
-        assert r["theta_i"].iloc[-1] == pytest.approx(attendu, rel=1e-4)
+    for efficacite in (hyp("ventilation_bbio_efficacite"), 0.0):
+        attendu = 5.0 + 500.0 / ((1.0 - efficacite) * hv + paroi)
+        etat = etat_initial()
+        for _ in range(2000):
+            r = pas_groupe(modele, etat, te=5.0, hg_ei=hv, theta_eieq=5.0 + efficacite * (etat.theta_i - 5.0),
+                           phi_conv=500.0)
+            avancer_etat(modele, etat, r)
+        assert r["theta_i"] == pytest.approx(attendu, rel=1e-4)
+
+
+def test_air_souffle_du_calcul_annuel():
+    """La boucle du moteur souffle l'air à θe + ε (θi de fin d'heure précédente − θe) (éq. 378) ; ε hors de
+    [0 ; 1] est refusée."""
+    meteo = charger_meteo("H1a", "th_bc", 100.0)
+    groupe = groupe_annuel()
+    r = annee(groupe, meteo, "th_bc", efficacite_echangeur=0.8)
+    te = meteo["te"].to_numpy()
+    theta_i_prec = np.r_[etat_initial().theta_i, r["theta_i"].to_numpy()[:-1]]
+    assert r["theta_souffle"].to_numpy() == pytest.approx(te + 0.8 * (theta_i_prec - te))
     with pytest.raises(ValueError, match="Efficacité"):
-        simuler_groupe(groupe, meteo_constante(5.0, 10), "th_bc", efficacite_echangeur=1.5)
-
-
-def test_apports_mal_formes():
-    with pytest.raises(ValueError, match="apports"):
-        simuler_groupe(groupe_test(), meteo_constante(5.0, 10), "th_bc", apports=pd.DataFrame({"inconnu": [0.0] * 10}))
-    with pytest.raises(ValueError, match="apports"):
-        simuler_groupe(groupe_test(), meteo_constante(5.0, 10), "th_bc", apports=pd.DataFrame({"phi_conv": [0.0]}))
+        annee(groupe, meteo, "th_bc", efficacite_echangeur=1.5)
 
 
 # ------------------------------------------------------------------
@@ -307,24 +325,19 @@ def test_apports_mal_formes():
 def test_brasseurs_dans_le_groupe():
     brasseur = Brasseur("Séjour", nombre=1, surface_desservie_m2=15.0, debit_max_m3h=5000.0, puissance_max_w=40.0,
                         usage="jour_et_nuit")
-    avec, sans = groupe_test(brasseurs=[brasseur]), groupe_test()
     meteo = charger_meteo("H2d", "th_d", 100.0)
-    n = len(meteo)
-    entrees = pd.DataFrame({"hleg": construire_calendrier()["hleg"], "actif": True, "occupe": True,
-                            "theta_ifr": 26.0, "ecart_conf_adapt": 0.0})
-    options = {"confort_adaptatif": np.zeros(n)}
-    r_avec = simuler_groupe(avec, meteo, "th_d", entrees_brasseurs=entrees, **options)
-    r_sans = simuler_groupe(sans, meteo, "th_d", **options)
-    # Les brasseurs tournent quand il fait chaud, relèvent le seuil d'inconfort et chauffent un peu le groupe
+    r_avec = annee(groupe_annuel(brasseurs=[brasseur]), meteo, "th_d")
+    r_sans = annee(groupe_annuel(), meteo, "th_d")
+    # Les brasseurs tournent quand il fait chaud, relèvent le seuil d'inconfort et chauffent un peu le groupe :
+    # leur consommation s'ajoute, heure par heure, aux apports internes
     assert r_avec["energie_brasseurs_wh"].sum() > 0 and r_avec["ecart_ba"].max() > 0
-    assert (r_avec["chaleur_brasseurs_w"] == r_avec["energie_brasseurs_wh"]).all()
+    assert (r_avec["phi_apports"] - r_sans["phi_apports"]).to_numpy() == pytest.approx(
+        r_avec["energie_brasseurs_wh"].to_numpy(), abs=1e-9)
     assert r_avec["theta_i"].mean() > r_sans["theta_i"].mean()
-    assert r_avec["chaleur_brasseurs_w"].iloc[0] == 0                  # arrêt à la première heure
+    assert r_avec["energie_brasseurs_wh"].iloc[0] == 0                 # arrêt à la première heure
     assert r_sans["energie_brasseurs_wh"].sum() == 0
     # Bilan d'énergie toujours respecté, chaleur des brasseurs comprise
     assert (r_avec["stockage"] - r_avec[FLUX_DU_BILAN].sum(axis=1)).abs().max() < 1e-6
-    with pytest.raises(ValueError, match="entrees_brasseurs"):
-        simuler_groupe(avec, meteo, "th_d", **options)
 
 
 def test_debit_de_ventilation_moyen():

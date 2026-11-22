@@ -50,7 +50,8 @@ GRANDEURS = ("b_ch", "b_fr", "b_ecl", "bbio", "bbio_max")
 
 
 def lister_etudes(dossiers):
-    """Fichiers XML des dossiers (sous-dossiers compris), sans doublon de contenu : [(chemin, empreinte)]."""
+    """Fichiers XML des dossiers (sous-dossiers compris), sans doublon de contenu (même empreinte SHA-1) : liste
+    des chemins."""
     vus, etudes = set(), []
     for dossier in dossiers:
         for chemin in sorted(glob.glob(os.path.join(dossier, "**", "*.xml"), recursive=True)):

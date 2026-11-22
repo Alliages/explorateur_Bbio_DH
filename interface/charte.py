@@ -31,6 +31,7 @@ FOND_SCHEMA = "#FFF6E3"     # jaune très pâle : fond de l'axonométrie
 GRIS = "#8A8F99"            # grandeurs extérieures, repères secondaires
 SOL = "#EFE3C8"             # disque du sol, sous la boîte
 GRIS_ADIABATIQUE = "#C4C6CC"    # paroi adiabatique (sur un local chauffé) dans le dessin
+BORDURE = "#E6D9BC"         # filets et bords (borderColor du thème)
 
 # ============================================================
 # RÔLES

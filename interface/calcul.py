@@ -208,12 +208,3 @@ def effet_paroi(boite, cle, calculs=CALCULS):
         effets["bbio"] = float(calculer_bbio(construire_projet(boite, sans=(cle,)), calendrier=calendrier)
                                .groupes.iloc[0]["bbio"])
     return effets
-
-
-def calculer(boite, calculs=CALCULS):
-    """Résultats des calculs demandés (« bbio », « dh » ou les deux), sans mémoire : app.py garde les siens."""
-    fonctions = {"bbio": resultats_bbio, "dh": resultats_dh}
-    champs = {}
-    for nom in calculs:
-        champs.update(fonctions[nom](boite))
-    return Resultats(**champs)

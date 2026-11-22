@@ -603,8 +603,9 @@ def test_moteur_ignore_l_interface():
 # ============================================================
 @pytest.fixture(scope="module")
 def resultats():
-    from interface.calcul import calculer
-    return calculer(replace(IMMEUBLE, permeabilite_q4pa=0.0))       # sans infiltrations : deux fois plus rapide
+    from interface.calcul import Resultats, resultats_bbio, resultats_dh
+    boite = replace(IMMEUBLE, permeabilite_q4pa=0.0)                # sans infiltrations : deux fois plus rapide
+    return Resultats(**resultats_bbio(boite), **resultats_dh(boite))
 
 
 def test_calcul_de_la_boite(resultats):
@@ -752,6 +753,63 @@ def test_ecarts_entre_deux_calculs(resultats):
         "DH", "Heures d'inconfort", "Température la plus haute"]
 
 
+def test_variantes_a_a_d():
+    """Garder range sous la première lettre libre, quatre au plus ; une boîte déjà gardée ne l'est pas deux fois ;
+    retirer libère la lettre ; la référence retirée passe à la première qui reste."""
+    from interface import variantes
+    boites = [replace(boite_de_depart(), nb_niveaux=n) for n in (1, 2, 3, 4, 5)]
+    liste = []
+    for boite in boites[:4]:
+        liste, lettre = variantes.garder(liste, boite, "Logement de 70 m²", "Moyen")
+    assert [v["lettre"] for v in liste] == list("ABCD") and lettre == "D"
+    assert variantes.garder(liste, boites[4], "Logement de 70 m²", "Moyen") == (liste, None)       # plein
+    assert variantes.garder(liste, boites[1], "Logement de 70 m²", "Moyen") == (liste, "B")        # déjà gardée
+    liste = variantes.retirer(liste, "B")
+    liste, lettre = variantes.garder(liste, boites[4], "Logement de 70 m²", "Moyen")
+    assert lettre == "B" and [v["lettre"] for v in liste] == list("ABCD")                    # lettre libérée
+    assert variantes.trouver(liste, boites[4]) == "B" and variantes.trouver(liste, boites[1]) is None
+    assert variantes.reference(liste, "C") == "C" and variantes.reference(variantes.retirer(liste, "C"), "C") == "A"
+    assert variantes.reference([], "A") is None
+    assert variantes.libelle(liste[0], {"bbio": 119.84, "dh": 732.2}, True) == ":material/bookmark: A · 119,8 · 732 °C.h"
+    assert variantes.libelle(liste[0], {"dh": 732.2}, False) == "A · 732 °C.h"
+
+
+def test_synthese_bbio_et_dh(resultats):
+    """La synthèse lit l'écart de chaque besoin et du DH face à la référence ; rien sans référence."""
+    from interface import synthese
+    assert synthese.lecture(resultats, None, "A") is None
+    assert synthese.lecture(resultats, resultats, "A") == (
+        "Face à A, en kWh/m² : chauffage ± 0, refroidissement ± 0, éclairage ± 0 ; DH ± 0 °C.h.")
+    points = synthese.points_par_poste(resultats, "B")
+    assert [ligne["poste"] for ligne in points] == ["Chauffage", "Refroidissement", "Éclairage"]
+    assert abs(sum(ligne["points"] for ligne in points) - resultats.bbio["bbio"]) < 0.05
+
+
+def test_saisies_de_la_fiche():
+    """La fiche reprend les saisies de sa paroi, avec des clés à elle (« fiche_ ») ; chaque saisie a un widget au
+    menu (le menu reste la seule source de la boîte)."""
+    from interface.formulaire import PREFIXE_FICHE, saisies_de_la_paroi, valeurs_des_widgets
+    boite = boite_de_depart()
+    assert saisies_de_la_paroi(boite, "baies_principale") == ["part_vitree_principale", "uw", "sw", "protection"]
+    assert saisies_de_la_paroi(boite, "arriere") == ["part_vitree_arriere", "u_mur", "teinte"]
+    assert saisies_de_la_paroi(boite, "toiture") == ["u_toiture", "teinte"]
+    assert saisies_de_la_paroi(boite, "plancher_bas") == ["u_plancher", "plancher_sur_sol"]
+    menu = valeurs_des_widgets(boite)
+    assert all(champ in menu for cle in ("baies_pignon_a", "principale", "toiture", "plancher_bas")
+               for champ in saisies_de_la_paroi(boite, cle))
+    assert PREFIXE_FICHE == "fiche_"
+
+
+def _surface(page):
+    """Surface habitable écrite à droite du dessin (« Surface habitable **70 m²** · baies … »)."""
+    return next(m.value for m in page.markdown if m.value.startswith("Surface habitable **")).split("**")[1]
+
+
+def _lettres(page):
+    """Lettres des pastilles des variantes (leur texte : « A · 119,8 · 732 °C.h », signet de la référence ôté)."""
+    return [option.split(" ")[0] for option in page.pills(key="pastilles").options]
+
+
 def test_page_entiere(resultats, monkeypatch):
     """La page s'affiche avec le DH seul, puis avec le Bbio et le DH ; chaque brique s'affiche ; une saisie
     modifiée attend le bouton « Calculer » ; changer de bâtiment remet les saisies à ses valeurs."""
@@ -776,19 +834,30 @@ def test_page_entiere(resultats, monkeypatch):
     assert not page.exception and page.session_state["page"] == "Explorer"
 
     # Explorer : le logement de 70 m², l'enveloppe moyenne, le DH seul, sans brique Bbio ni calcul précédent
-    assert [m.label for m in page.metric][:3] == ["Surface habitable", "Baies / surface habitable", "DH"]
-    assert "Bbio (points)" not in [m.label for m in page.metric] and page.metric[0].value.startswith("70")
+    assert [m.label for m in page.metric][0] == "DH" and _surface(page).startswith("70")
+    assert "Bbio (points)" not in [m.label for m in page.metric]
     assert appels == [("dh", boite_de_depart())] and page.button(key="calculer").disabled and not page.warning
-    assert page.metric[2].delta is None or page.metric[2].delta == ""
-    assert any(m.value.startswith("DH : :") and "DH max" in m.value for m in page.markdown)
+    assert page.metric[0].delta is None or page.metric[0].delta == ""
+    assert any(m.value.startswith(":green[") and "DH max" in m.value for m in page.markdown)
     assert page.segmented_control(key="niveau_enveloppe").value == "Moyen" and page.slider(key="sw").value == 0.4
     assert page.segmented_control(key="brique").options == [b.titre for b in BRIQUES if b.besoin in ("dh", "")]
+    # Volets du menu : le titre résume les valeurs ; « Baies » est ouvert
+    titres = [e.label for e in page.expander]
+    assert "Baies · 25/0/25/0 % · volets" in titres and "Forme · 7 × 10 m · 1 niveau · sud" in titres
 
     # Paroi examinée sous le dessin : aucune à l'ouverture, puis la toiture et sa fiche, sans relancer de calcul
     assert page.selectbox(key="paroi_examinee").value is None
     page.selectbox(key="paroi_examinee").set_value("toiture").run()
     assert not page.exception and len(appels) == 1
-    assert any(m.value.startswith("**Toiture**") and "U × surface" in m.value for m in page.markdown)
+    assert any(m.value.startswith("**Toiture**") for m in page.markdown)
+    assert any("U × surface" in m.value for m in page.markdown)
+    # Saisies de la fiche, liées au menu : U de la toiture changé dans la fiche, le menu le suit
+    assert page.slider(key="fiche_u_toiture").value == page.slider(key="u_toiture").value
+    page.slider(key="fiche_u_toiture").set_value(0.5).run()
+    assert not page.exception and page.slider(key="u_toiture").value == 0.5 and len(appels) == 1
+    assert any("calcul précédent" in w.value for w in page.warning)
+    page.slider(key="u_toiture").set_value(boite_de_depart().u_toiture).run()
+    assert page.slider(key="fiche_u_toiture").value == boite_de_depart().u_toiture and not page.warning
     page.selectbox(key="paroi_examinee").set_value(None).run()
 
     # Bbio et DH : seul le Bbio est calculé, le DH vient de la mémoire
@@ -796,7 +865,7 @@ def test_page_entiere(resultats, monkeypatch):
     assert not page.button(key="calculer").disabled and any("calcul précédent" in w.value for w in page.warning)
     page.button(key="calculer").click().run()
     assert not page.exception and [nom for nom, _ in appels] == ["dh", "bbio"]
-    assert [m.label for m in page.metric][2:4] == ["Bbio (points)", "DH"]
+    assert [m.label for m in page.metric][:2] == ["Bbio (points)", "DH"]
     for brique in BRIQUES:
         page.session_state["brique"] = brique.cle
         page.run()
@@ -812,11 +881,14 @@ def test_page_entiere(resultats, monkeypatch):
     page.slider(key="nb_niveaux").set_value(5).run()
     assert not page.exception and not page.button(key="calculer").disabled
     assert any("calcul précédent" in w.value for w in page.warning)
-    assert page.metric[0].value.startswith("350")
+    assert _surface(page).startswith("350")
+    # Chiffres pâlis ; « Garder » dit qu'il garde le calcul affiché, celui d'avant la saisie
+    assert any("st-key-briques" in h.proto.body for h in page.get("html"))
+    assert page.button(key="garder_variante").label == "Garder le calcul affiché en A"
     page.button(key="calculer").click().run()
     assert not page.exception and page.button(key="calculer").disabled
     # Nouvelle boîte : le DH montre l'écart avec le calcul précédent (nul ici, le calcul est simulé)
-    assert page.metric[2].delta == "inchangé depuis le calcul précédent"
+    assert page.metric[0].delta == "inchangé depuis le calcul précédent"
 
     # Retour à l'accueil, puis « Calculer » dans le menu, qui rouvre « Explorer »
     page.segmented_control(key="page").set_value("Accueil").run()
@@ -844,21 +916,38 @@ def test_page_entiere(resultats, monkeypatch):
     assert not page.exception and page.slider(key="nb_niveaux").value == 3 and page.slider(key="longueur_m").value == 20
     immeuble = boite_de_depart("Immeuble de 9 logements", "Performant")
     assert all(page.session_state[cle] == valeur for cle, valeur in valeurs_des_widgets(immeuble).items())
-    assert page.metric[0].value.startswith("576")
+    assert _surface(page).startswith("576")
     page.button(key="calculer").click().run()
     assert not page.exception and appels[-1] == ("dh", immeuble)
     page.segmented_control(key="niveau_enveloppe").set_value("Moyen").run()
     page.selectbox(key="batiment_depart").set_value("Logement de 70 m²").run()
-    assert page.slider(key="nb_niveaux").value == 1 and page.metric[0].value.startswith("70")
+    assert page.slider(key="nb_niveaux").value == 1 and _surface(page).startswith("70")
     assert all(page.session_state[cle] == valeur for cle, valeur in valeurs_des_widgets(boite_de_depart()).items())
 
-    # Référence : gardée, puis comparée à une variante avec balcons ; le second bouton « Calculer » sert aussi
-    assert not page.dataframe
-    page.button(key="garder_reference").click().run()
-    assert page.button(key="garder_reference").disabled and any("référence" in i.value for i in page.info)
+    # Variantes : A gardée (la référence), puis une variante avec balcons ; le second bouton « Calculer » sert aussi
+    assert not page.dataframe and "pastilles" not in [p.key for p in page.pills]
+    page.button(key="calculer").click().run()                           # la boîte de départ, calculée
+    page.button(key="garder_variante").click().run()
+    assert "garder_variante" not in [b.key for b in page.button]
+    assert _lettres(page) == ["A"] and page.pills(key="pastilles").value == "A"
+    assert any("Ce calcul est la référence A" in c.value for c in page.caption)
     page.slider(key="debord_m").set_value(1.5).run()
     page.button(key="calculer_ici").click().run()
     assert not page.exception and not page.warning and len(page.dataframe) == 1
     assert any("Balcons ou casquettes" in m.value for m in page.markdown)
-    page.button(key="oublier_reference").click().run()
-    assert not page.exception and not page.dataframe and "reference" not in page.session_state
+    assert page.metric[0].delta == "inchangé face à A"                  # calcul simulé : même DH
+    assert page.pills(key="pastilles").value is None                   # la saisie n'est aucune variante
+    page.button(key="garder_variante").click().run()
+    assert _lettres(page) == ["A", "B"] and page.pills(key="pastilles").value == "B"
+    # Un clic sur A remet sa saisie (sans balcons) et son calcul, sans en relancer un
+    nb_appels = len(appels)
+    page.pills(key="pastilles").set_value("A").run()
+    assert not page.exception and page.slider(key="debord_m").value == 0.0 and len(appels) == nb_appels
+    assert page.button(key="calculer").disabled and page.pills(key="pastilles").value == "A"
+    # B devient la référence ; A retirée : B reste seule
+    page.segmented_control(key="choix_reference").set_value("B").run()
+    assert page.session_state["lettre_reference"] == "B" and page.metric[0].delta == "inchangé face à B"
+    page.button(key="retirer_A").click().run()
+    assert not page.exception and _lettres(page) == ["B"] and len(page.dataframe) == 1
+    page.button(key="retirer_B").click().run()
+    assert not page.exception and not page.dataframe and "pastilles" not in [p.key for p in page.pills]

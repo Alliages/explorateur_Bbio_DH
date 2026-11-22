@@ -270,11 +270,6 @@ class Saisons:
 # ============================================================
 # 2. ÉMETTEUR CONVENTIONNEL DU BBIO (fiche 8.1)
 # ============================================================
-def temperature_sonde(resultat):
-    """θsd : température vue par la sonde de l'émetteur, sur les moyennes de l'heure (éq. 801)."""
-    return _sonde(hyp("emetteur_bbio_psd"), resultat["theta_i_moy"], resultat["theta_rm_moy"])
-
-
 def _sonde(psd, theta_i_moy, theta_rm_moy):
     """θsd = psd × θi + (1 − psd) × θrm (éq. 801), psd étant la part d'air vue par la sonde."""
     return psd * theta_i_moy + (1.0 - psd) * theta_rm_moy
@@ -429,6 +424,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
     hg_ei = hyp("chaleur_volumique_air") * debit_ventilation(groupe)
     if efficacite_echangeur is None:
         efficacite_echangeur = hyp("ventilation_th_d_efficacite" if th_d else "ventilation_bbio_efficacite")
+    if not 0.0 <= efficacite_echangeur <= 1.0:
+        raise ValueError(f"Efficacité de l'échangeur hors de [0 ; 1] : {efficacite_echangeur}")
     # --- Brasseurs d'air (fiche 8.32) : en Th-D seulement ---
     types_brasseurs = preparer_brasseurs(groupe, scenarios.usage) if th_d else []
     regimes = [ARRET] * len(types_brasseurs)

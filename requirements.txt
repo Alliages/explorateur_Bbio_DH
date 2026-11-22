@@ -1,12 +1,17 @@
-# Moteur
-numpy>=1.26
-pandas>=2.1
+# Versions épinglées (0.9.30) : celles avec lesquelles « python -m pytest » réussit, sous Python 3.11. Sans elles,
+# l'hébergeur installe la dernière version à chaque redémarrage et la page peut casser sans changement de code.
+# Pour monter une version : la changer ici, relancer les tests (non-régression comprise), noter au CHANGELOG.
 
-# Interface (app.py) ; Altair, qui trace les graphiques, est installé avec Streamlit
-streamlit>=1.57
+# Moteur
+numpy==2.4.6
+pandas==3.1.1
+
+# Interface (app.py) ; Altair trace les graphiques des briques (installé avec Streamlit, importé directement)
+streamlit==1.67.0
+altair==6.3.0
 
 # Tests
-pytest>=8.0
+pytest==9.2.0
 
 # Outil d'extraction des classeurs officiels (outils/extraire_donnees.py), pas le moteur
-openpyxl>=3.1
+openpyxl==3.1.5
