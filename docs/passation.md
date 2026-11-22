@@ -4,10 +4,15 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## État au 22/11/2026
 
-- Dernière version publiée sur `travail` : **0.9.25** (commit `652b972`, 22/11/2026), avec les 0.9.18 à 0.9.24
-  dans le même commit. Avant : 0.9.16 avec la 0.9.15 (`dee10e0`), 0.9.13 avec les 0.9.9 à 0.9.11 (`667d842`),
-  0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé (0.9.4).
-- **0.9.27** (prête, non poussée) : audit de la 0.9.25, faite dans claude.ai sans les études ni l'annexe III ;
+- **0.9.29** (poussée sur `travail`) : calcul 1,16 fois plus rapide, résultats identiques au bit près
+  (`moteur/infiltrations.py` : bilans des bornes gardés ; `moteur/ouvertures.py` : secteurs traversants, Cpr,
+  hystérésis). Vectorisation numpy essayée et écartée (la boucle horaire lit l'heure précédente ; numpy plus lent
+  sur 2 à 9 éléments). Constat : DH sensible à 0,2 % près à une perturbation de 1e-12 (seuils). Détail :
+  `docs/audit.md`, 0.9.29 ; suites dans `ROADMAP.md`. Tests : 392 réussis, 3 sautés.
+- Version précédente sur `travail` : **0.9.27** (commit `b6c4eb2`, 22/11/2026). Avant : **0.9.25** (commit
+  `652b972`), avec les 0.9.18 à 0.9.24 dans le même commit. Avant : 0.9.16 avec la 0.9.15 (`dee10e0`), 0.9.13
+  avec les 0.9.9 à 0.9.11 (`667d842`), 0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé (0.9.4).
+- **0.9.27** (poussée, `b6c4eb2`) : audit de la 0.9.25, faite dans claude.ai sans les études ni l'annexe III ;
   calcul inchangé (détail : `docs/audit.md`, 0.9.27).
   - Non-régression : bâtiments de départ identiques à la 0.9.15. L'exemple du `README.md` était périmé
     (Bbio 27,8, DH 1 981). **À relancer sur le poste** : `python -m outils.valider "..\_RSEE" "_sources" --dh` et

@@ -152,8 +152,9 @@ def seuils_ouverture(saison, consigne_fr_confort, ecart_confort_adaptatif):
 def ratio_selon_temperature(ratio_prec, theta_op_prec, seuils):
     """Rouv_op : profil à hystérésis de la figure 62, à partir du ratio de l'heure précédente."""
     ouv1, ouv2, fer1, fer2 = seuils
-    en_ouvrant = float(np.clip((theta_op_prec - ouv1) / (ouv2 - ouv1), 0.0, 1.0))
-    en_fermant = float(np.clip((theta_op_prec - fer2) / (fer1 - fer2), 0.0, 1.0))
+    # Bornés à [0 ; 1] en Python simple : appelé à chaque heure d'occupation, sur un seul nombre (0.9.29)
+    en_ouvrant = min(max((theta_op_prec - ouv1) / (ouv2 - ouv1), 0.0), 1.0)
+    en_fermant = min(max((theta_op_prec - fer2) / (fer1 - fer2), 0.0), 1.0)
     return max(en_ouvrant, min(ratio_prec, en_fermant))
 
 
@@ -170,22 +171,37 @@ def contrainte_ouverture(exposition_bruit, saison, hleg):
 # ============================================================
 # 2. DÉBIT PAR LES BAIES OUVERTES (fiche 5.13, éq. 251 à 255)
 # ============================================================
-def surface_traversante(aouv, orientations_deg, inclinaisons_deg):
+def secteurs_traversants(orientations_deg, inclinaisons_deg):
+    """Baies de façade de chaque secteur, pour les deux roses décalées de 45° (éq. 253) : rangs des baies, par
+    rose puis par secteur. Ne dépend que des baies : OuverturesGroupe le calcule une fois pour l'année."""
+    facade = np.asarray(inclinaisons_deg) >= INCLINAISON_FACADE_DEG
+    azimut = np.mod(orientations_deg, 360.0)
+    roses = []
+    for k in range(2):
+        secteurs = []
+        for n in range(SECTEURS):
+            reference = k * 45.0 + n * 90.0
+            ecart = np.mod(azimut - reference + 45.0, 360.0)        # dans [0 ; 90[ si la baie est dans le secteur
+            secteurs.append(np.flatnonzero(facade & (ecart < 90.0)))
+        roses.append(secteurs)
+    return roses
+
+
+def surface_traversante(aouv, orientations_deg, inclinaisons_deg, secteurs=None):
     """Sors (m²) : surface équivalente du balayage traversant (éq. 252-253).
 
     Les baies de façade sont regroupées en quatre orientations ; le calcul est fait pour deux roses décalées de
     45° et la plus faible valeur est retenue. Il faut au moins deux orientations ouvertes, sinon Sors est nul.
+    secteurs : facultatif, secteurs_traversants() des mêmes baies, déjà calculés.
     """
+    if secteurs is None:
+        secteurs = secteurs_traversants(orientations_deg, inclinaisons_deg)
     total = float(aouv.sum())
-    facade = inclinaisons_deg >= INCLINAISON_FACADE_DEG
-    azimut = np.mod(orientations_deg, 360.0)
     resultats = []
-    for k in range(2):
+    for rose in secteurs:
         somme = 0.0
-        for n in range(SECTEURS):
-            reference = k * 45.0 + n * 90.0
-            ecart = np.mod(azimut - reference + 45.0, 360.0)        # dans [0 ; 90[ si la baie est dans le secteur
-            a_n = float(aouv[facade & (ecart < 90.0)].sum())
+        for indices in rose:
+            a_n = float(aouv[indices].sum())
             reste = total - a_n
             if a_n > 0 and reste > 0:
                 somme += 1.0 / np.sqrt(1.0 / a_n ** 2 + 1.0 / reste ** 2)
@@ -194,15 +210,17 @@ def surface_traversante(aouv, orientations_deg, inclinaisons_deg):
 
 
 def debit_surventilation(aouv, orientations_deg, inclinaisons_deg, traversant, hauteur_tirage_m, vent, te,
-                         theta_i_prec):
-    """Débit volumique par les baies ouvertes (m³/h) : éq. 251 (non traversant) ou 254 (traversant)."""
+                         theta_i_prec, secteurs=None):
+    """Débit volumique par les baies ouvertes (m³/h) : éq. 251 (non traversant) ou 254 (traversant).
+
+    secteurs : facultatif, secteurs_traversants() des mêmes baies, déjà calculés."""
     total = float(aouv.sum())
     if total <= 0:
         return 0.0
     tirage = hyp("ouv_constante_tirage") * hauteur_tirage_m * abs(te - theta_i_prec)
     if not traversant:
         return SECONDES_PAR_HEURE * total / 2.0 * np.sqrt(max(hyp("ouv_constante_vent") * vent ** 2, tirage))
-    sors = surface_traversante(aouv, orientations_deg, inclinaisons_deg)
+    sors = surface_traversante(aouv, orientations_deg, inclinaisons_deg, secteurs)
     par_le_vent = (hyp("ouv_coefficient_decharge") * sors * min(vent, hyp("ouv_vent_max"))
                    * np.sqrt(hyp("ouv_ecart_pression")))
     return SECONDES_PAR_HEURE * max(par_le_vent, total / 2.0 * np.sqrt(tirage))
@@ -232,6 +250,8 @@ class OuverturesGroupe:
         self.exposition = [b.exposition_bruit or groupe.exposition_bruit for b in baies]
         self.orientations = np.array([b.orientation_deg for b in baies], dtype=float)
         self.inclinaisons = np.array([b.inclinaison_deg for b in baies], dtype=float)
+        self.secteurs = secteurs_traversants(self.orientations, self.inclinaisons)   # fixes pour l'année
+        self.contraintes = {}       # Cpr des baies, par (saison, heure légale) : calculés à la première rencontre
         self.traversant = groupe.traversant
         self.hauteur_tirage = (groupe.hauteur_tirage_m if groupe.hauteur_tirage_m is not None
                                else hyp("ouv_hauteur_tirage_defaut"))
@@ -280,7 +300,10 @@ class OuverturesGroupe:
         if commun <= 0:
             return {"debit_m3h": 0.0, "hg": 0.0, "aouv_m2": 0.0, "rouv_moyen": 0.0, "rouv_brut_moyen": 0.0}
 
-        cpr = np.array([contrainte_ouverture(e, saison, hleg) for e in self.exposition])
+        cpr = self.contraintes.get((saison, hleg))
+        if cpr is None:
+            cpr = np.array([contrainte_ouverture(e, saison, hleg) for e in self.exposition])
+            self.contraintes[(saison, hleg)] = cpr
         rouv = commun * cpr                                                             # éq. 240
         # Protection mobile en place : la part fermée ne laisse passer que Taux_passage de l'air (éq. 239), le
         # ratio est corrigé pour garder la même section d'ouverture (éq. 248-249)
@@ -288,7 +311,7 @@ class OuverturesGroupe:
                        else self.aouv_max)
         aouv = np.minimum(aouv_max_pm, rouv * self.aouv_max)
         debit = debit_surventilation(aouv, self.orientations, self.inclinaisons, self.traversant,
-                                     self.hauteur_tirage, self.vent[h], te, theta_i_prec)
+                                     self.hauteur_tirage, self.vent[h], te, theta_i_prec, self.secteurs)
         # Masse volumique de l'air entrant (éq. 255), rapportée à celle de référence du coefficient 0,34
         densite = (KELVIN + hyp("ouv_temperature_reference")) / (KELVIN + te)
         total_max = float(self.aouv_max.sum())

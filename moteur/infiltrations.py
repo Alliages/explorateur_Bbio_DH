@@ -172,22 +172,33 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
     rho_souffle = masse_volumique(theta_souffle if theta_souffle is not None else te)
     net_ventilation = (rho_souffle - rho_int) * debit_ventilation_m3h / SECONDES_PAR_HEURE
 
+    defauts_du_bilan = list(zip(coefficients, motrices, exposants))
+    secondes = SECONDES_PAR_HEURE
+
     def bilan(pib):
-        """Somme des débits massiques entrant dans le groupe (kg/s) pour une pression Pib : décroît avec Pib."""
+        """Somme des débits massiques entrant dans le groupe (kg/s) pour une pression Pib : décroît avec Pib.
+
+        Appelé une dizaine de fois par heure : écrit au plus court (dp > 0 : |dp| = dp ; sinon |dp| = −dp)."""
         total = net_ventilation
-        for c, motrice, n in zip(coefficients, motrices, exposants):
+        for c, motrice, n in defauts_du_bilan:
             dp = motrice - pib
-            total += (rho_ext if dp > 0 else rho_int) * c * (abs(dp) ** n if dp > 0 else -abs(dp) ** n) \
-                / SECONDES_PAR_HEURE
+            if dp > 0:
+                total += rho_ext * c * dp ** n / secondes
+            else:
+                total += rho_int * c * -((-dp) ** n) / secondes
         return total
 
     # Encadrement : sous la plus petite pression motrice tout entre, au-dessus de la plus grande tout sort ;
     # élargi tant que la ventilation déséquilibrée l'exige
     bas, haut = min(motrices) - MARGE_PRESSION, max(motrices) + MARGE_PRESSION
-    while bilan(bas) < 0:
+    bilan_bas = bilan(bas)
+    while bilan_bas < 0:
         bas -= 10.0 * (haut - bas)
-    while bilan(haut) > 0:
+        bilan_bas = bilan(bas)
+    bilan_haut = bilan(haut)
+    while bilan_haut > 0:
         haut += 10.0 * (haut - bas)
+        bilan_haut = bilan(haut)
     # Recherche de Pib : le bilan décroît de bilan(bas) > 0 à bilan(haut) < 0.
     #   1. fausse position : on essaie le point où la corde entre les deux bornes coupe zéro ; si la même borne
     #      vient d'être déplacée deux fois de suite, le bilan de l'autre est divisé par deux (variante dite
@@ -195,7 +206,6 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
     #   2. garde-fou : si, en ESSAIS_PAR_CONTROLE essais, l'encadrement n'a pas été divisé par deux, l'essai
     #      suivant est le milieu (dichotomie) ;
     #   3. arrêt quand deux essais successifs sont à moins de PRECISION_PRESSION, ou sur un bilan nul.
-    bilan_bas, bilan_haut = bilan(bas), bilan(haut)
     if bilan_bas == 0.0:
         pib = bas
     elif bilan_haut == 0.0:
@@ -262,6 +272,7 @@ class InfiltrationsGroupe:
         self.debit_ventilation = debit_ventilation_m3h
         self.vent = hyp("vent_correction_locale") * meteo["Vent"].to_numpy(float)       # fiche 3.2 : Ventc
         self.te = meteo["te"].to_numpy(float)
+        self.chaleur_volumique = hyp("chaleur_volumique_air")
 
     def pas(self, h, theta_i_prec, theta_souffle):
         """Débit entrant par les défauts à l'heure h et son coefficient d'échange (W/K, air à te)."""
@@ -269,4 +280,4 @@ class InfiltrationsGroupe:
             return {"debit_m3h": 0.0, "hg": 0.0, "pib": 0.0}
         r = equilibre(self.defauts, self.vent[h], self.te[h], theta_i_prec, self.debit_ventilation, theta_souffle)
         return {"debit_m3h": r["debit_entrant_m3h"], "pib": r["pib"],
-                "hg": hyp("chaleur_volumique_air") * r["debit_entrant_m3h"]}
+                "hg": self.chaleur_volumique * r["debit_entrant_m3h"]}

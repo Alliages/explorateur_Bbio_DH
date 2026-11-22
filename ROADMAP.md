@@ -39,6 +39,7 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.24 | Coupe du bilan | Étape 4 du plan « informations au clic » et coupe schématique : coupe transversale de la boîte (toiture, plancher bas, façades principale et arrière avec leurs baies, pignons en une flèche), flèches proportionnelles aux kWh (soleil transmis, U × S × Δθ, rayonnement froid, ventilation et infiltrations, apports internes, ponts thermiques, besoin), hiver (Bbio) ou été et semaine la plus chaude (DH) ; part de chaque paroi dans les apports des heures qui comptent des DH ; bouton « Mesurer l'effet de cette paroi » (calcul relancé sans elle : baie remplacée par le mur de sa façade, paroi opaque rendue adiabatique ; ΔDH, ΔBbio) ; clic sur la coupe. Brique « Le bilan en coupe » (`interface/coupe.py`, `interface/briques/bilan.py`), hypothèses 103 et 104 | fait |
 | 0.9.25 | Bilan en coupe exact | Correction : conduction des parois et des baies lue dans le modèle (masse θmq, surfaces θs), bilan fermé exactement, reste = stockage de la masse (hypothèse 103 corrigée) ; lecture « Heure de pointe (Wh) » de la coupe, pic du soleil transmis dans la fiche (hypothèse 105) | fait |
 | 0.9.27 | Audit de la 0.9.25 | Non-régression des bâtiments de départ ; relecture de `dh.py`, `confort.py`, `brasseurs.py`, `enveloppe.py` (points R1 à R6 de `docs/audit.md`) ; tendances de la boîte (six testées) ; documentation et fiabilité affichée mises à jour ; calcul inchangé | fait |
+| 0.9.29 | Calcul plus rapide | Infiltrations (bilans des bornes gardés) et ouverture des baies (secteurs, Cpr, hystérésis) : 1,16 fois plus rapide, résultats identiques au bit près ; vectorisation numpy essayée et écartée ; sensibilité du DH de 0,2 % à une perturbation de 1e-12 (`docs/audit.md`, 0.9.29) | fait |
 | 0.9.26 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 ; décalée de 0.9.16 le 20/11/2026, de 0.9.18, 0.9.20, 0.9.22 et 0.9.24 le 22/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
@@ -54,6 +55,16 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 
 ## Points à reprendre
 
+- **Vitesse du calcul, suites** (0.9.29, détail : `docs/audit.md`) : la boucle horaire dépend de l'heure
+  précédente et ne se vectorise pas sur le temps. Pistes restantes, seulement si l'interface paraît lente ou pour
+  les balayages (« Mesurer l'effet de cette paroi », tendances, validation) : calculer plusieurs variantes à la fois
+  (boucle sur les heures, tableaux sur les variantes ; refonte de `besoins.py`, `protections.py`, `ouvertures.py`,
+  `infiltrations.py`) ; numba sur la boucle (une dépendance de plus). Protections (`ratios`, `flux` : 20 % du
+  temps restant) laissées telles quelles : leurs produits scalaires numpy ne sont pas reproductibles au bit près en
+  Python.
+- **Sensibilité numérique du DH** (0.9.29) : ± 0,2 % pour une perturbation de 1e-12 (seuils de l'ouverture et des
+  protections). Bien sous les cibles de validation (± 10 %), mais à garder en tête pour comparer deux versions ou
+  deux variantes proches.
 - **Audit de la 0.9.27, suites** (détail : `docs/audit.md`, 0.9.27) :
   - relancer sur le poste `python -m outils.valider "..\_RSEE" "_sources" --dh` et `python -m outils.comparer_horaires
     tous` (non-régression face à la 0.9.15) ;

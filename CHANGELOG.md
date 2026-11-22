@@ -3,6 +3,23 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.29 — correction (22/11/2026), calcul plus rapide
+
+Résultats identiques au bit près (sorties horaires de 22 calculs annuels : 6 boîtes de départ et 5 variantes, Th-B
+et Th-D). Calcul 1,16 fois plus rapide sur ces 22 cas (21,6 s → 18,6 s). Détail : `docs/audit.md`, 0.9.29.
+
+- **Infiltrations** (`moteur/infiltrations.py`) : bilans des bornes de l'encadrement gardés au lieu d'être
+  recalculés (13,1 → 11,1 évaluations par heure), bilan écrit sans `abs()` ni second test.
+- **Ouverture des baies** (`moteur/ouvertures.py`) : secteurs du balayage traversant calculés une fois par groupe
+  (`secteurs_traversants`), Cpr des baies gardés par saison et heure, bornes de l'hystérésis en Python simple au
+  lieu de `np.clip` sur un seul nombre.
+- **Essayés, écartés** : vectoriser avec numpy ce qui ne dépend que de la météo (gain 2 %) ; numpy sur les défauts
+  d'une heure (4 fois plus lent sur 9 éléments) ; partir de la Pib de l'heure précédente (aucun essai gagné, la
+  précision de 1e-12 Pa fixant leur nombre, et résultats changés).
+- **Constat** : une perturbation de 1e-12 des infiltrations change le DH jusqu'à 0,2 % (immeuble performant :
+  447,7 → 446,9) par le jeu des seuils (ouverture, protections). Toute optimisation doit garder les résultats au
+  bit près pour être sans effet.
+
 ## 0.9.27 — correction (22/11/2026), audit de la 0.9.25
 
 Audit sans changement du calcul (détail : `docs/audit.md`, 0.9.27).

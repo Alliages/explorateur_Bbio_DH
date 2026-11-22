@@ -1816,3 +1816,52 @@ Lecture :
 `README.md` (état, exemple, lien de la capture), fiabilité affichée (`interface/textes/accueil.md`,
 `interface/briques/bbio.py` et `dh.py` : chiffres de la 0.9.15 au lieu de ceux de la 0.9.11),
 `docs/passation.md` (la 0.9.25 a bien été poussée, commit `652b972`).
+
+## 0.9.29 — calcul plus rapide, sensibilité numérique
+
+Sans changement des résultats. Banc hors dépôt : sorties horaires complètes de `calculer_besoins` pour 22 calculs
+annuels (logement de 70 m² et immeuble de 9 logements × trois niveaux d'enveloppe ; boîte en H3 sans protection,
+en gestion automatique, en store ; H2b avec brasseurs ; non traversant ; chacun en Th-B et en Th-D), comparées
+colonne par colonne à la 0.9.27 ; temps : minimum de trois passages.
+
+### Où passe le temps (0.9.27, boîte de départ, DH + Bbio)
+
+| Poste | Part |
+|---|---|
+| Équilibre des infiltrations (recherche de Pib, 13,1 évaluations du bilan par heure) | 35 % |
+| Protections mobiles (`ratios`, `flux`) | 16 % |
+| Ouverture des baies | 13 % |
+| Modèle RC du groupe | 13 % |
+| Reste de la boucle, tableau horaire | 23 % |
+
+La boucle horaire ne se vectorise pas sur le temps : protections (θop), ouvertures (θop, θi), infiltrations (θi),
+brasseurs et saisons lisent l'état de l'heure précédente.
+
+### Essais
+
+| Essai | Résultats | Temps |
+|---|---|---|
+| Pression du vent sur chaque défaut calculée pour l'année en numpy | identiques | − 2 % (dans le bruit) : écarté |
+| Bilan des débits en numpy sur les 9 défauts d'une heure | — | 4,9 µs contre 1,2 µs par évaluation : écarté |
+| Recherche de Pib partant de celle de l'heure précédente (± 0,05 à 2 Pa) | changés (voir ci-dessous) | 11,2 → 11,4 à 12,0 évaluations par heure : écarté. La fausse position (Illinois) converge vite ; c'est la précision de 1e-12 Pa qui fixe le nombre d'essais |
+| Bilans des bornes gardés, bilan sans `abs()` | identiques | 13,1 → 11,1 évaluations par heure ; − 9 % : **retenu** |
+| Ouvertures : secteurs traversants une fois par groupe, Cpr gardés, hystérésis sans `np.clip` | identiques | − 6 % : **retenu** |
+
+Ensemble : 21,6 s → 18,6 s (1,16 fois plus rapide), 22 sorties horaires identiques au bit près ; `python -m pytest` :
+392 réussis, 3 sautés. Les produits scalaires numpy de `ProtectionsGroupe.flux` ne sont pas réécrits : l'ordre des
+additions de numpy n'est pas garanti identique à celui de Python.
+
+### Sensibilité numérique du DH
+
+Infiltrations de chaque heure multipliées par (1 + 1e-12), rien d'autre :
+
+| Bâtiment de départ | DH | Bbio |
+|---|---|---|
+| Logement de 70 m², trois niveaux | inchangé | inchangé |
+| Immeuble de 9 logements, performant | 447,7 → 446,9 (− 0,19 %) | inchangé |
+| Immeuble de 9 logements, moyen / faible | 0,00 / + 0,01 % | + 0,001 % |
+
+Un écart infime franchit un seuil (hystérésis de l'ouverture, fermeture des protections, journée chaude) et se
+propage aux heures suivantes : le DH porte un « bruit » de l'ordre de 0,2 %. Sans effet sur la validation (± 10 %),
+mais deux variantes proches ne se départagent pas en dessous ; et une optimisation n'est sans effet que si elle
+garde les résultats au bit près.
