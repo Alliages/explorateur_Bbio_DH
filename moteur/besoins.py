@@ -123,6 +123,7 @@ JEU = "th_bc"       # les besoins du Bbio se calculent sur le climat moyen (mode
 # Mode de calcul → jeu météo : « th_b » pour les besoins du Bbio, « th_d » pour le confort d'été (DH)
 JEUX_DES_MODES = {"th_b": JEU, "th_d": "th_d"}
 WH_PAR_KWH = 1000.0
+PREFIXE_RPROT_BAIE = "rprot_baie_"    # colonnes de sortie : fermeture de chaque baie (rprot_baie_0, …)
 # Saison propre du groupe selon (autorisation de chauffage, autorisation de refroidissement) : fiche 4.6, tableau 11
 SAISONS = {(0, 1): 1,       # refroidissement
            (0, 0): 2,       # mi-saison
@@ -365,6 +366,8 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         dh_ch, dh_fr                        écarts d'inconfort froid et chaud de l'heure (°C)
         rprot_moyen, hg_es                  ratio de fermeture moyen des protections mobiles (pondéré par les
                                             surfaces de baie) et transmission des baies de l'heure (W/K)
+        rprot_baie_0, rprot_baie_1…         ratio de fermeture de chaque baie (rang dans groupe.baies), si le
+                                            groupe a des protections mobiles (bilan par paroi, moteur/bilan_paroi.py)
         rouv_brut_moyen                     Rouv de l'éq. 240 (avant Rouvmax et protections), moyenne des baies
         rouv_moyen, debit_ouvertures_m3h    part ouverte de la surface ouvrable des baies et débit d'air entrant
                                             par les baies ouvertes (m³/h)
@@ -483,7 +486,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
         te = s["te"][h]
         theta_souffle = te + efficacite_echangeur * (etat.theta_i - te)
         hg_air, theta_air, rouv_moyen, debit_ouvertures, rouv_brut = hg_ei, theta_souffle, 0.0, 0.0, 0.0
-        debit_infiltrations = hg_infiltrations = 0.0
+        debit_infiltrations = hg_infiltrations = hg_ouvertures = 0.0
         if infiltrations is not None:
             i = infiltrations.pas(h, etat.theta_i, theta_souffle)
             debit_infiltrations, hg_infiltrations = i["debit_m3h"], i["hg"]
@@ -500,6 +503,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                                th_b=not th_d)
             rouv_moyen, debit_ouvertures, rouv_brut = o["rouv_moyen"], o["debit_m3h"], o["rouv_brut_moyen"]
             if o["hg"] > 0:
+                hg_ouvertures = o["hg"]
                 theta_air = (hg_air * theta_air + o["hg"] * te) / (hg_air + o["hg"])
                 hg_air += o["hg"]
 
@@ -547,7 +551,13 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                  hg_infiltrations=hg_infiltrations,
                  # Sollicitations de l'heure, pour comparer aux sorties horaires d'un moteur Th-BCE
                  hg_ei=hg_air, theta_eieq=theta_air, fs1=baies["fs1"], fs3=baies["fs3"], phi_sl=baies["phi_sl"],
-                 phi_sh=s["phi_sh"][h], phi_i=libre["phi_i"], phi_s=libre["phi_s"], phi_m=libre["phi_m"])
+                 phi_sh=s["phi_sh"][h], phi_i=libre["phi_i"], phi_s=libre["phi_s"], phi_m=libre["phi_m"],
+                 # Air entrant poste par poste et apports internes, pour le bilan en coupe (moteur/bilan_paroi.py) :
+                 # hg_ei . θeieq = hg_ventilation . θsouffle + (hg_infiltrations + hg_ouvertures) . θe
+                 hg_ventilation=hg_ei, theta_souffle=theta_souffle, hg_ouvertures=hg_ouvertures,
+                 phi_apports=phi_conv[h] + phi_rad[h] + chaleur_brasseurs)
+        if rprot is not None:       # fermeture de chaque baie, pour le bilan par paroi (moteur/bilan_paroi.py)
+            r.update({f"{PREFIXE_RPROT_BAIE}{i}": float(valeur) for i, valeur in enumerate(rprot)})
         if th_d:
             r.update(ecart_ba=ecart_ba, energie_brasseurs_wh=energie_brasseurs)
         lignes.append(r)

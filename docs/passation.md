@@ -2,11 +2,51 @@
 
 Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis claude.ai ou Claude Code.
 
-## État au 20/11/2026
+## État au 22/11/2026
 
-- Dernière version publiée sur `travail` : **0.9.13** (commit `667d842`, 20/11/2026), avec les **0.9.9 à 0.9.11**
-  dans le même commit. Avant : 0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé.
-- **0.9.16** (prête, non poussée, dans la même copie de travail que la 0.9.15) :
+- Dernière version publiée sur `travail` : **0.9.16** (commit `dee10e0`, 22/11/2026), avec la **0.9.15** dans le même
+  commit. Avant : 0.9.13 avec les 0.9.9 à 0.9.11 (`667d842`). Avant : 0.9.8 avec la 0.9.6 (`acab5fb`). `main` n'a pas bougé.
+- **0.9.25** (prête, non poussée, avec les 0.9.18 à 0.9.24) : correction du bilan en coupe, devenu exact.
+  Conduction des parois opaques et des ponts vers la masse θmq, des baies vers les surfaces θs, rayonnement
+  intérieur perdu par les vitrages compris : le reste du bilan est le stockage du modèle (l'ancienne lecture
+  H × (θi − θe) faisait passer 13 kWh d'erreur pour du stockage sur la semaine chaude du logement faible sans
+  protection). Lecture « Heure de pointe (Wh) » de la coupe (heure du soleil transmis le plus fort) ; fiche : pic
+  du soleil transmis, conduction du modèle. Hypothèses 103 (corrigée) et 105. Résultats inchangés. Vu dans Chrome
+  (logement faible sans protection : baies sud 976 Wh à 16 h le 11/08, 4 035 Wh gardés par la masse). Tests : 387
+  réussis, 2 sautés. Suite : diffusion en 0.9.26.
+- **0.9.24** (prête, non poussée, dans la même copie de travail que les 0.9.18 à 0.9.22) : étape 4 du plan
+  « informations au clic », qui est achevé. Brique « Le bilan en coupe » (`interface/briques/bilan.py`, dessin
+  `interface/coupe.py`) : coupe hors échelle, une flèche par poste proportionnelle aux kWh (soleil, parois, ponts
+  thermiques, air en trois postes, apports internes, chauffage, froid), pignons en un cercle, masse ; périodes des
+  calculs lancés ; tableau équilibré ; avec le DH, part de chaque poste dans la chaleur entrée aux heures de DH ;
+  clic sur la coupe. Bouton « Mesurer l'effet de cette paroi » sous la fiche (`calcul.effet_paroi`,
+  `construire_projet(…, sans=…)`). Moteur : sorties `hg_ventilation`, `theta_souffle`, `hg_ouvertures`,
+  `phi_apports` ; `bilan_paroi.postes_du_groupe`. Hypothèses 103 et 104. Résultats inchangés (DH 732, Bbio 119,8).
+  Logement moyen : sans les baies sud DH 994, sans toiture 615. Vu dans Chrome (trois périodes, clic sur la baie
+  sud de la coupe, bouton). Tests : 387 réussis, 2 sautés.
+- **0.9.22** (prête, non poussée, dans la même copie de travail que les 0.9.18 et 0.9.20) : étape 5 du plan
+  « informations au clic ». Un clic sur un mur, des baies (ou leur protection) ou la toiture du dessin les choisit
+  dans la liste « Paroi examinée » (fiche, contour orange, « Ce qu'elle fait »). Composant inline
+  `interface/dessin_cliquable.py` (`st.components.v2`, événement `clic`), qui remplace
+  `st.markdown(unsafe_allow_html=True)` ; clé `data-cle` sur chaque forme de `axonometrie.py`. La liste reste
+  (clavier, parois cachées : façade de dos, plancher bas). Résultats inchangés. Vu dans Chrome (vues sud-ouest et
+  nord-est : baies, toiture, pignon ; infobulles gardées). Tests : 383 réussis, 2 sautés. **Suite : 0.9.24**, coupe schématique du bilan et étape
+  4 (choix arrêtés dans `ROADMAP.md`, plan de bataille) ; diffusion en 0.9.26.
+- **0.9.20** (prête, non poussée, dans la même copie de travail que la 0.9.18) : étape 3 du plan « informations
+  au clic ». `moteur/bilan_paroi.py` : bilan heure par heure de chaque baie et paroi opaque (soleil reçu et transmis,
+  rayonnement froid, H × (θi − θe), fermeture, ouverture), sommes égales aux flux du groupe (hypothèse 102).
+  `calculer_besoins` sort `rprot_baie_<rang>` ; `interface/calcul.py` rend `parois_dh` (semaine la plus chaude,
+  confort adaptatif) et `parois_bbio` (année) ; tableau « Ce qu'elle fait » sous la fiche (`fiche_paroi.bilan`),
+  lu dans le cache, seulement si la saisie n'a pas changé. Fiche : plancher sur le sol corrigé (U × surface).
+  Résultats inchangés (DH 732, Bbio 119,8 ; Paris − 6,1 / + 6,9 %). Diffusion en 0.9.22. Vu dans Chrome ; tests :
+  382 réussis, 2 sautés. Suite : étape 4, part de la paroi dans le DH.
+- **0.9.18** (prête, non poussée) : étapes 1 et 2 du plan « informations au clic » (`ROADMAP.md`). Liste
+  « Paroi examinée » sous le dessin (`interface/fiche_paroi.py` : `parois`, `fiche`, `infobulles`), paroi entourée
+  en orange (pointillé si cachée), fiche en tableau ; infobulle (`<title>`) de chaque mur, baie et toiture. Le
+  dessin passe par `st.markdown(unsafe_allow_html=True)` : `st.image` ne transmet pas le survol, `st.html`
+  (DOMPurify, profil « html ») retire le SVG. Diffusion décalée en 0.9.20. Vu dans Chrome ; tests : 378 réussis,
+  2 sautés. Suite : étape 3, grandeurs calculées par paroi (`moteur/bilan_paroi.py`).
+- **0.9.16** (poussée avec la 0.9.15) :
   - **dessin** : course du 21 juin dans le ciel et au bord du sol, soleil de 16 h légale à sa hauteur (55,5°,
     59° à l'ouest du sud ; 46,5° N, 2,5° E), ombre de la boîte au sol, façades à l'ombre assombries, flèche du
     nord. Vu du sud-ouest, le plan de la course est vu par la tranche : un trait étroit, avec le soleil posé sur
@@ -27,7 +67,7 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
     « Diffusion » passe en 0.9.18 ;
   - vu dans Chrome (vues sud-ouest et nord-est ; boutons et cadre du DH ; curseur de l'heure, de 6 à 20 h).
     Tests : 376 réussis, 2 sautés.
-- **0.9.15** (prête, non poussée) : ouverture des baies comme le moteur COMETH (`OUVERTURE_COMME_LE_MOTEUR`,
+- **0.9.15** (poussée avec la 0.9.16) : ouverture des baies comme le moteur COMETH (`OUVERTURE_COMME_LE_MOTEUR`,
   hypothèse 100) : θouv2 sans Δθconf_adapt, θouv1 = θouv2 − 1, réglage la nuit aussi ; règle reproduite 92 à
   99,9 % des heures (diagnostic dans `docs/audit.md`). Protections et passage d'air (éq. 239) : déjà conformes au
   moteur. Face au moteur : ouverture Th-B − 4 à + 3 %, Th-D − 4 à − 16 % ; froid de Paris 2 − 33 → − 9 %.
@@ -170,7 +210,8 @@ Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis cl
 
 ## Prochaine étape
 
-« Push » des 0.9.9 à 0.9.11, puis mise en ligne sur accord. Ensuite : entrées d'air trop fortes (chauffage de
+« Push » des 0.9.18 et 0.9.20, puis étape 4 du plan « informations au clic » (part de la paroi dans le DH) ;
+mise en ligne sur accord. Ensuite : entrées d'air trop fortes (chauffage de
 Sète traversant, `rsee.xml`, Vélizy, Saint-Ouen), ouverture des baies en Th-D encore 16 à 32 % sous le moteur, Φsh,
 relecture des modules restants (`relecture_0.9.8.md`, § 1), chaque fois vérifiés avec
 `python -m outils.comparer_horaires tous` ; autres études ou OPEE ou les nouvelles briques (version à fixer). Écrire une brique : un fichier dans

@@ -412,6 +412,24 @@ def libelle_orientation(orientation_deg):
 # ============================================================
 # DE LA BOÎTE AU PROJET
 # ============================================================
+def noms_composants(boite):
+    """Nom, dans le projet du moteur, de chaque paroi de la boîte qui entre dans le groupe : {clé: nom}. Clés :
+    celles de interface/fiche_paroi.py (« principale »… pour les murs, « baies_principale »… pour les baies,
+    « toiture », « plancher_bas ») ; une paroi adiabatique ou une façade sans baie n'a pas de nom."""
+    noms = {}
+    for facade in boite.facades():
+        if facade["adiabatique"]:
+            continue
+        nom = f"{facade['libelle']} ({point_cardinal(facade['orientation_deg'])})"
+        noms[facade["cle"]] = f"Mur — {nom}"
+        if facade["baies_m2"] > 0:
+            noms[f"baies_{facade['cle']}"] = f"Baies — {nom}"
+    for cle in ("toiture", "plancher_bas"):
+        if cle not in boite.parois_adiabatiques:
+            noms[cle] = PAROIS_ADIABATIQUES[cle]
+    return noms
+
+
 def _conventions_protection(boite):
     """Ce que la boîte ne fait pas saisir d'une protection mobile, pris selon son type (volet, store enroulable)
     dans le guide Actibaie (donnees/hypotheses.csv, clés boite_…) :
@@ -425,8 +443,12 @@ def _conventions_protection(boite):
             "sw2_protege": hyp(f"boite_sw2_part_protege_{boite.protection}") * boite.sw_protege}
 
 
-def construire_projet(boite):
+def construire_projet(boite, sans=()):
     """Projet du moteur décrit par la boîte : un bâtiment, une zone, un groupe.
+
+    sans : clés de parois (interface/fiche_paroi.py) laissées hors du groupe, pour mesurer leur effet
+    (hypothèse 104 de docs/audit.md) : les baies d'une façade (« baies_principale »…) sont remplacées par le mur
+    de la façade ; un mur, la toiture ou le plancher bas sont retirés, comme une paroi adiabatique.
 
     Les contrôles sont ceux du moteur (moteur/structures.py) : une valeur hors bornes lève une ValueError
     au message clair, que l'interface affiche telle quelle.
@@ -443,6 +465,10 @@ def construire_projet(boite):
     inconnues = set(boite.facades_debord) - {cle for cle, *_ in FACADES}
     if inconnues:
         raise ValueError(f"Façades inconnues pour les balcons : {', '.join(sorted(inconnues))}")
+    connues = {cle for cle, *_ in FACADES} | {f"baies_{cle}" for cle, *_ in FACADES} | set(PAROIS_ADIABATIQUES)
+    inconnues = set(sans) - connues
+    if inconnues:
+        raise ValueError(f"Parois à retirer inconnues : {', '.join(sorted(inconnues))}")
     inconnues = set(boite.parois_adiabatiques) - set(PAROIS_ADIABATIQUES)
     if inconnues:
         raise ValueError(f"Parois adiabatiques inconnues : {', '.join(sorted(inconnues))} "
@@ -454,20 +480,23 @@ def construire_projet(boite):
     # Une paroi adiabatique (sur un local chauffé) n'entre pas dans le groupe : ni échange de chaleur, ni soleil, ni
     # perméabilité à l'air ; l'inertie, donnée par sa classe, ne change pas (hypothèse 101 de docs/audit.md)
     parois, baies = [], []
+    noms = noms_composants(boite)
     for facade in boite.facades():
         if facade["adiabatique"]:
             continue
-        nom = f"{facade['libelle']} ({point_cardinal(facade['orientation_deg'])})"
-        parois.append(Paroi(f"Mur — {nom}", "mur", facade["mur_m2"], u=boite.u_mur,
-                            orientation_deg=facade["orientation_deg"], alpha=alpha))
-        if facade["baies_m2"] > 0:
+        sans_baies = f"baies_{facade['cle']}" in sans          # baies remplacées par du mur
+        mur_m2 = facade["mur_m2"] + (facade["baies_m2"] if sans_baies else 0.0)
+        if facade["cle"] not in sans:
+            parois.append(Paroi(noms[facade["cle"]], "mur", mur_m2, u=boite.u_mur,
+                                orientation_deg=facade["orientation_deg"], alpha=alpha))
+        if facade["baies_m2"] > 0 and not sans_baies:
             # Balcon ou casquette : un débord horizontal au nu du plancher haut, donc à un linteau du haut de
             # la baie (fiche 3.2, éq. 20 et 21 : seules comptent la profondeur, cette distance et la hauteur)
             fh, hauteur_baie, _, linteau = gabarit_baie(facade["part_vitree"], boite.hauteur_etage_m)
             largeur_baie = facade["part_vitree"] / fh * largeur_travee(facade["largeur_m"])
             masques = [MasqueProcheHorizontal(boite.debord_m, distance_m=linteau)] \
                 if boite.debord_m > 0 and facade["cle"] in boite.facades_debord else []
-            baies.append(Baie(f"Baies — {nom}", facade["baies_m2"], facade["orientation_deg"],
+            baies.append(Baie(noms[f"baies_{facade['cle']}"], facade["baies_m2"], facade["orientation_deg"],
                               largeur_m=largeur_baie, hauteur_m=hauteur_baie, masques=masques,
                               uw=boite.uw, sw_e=boite.sw, tl=boite.tl,
                               protection=boite.protection if avec_protection else None,
@@ -478,10 +507,10 @@ def construire_projet(boite):
                               ouvrable=boite.ouvrable,
                               ratio_ouverture_max=boite.ratio_ouverture_max if boite.ouvrable else None))
     # --- Toiture et plancher bas : l'emprise de la boîte ---
-    if "toiture" not in boite.parois_adiabatiques:
-        parois.append(Paroi("Toiture", "toiture", boite.emprise_m2, u=boite.u_toiture, alpha=alpha))
-    if "plancher_bas" not in boite.parois_adiabatiques:
-        parois.append(Paroi("Plancher bas", "plancher_bas", boite.emprise_m2, u=boite.u_plancher,
+    if "toiture" not in boite.parois_adiabatiques and "toiture" not in sans:
+        parois.append(Paroi(noms["toiture"], "toiture", boite.emprise_m2, u=boite.u_toiture, alpha=alpha))
+    if "plancher_bas" not in boite.parois_adiabatiques and "plancher_bas" not in sans:
+        parois.append(Paroi(noms["plancher_bas"], "plancher_bas", boite.emprise_m2, u=boite.u_plancher,
                             contact="sol" if boite.plancher_sur_sol else "exterieur"))
     # --- Ponts thermiques : la rive de chaque plancher (bas, intermédiaires et toiture) le long des façades sur
     # l'extérieur. Une toiture ou un plancher bas adiabatique garde sa rive : la dalle reste liée à la façade,

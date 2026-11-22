@@ -60,6 +60,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE
 from moteur.bbio import controler_projet
 from moteur.besoins import JEUX_DES_MODES, calculer_besoins
 from moteur.calendrier import construire_calendrier
@@ -160,6 +161,14 @@ def avertissements_confort(groupe):
     if not groupe_ouvrable(groupe):
         manques.append("aucune baie ouvrable")
     return ", ".join(manques)
+
+
+def debut_semaine_la_plus_chaude(dh_horaire):
+    """Rang de la première heure des sept jours consécutifs (de minuit à minuit, en heures de simulation) qui
+    comptent le plus de degrés-heures ; dh_horaire : une valeur par heure, sur des jours entiers."""
+    par_jour = np.asarray(dh_horaire, dtype=float).reshape(-1, HEURES_PAR_JOUR).sum(axis=1)
+    sur_sept_jours = pd.Series(par_jour).rolling(JOURS_PAR_SEMAINE).sum().shift(-(JOURS_PAR_SEMAINE - 1))
+    return int(sur_sept_jours.fillna(0.0).idxmax()) * HEURES_PAR_JOUR
 
 
 @dataclass

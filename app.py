@@ -34,7 +34,8 @@
 import streamlit as st
 
 from config.reglages import lire_version
-from interface import accueil, axonometrie, calcul, comparaison
+from interface import accueil, axonometrie, calcul, comparaison, fiche_paroi
+from interface.dessin_cliquable import dessin_cliquable, paroi_cliquee
 from interface.aides import aide
 from interface.briques import BRIQUES
 from interface.briques.base import montrer
@@ -69,6 +70,12 @@ def _bbio(boite):
 @st.cache_data(max_entries=CALCULS_GARDES, show_spinner=False)
 def _dh(boite):
     return calcul.resultats_dh(boite)
+
+
+@st.cache_data(max_entries=CALCULS_GARDES, show_spinner=False)
+def _effet(boite, cle, calculs):
+    """DH et Bbio sans la paroi « cle » (bouton « Mesurer l'effet de cette paroi » de la fiche)."""
+    return calcul.effet_paroi(boite, cle, calculs)
 
 
 def _calculer(boite, calculs):
@@ -158,31 +165,118 @@ if page == PAGE_ACCUEIL:                                    # l'accueil ne lance
     accueil.afficher(lambda: st.session_state.update(page=PAGE_EXPLORER))
     st.stop()
 
+def _bilan_paroi(paroi, boite, boite_calculee, calculs_lances):
+    """Ce que fait la paroi examinée, d'après le dernier calcul (lu en mémoire : aucun calcul de plus), et
+    seulement si la saisie n'a pas changé depuis : sinon le bilan serait celui d'une autre boîte."""
+    if boite != boite_calculee:
+        st.caption("Cliquer sur « Calculer » pour lire ce que fait cette paroi.")
+        return
+    try:
+        resultats = _calculer(boite_calculee, calculs_lances)
+    except ValueError:                                      # message affiché plus bas, avec les résultats
+        return
+    periodes, lignes = fiche_paroi.bilan(resultats, paroi)
+    if not periodes:                                        # paroi hors du groupe
+        if paroi in boite.parois_adiabatiques:
+            st.caption("Paroi adiabatique : elle n'échange rien avec l'extérieur.")
+        return
+    st.markdown("**Ce qu'elle fait**, d'après le calcul\n\n"
+                f"| | {' | '.join(periodes)} |\n|---|{'---|' * len(periodes)}\n"
+                + "\n".join(f"| {grandeur} | {' | '.join(valeurs)} |" for grandeur, valeurs in lignes),
+                help=aide("bilan_paroi"))
+    _effet_paroi(paroi, boite_calculee, calculs_lances, resultats)
+
+
+def _effet_paroi(paroi, boite, calculs_lances, resultats):
+    """Bouton « Mesurer l'effet de cette paroi » : DH et Bbio relancés sans elle (un calcul par indicateur, gardé en
+    mémoire), comparés au calcul affiché. La demande est retenue tant que la paroi et la boîte ne changent pas."""
+    demande = (boite, paroi, tuple(calculs_lances))
+    if st.button("Mesurer l'effet de cette paroi", icon=":material/science:", key="effet_paroi",
+                 help=aide("effet_paroi")):
+        st.session_state["effet_demande"] = demande
+    if st.session_state.get("effet_demande") != demande:
+        return
+    with st.spinner("Calcul sans cette paroi…"):
+        effets = _effet(*demande)
+    sans = ("baies remplacées par du mur" if paroi.startswith(axonometrie.PREFIXE_BAIES)
+            else "paroi retirée, comme si elle était adiabatique")
+    lignes = []
+    if "dh" in effets and resultats.dh is not None:
+        avec = resultats.dh["dh"]
+        lignes.append(f"DH : {nombre(effets['dh'], 0, '°C.h')} au lieu de {nombre(avec, 0, '°C.h')} "
+                      f"({_signe(effets['dh'] - avec, 0)})")
+    if "bbio" in effets and resultats.bbio is not None:
+        avec = resultats.bbio["bbio"]
+        lignes.append(f"Bbio : {nombre(effets['bbio'], 1)} au lieu de {nombre(avec, 1)} "
+                      f"({_signe(effets['bbio'] - avec, 1)})")
+    st.markdown(f"**Sans cette paroi** ({sans}) :\n" + "\n".join(f"- {ligne}" for ligne in lignes))
+    if (paroi.startswith(axonometrie.PREFIXE_BAIES) and resultats.dh is not None
+            and effets.get("dh", 0.0) > resultats.dh["dh"]):
+        st.caption("Le DH monte sans ces baies : elles font entrer le soleil, mais on les ouvre aussi pour "
+                   "rafraîchir le logement, la nuit surtout. Le bilan en coupe montre ce que l'air des baies "
+                   "ouvertes emporte.")
+
+
+def _signe(ecart, decimales):
+    """Écart signé, à la française (« + 12 », « − 3,5 »)."""
+    return f"{'+' if ecart >= 0 else '−'} {nombre(abs(ecart), decimales)}"
+
+
 @st.fragment
-def _dessin(boite):
-    """Axonométrie, avec le choix de la vue au-dessus et l'heure du soleil au-dessous. Fragment : changer de vue
-    ou d'heure ne redessine que lui, sans repasser par le calcul ni par les graphiques."""
+def _dessin(boite, boite_calculee, calculs_lances):
+    """Axonométrie, avec le choix de la vue au-dessus, l'heure du soleil et la paroi examinée (sa fiche et, la
+    boîte calculée, ce qu'elle fait) au-dessous ; un clic sur une paroi du dessin la choisit dans la liste.
+    Fragment : changer de vue, d'heure ou de paroi ne redessine que lui, sans repasser par le calcul ni par les
+    graphiques."""
     vue = st.segmented_control("Vue depuis le", list(axonometrie.VUES), default="sud-ouest", required=True,
                                key="vue")
     dessin = st.container()                                 # le dessin au-dessus du curseur qui le règle
     heure = st.select_slider("Heure du soleil, le 21 juin (heure légale)", options=axonometrie.HEURES_SOLEIL,
                              value=int(axonometrie.SOLEIL_HEURE), key="heure_soleil",
                              format_func=lambda h: f"{h} h", help=aide("heure_soleil"))
-    dessin.image(axonometrie.dessiner(boite, axonometrie.VUES[vue], heure), width="stretch",
-                 alt=f"Axonométrie de la boîte, façade principale au {point_cardinal(boite.orientation_deg)}, "
-                     f"soleil du 21 juin à {heure} h")
     plancher = " Le plancher bas, adiabatique, n'est pas visible." if "plancher_bas" in boite.parois_adiabatiques \
         else ""
     st.caption("Dessin à l'échelle : les baies ont la surface saisie. En prune, la protection mobile ; en gris, "
                "les parois adiabatiques. En pointillé, la course du soleil le 21 juin, du lever au nord-est au "
                "coucher au nord-ouest (un point toutes les deux heures), dans le ciel et portée au bord du sol ; "
                "le soleil de l'heure choisie est à sa hauteur, avec l'ombre de la boîte et ses façades à "
-               "l'ombre, plus sombres." + plancher)
+               "l'ombre, plus sombres. Survoler un mur, une baie ou la toiture affiche ses valeurs ; cliquer dessus "
+               "ouvre sa fiche." + plancher)
+    # Paroi examinée : surlignée dans le dessin, avec sa fiche ; une paroi disparue de la boîte (baies d'une façade
+    # passée à 0 % ou adiabatique) est oubliée avant d'afficher la liste
+    choix = fiche_paroi.parois(boite)
+    if st.session_state.get("paroi_examinee") not in choix:
+        st.session_state.pop("paroi_examinee", None)
+    paroi = st.selectbox("Paroi examinée", list(choix), index=None, format_func=choix.get, key="paroi_examinee",
+                         placeholder="Cliquer sur le dessin, ou choisir une façade, ses baies, la toiture ou le "
+                                     "plancher bas",
+                         help=aide("paroi_examinee"))
+    if paroi is not None:
+        projection = axonometrie.Projection(axonometrie.VUES[vue])
+        cachee = "" if axonometrie.paroi_visible(boite, paroi, projection) else \
+            " Cachée dans cette vue : son contour est en pointillé."
+        st.markdown(f"**{choix[paroi]}**.{cachee}\n\n| Grandeur | Valeur |\n|---|---|\n"
+                    + "\n".join(f"| {grandeur} | {valeur} |" for grandeur, valeur in fiche_paroi.fiche(boite, paroi)))
+        _bilan_paroi(paroi, boite, boite_calculee, calculs_lances)
+    # SVG écrit dans la page par un composant (interface/dessin_cliquable.py) : infobulle de chaque paroi au
+    # survol, clé de la paroi renvoyée au clic. Le rappel tourne avant le passage suivant du fragment : la paroi
+    # cliquée est mise dans la liste avant qu'elle ne s'affiche
+    def _clic():
+        cle = paroi_cliquee(st.session_state.get("dessin_axonometrie"), choix)
+        if cle is not None:
+            st.session_state["paroi_examinee"] = cle
+
+    svg = axonometrie.dessiner(boite, axonometrie.VUES[vue], heure, surlignee=paroi,
+                               infobulles=fiche_paroi.infobulles(boite))
+    description = (f"Axonométrie de la boîte, façade principale au {point_cardinal(boite.orientation_deg)}, "
+                   f"soleil du 21 juin à {heure} h ; cliquer sur une paroi ouvre sa fiche")
+    with dessin:
+        dessin_cliquable(svg, description, key="dessin_axonometrie", on_clic=_clic)
 
 
 colonne_dessin, colonne_chiffres = st.columns([3, 2], gap="large")
 with colonne_dessin:
-    _dessin(boite)
+    _dessin(boite, boite_calculee, calculs_lances)
 
 with colonne_chiffres:
     st.subheader("Chiffres clés")
@@ -254,7 +348,7 @@ elif reference is not None:
 # 5. BRIQUES : une seule est affichée à la fois, parmi celles des calculs lancés
 # ============================================================
 st.divider()
-briques = [brique for brique in BRIQUES if brique.besoin in calculs_lances]
+briques = [brique for brique in BRIQUES if not brique.besoin or brique.besoin in calculs_lances]
 titres = {brique.cle: f"{brique.icone} {brique.titre}" for brique in briques}
 if st.session_state.get("brique") not in titres:            # brique d'un calcul qui n'est plus lancé
     st.session_state.pop("brique", None)

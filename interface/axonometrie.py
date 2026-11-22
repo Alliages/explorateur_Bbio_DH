@@ -13,6 +13,11 @@
      part vitrée saisie, avec leur protection mobile ;
    - les balcons ou casquettes, de la profondeur saisie ;
    - les parois adiabatiques (sur un local chauffé), en gris ;
+   - la paroi examinée sous le dessin (interface/fiche_paroi.py),
+     d'un contour orange épais (en pointillé si elle est cachée) ;
+     au survol, chaque mur, baie ou toiture montre son infobulle ;
+     chacun porte la clé de sa paroi (attribut data-cle), que le
+     clic renvoie à la page (interface/dessin_cliquable.py) ;
    - le soleil du 21 juin (à 46,5° N, 2,5° E) :
        · sa course dans le ciel, du lever au nord-est au coucher
          au nord-ouest, un point toutes les deux heures ;
@@ -71,6 +76,8 @@ PAS_REPERES_H = 2                   # un point sur la course toutes les deux heu
 POINTS_COURSE = 48                  # nombre de segments de la course
 PART_VOLET = 0.28                   # part haute de la baie couverte par la protection dessinée
 TRAIT = 1.4                         # épaisseur des traits (px)
+EPAISSEUR_SURLIGNAGE = 3.6          # contour de la paroi examinée (px)
+PREFIXE_BAIES = "baies_"            # clé des baies d'une façade : « baies_principale »… (voir interface/fiche_paroi.py)
 POLICE = "font-family='Helvetica, Arial, sans-serif'"
 # Couleur des murs selon la teinte saisie
 MURS = {"claire": "#FBF7EE", "moyenne": "#EBD6B0", "sombre": "#A98F78", "noire": "#5F5962"}
@@ -331,7 +338,12 @@ class _Scene:
                   f"<rect width='{LARGEUR}' height='{HAUTEUR}' rx='22' fill='{charte.FOND_SCHEMA}'/>"]
         for genre, points, suite in self.formes:
             if genre == "polygone":
-                lignes.append(f"<polygon points='{' '.join(px(p) for p in points)}' {attr(suite)}/>")
+                # Attribut « titre » : infobulle que le navigateur montre au survol (élément <title> du polygone)
+                attributs = dict(suite)
+                titre_forme = attributs.pop("titre", None)
+                debut = f"<polygon points='{' '.join(px(p) for p in points)}' {attr(attributs)}"
+                lignes.append(f"{debut}><title>{escape(titre_forme)}</title></polygon>" if titre_forme
+                              else f"{debut}/>")
             elif genre == "ligne":
                 lignes.append(f"<polyline points='{' '.join(px(p) for p in points)}' fill='none' {attr(suite)}/>")
             elif genre == "cercle":
@@ -445,29 +457,78 @@ def _ombre_portee(scene, proj, boite, soleil, rayon):
                    fill_opacity=OPACITE_OMBRE_PORTEE, stroke="none")
 
 
-def _facade(scene, proj, boite, facade, couleur):
-    """Une façade visible : le mur, les lignes de plancher, les baies et leur protection."""
+def point_de_facade(facade, u, z):
+    """Point (est, nord, haut) d'une façade : u le long de la façade depuis son milieu, z depuis le sol (m)."""
+    nx, ny = direction(facade["orientation_deg"])
+    return (nx * facade["recul_m"] + ny * u, ny * facade["recul_m"] - nx * u, z)
+
+
+def contours_paroi(boite, cle):
+    """Contours (points est, nord, haut) d'une paroi désignée par sa clé (interface/fiche_paroi.py) : un pour un
+    mur, la toiture ou le plancher bas, un par baie pour « baies_<façade> » ; liste vide pour une clé inconnue."""
+    facades = {facade["cle"]: facade for facade in boite.facades()}
+    if cle in ("toiture", "plancher_bas"):
+        z = boite.hauteur_m if cle == "toiture" else 0.0
+        return [[(x, y, z) for x, y in _coins(boite)]]
+    if cle in facades:
+        facade, demi = facades[cle], facades[cle]["largeur_m"] / 2.0
+        return [[point_de_facade(facade, u, z) for u, z in ((-demi, 0), (demi, 0), (demi, boite.hauteur_m),
+                                                             (-demi, boite.hauteur_m))]]
+    if cle.startswith(PREFIXE_BAIES) and cle[len(PREFIXE_BAIES):] in facades:
+        facade = facades[cle[len(PREFIXE_BAIES):]]
+        return [[point_de_facade(facade, u, z) for u, z in ((u0, z0), (u1, z0), (u1, z1), (u0, z1))]
+                for u0, u1, z0, z1 in decouper_baies(facade["part_vitree"], facade["largeur_m"], boite.nb_niveaux,
+                                                     boite.hauteur_etage_m)]
+    return []
+
+
+def paroi_visible(boite, cle, proj):
+    """Vrai si la paroi est vue du spectateur : la toiture toujours, le plancher bas jamais, une façade (et ses
+    baies) si elle est tournée vers lui."""
+    if cle in ("toiture", "plancher_bas"):
+        return cle == "toiture"
+    facade = next((f for f in boite.facades() if cle in (f["cle"], PREFIXE_BAIES + f["cle"])), None)
+    return facade is not None and proj.voit(direction(facade["orientation_deg"]))
+
+
+def _surligner(scene, proj, boite, cle):
+    """Contour épais de la paroi examinée, par-dessus tout le dessin ; en pointillé si elle est cachée (façade de
+    dos, plancher bas). Sans effet sur le survol : le contour laisse passer la souris (pointer-events)."""
+    cachee = not paroi_visible(boite, cle, proj)
+    for contour in contours_paroi(boite, cle):
+        scene.polygone([proj.point(*point) for point in contour], fill="none", stroke=charte.COULEUR_SURLIGNAGE,
+                       stroke_width=EPAISSEUR_SURLIGNAGE, stroke_linejoin="round", pointer_events="none",
+                       **({"stroke_dasharray": "6 4"} if cachee else {}))
+
+
+def _facade(scene, proj, boite, facade, couleur, infobulles):
+    """Une façade visible : le mur, les lignes de plancher, les baies et leur protection. infobulles : texte montré
+    au survol du mur et des baies, par clé de paroi (interface/fiche_paroi.py)."""
     nx, ny = direction(facade["orientation_deg"])
     cx, cy = nx * facade["recul_m"], ny * facade["recul_m"]     # milieu du pied de la façade
     tx, ty = ny, -nx                            # direction horizontale de la façade
 
     def p(u, z):
-        return proj.point(cx + tx * u, cy + ty * u, z)
+        return proj.point(*point_de_facade(facade, u, z))
 
     demi, haut = facade["largeur_m"] / 2.0, boite.hauteur_m
     trait = dict(stroke=charte.BLEU_NUIT, stroke_width=TRAIT, stroke_linejoin="round")
-    scene.polygone([p(-demi, 0), p(demi, 0), p(demi, haut), p(-demi, haut)], fill=couleur, **trait)
+    titre_baies = infobulles.get(PREFIXE_BAIES + facade["cle"])
+    # data_cle (écrit « data-cle ») : la paroi que désigne la forme, renvoyée par le clic (dessin_cliquable.py)
+    scene.polygone([p(-demi, 0), p(demi, 0), p(demi, haut), p(-demi, haut)], fill=couleur,
+                   titre=infobulles.get(facade["cle"]), data_cle=facade["cle"], **trait)
     for niveau in range(1, boite.nb_niveaux):
         z = niveau * boite.hauteur_etage_m
         scene.ligne([p(-demi, z), p(demi, z)], stroke=charte.BLEU_NUIT, stroke_width=0.5, stroke_opacity=0.35)
     for u0, u1, z0, z1 in decouper_baies(facade["part_vitree"], facade["largeur_m"], boite.nb_niveaux,
                                          boite.hauteur_etage_m):
         scene.polygone([p(u0, z0), p(u1, z0), p(u1, z1), p(u0, z1)], fill=charte.BLEU_CIEL, fill_opacity=0.75,
-                       stroke=charte.BLEU_NUIT, stroke_width=0.8, stroke_linejoin="round")
+                       stroke=charte.BLEU_NUIT, stroke_width=0.8, stroke_linejoin="round", titre=titre_baies,
+                       data_cle=PREFIXE_BAIES + facade["cle"])
         if boite.protection != SANS_PROTECTION:     # protection mobile, dessinée à demi baissée
             zv = z1 - (z1 - z0) * PART_VOLET
             scene.polygone([p(u0, zv), p(u1, zv), p(u1, z1), p(u0, z1)], fill=charte.COULEUR_PROTECTION,
-                           fill_opacity=0.8, stroke="none")
+                           fill_opacity=0.8, stroke="none", titre=titre_baies, data_cle=PREFIXE_BAIES + facade["cle"])
     # Balcons ou casquettes : une dalle en débord au nu de chaque plancher haut, dessinée par-dessus les baies
     if boite.debord_m > 0 and facade["cle"] in boite.facades_debord and not facade["adiabatique"]:
         for niveau in range(1, boite.nb_niveaux + 1):
@@ -494,9 +555,14 @@ def couleur_facade(boite, facade, soleil):
     return mur if au_soleil else _melanger(mur, charte.BLEU_NUIT, 1.0 - OMBRE)
 
 
-def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG, heure=SOLEIL_HEURE):
+def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG, heure=SOLEIL_HEURE, surlignee=None, infobulles=None):
     """SVG de la boîte, vue depuis l'azimut vue_deg (0 = depuis le sud, 90 = depuis l'ouest), avec le soleil du
-    21 juin à l'heure légale donnée (remonté à son lever ou à son coucher s'il est trop bas : heure_dessinee)."""
+    21 juin à l'heure légale donnée (remonté à son lever ou à son coucher s'il est trop bas : heure_dessinee).
+
+    surlignee  : clé de la paroi examinée (interface/fiche_paroi.py), entourée d'un contour épais ;
+    infobulles : {clé de paroi: texte} montré par le navigateur au survol du mur, des baies ou de la toiture.
+    """
+    infobulles = infobulles or {}
     proj = Projection(vue_deg)
     scene = _Scene()
     rayon = RAYON_SOL * math.hypot(boite.longueur_m, boite.profondeur_m)
@@ -517,16 +583,19 @@ def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG, heure=SOLEIL_HEURE):
     visibles.sort(key=lambda f: direction(f["orientation_deg"])[0] * proj.droite[0]
                   + direction(f["orientation_deg"])[1] * proj.droite[1])
     for facade in visibles:
-        _facade(scene, proj, boite, facade, couleur_facade(boite, facade, soleil))
+        _facade(scene, proj, boite, facade, couleur_facade(boite, facade, soleil), infobulles)
     # Toiture : les quatre coins hauts de la boîte ; grise si elle est adiabatique
     toiture = charte.GRIS_ADIABATIQUE if "toiture" in boite.parois_adiabatiques else MURS[boite.teinte]
     scene.polygone([proj.point(x, y, boite.hauteur_m) for x, y in _coins(boite)],
-                   fill=_melanger(toiture, "#FFFFFF", 0.45),
+                   fill=_melanger(toiture, "#FFFFFF", 0.45), titre=infobulles.get("toiture"), data_cle="toiture",
                    stroke=charte.BLEU_NUIT, stroke_width=TRAIT, stroke_linejoin="round")
     # Devant la boîte : partie proche de la course dans le ciel, et le soleil s'il est de ce côté
     _course_dans_le_ciel(scene, proj, rayon_ciel, devant=True)
     if soleil_devant:
         _soleil(scene, proj, rayon_ciel, heure)
+    # La paroi examinée, par-dessus la boîte et le soleil, sous l'étiquette de l'heure
+    if surlignee:
+        _surligner(scene, proj, boite, surlignee)
     _etiquette_soleil(scene, proj, rayon_ciel, heure, derriere=not soleil_devant)
 
     titre = (f"Boîte de {boite.longueur_m:.0f} m sur {boite.profondeur_m:.0f} m, {boite.nb_niveaux} niveaux, "

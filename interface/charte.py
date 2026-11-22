@@ -45,3 +45,4 @@ COULEUR_INTERIEUR = JAUNE
 COULEUR_SEUIL = ORANGE
 COULEUR_PROTECTION = PRUNE
 COULEUR_OUVERTURE = BLEU_CIEL
+COULEUR_SURLIGNAGE = ORANGE     # dessin : contour de la paroi examinée (trait plein, la course du soleil est pointillée)

@@ -1643,3 +1643,85 @@ référence `_resultats/mesures_0.9.11/final/validation.csv`, inchangée en 0.9.
 Soleil du 21 juin à 46,5° N et 2,5° E, déclinaison 23,44°, équation du temps − 1,7 min : 16 h légale = 14 h 08
 solaire, soleil à 55,5° de hauteur et à 59° à l'ouest du sud (convention du moteur). Les mêmes
 constantes sont en tête de `interface/axonometrie.py` (réglages du dessin, pas des hypothèses du moteur).
+
+## 0.9.20 — bilan par paroi
+
+### Hypothèse
+
+102. **Bilan par paroi, une lecture du calcul du groupe** (`moteur/bilan_paroi.py`). Il ne change aucun résultat :
+     il répartit entre les baies et les parois opaques les flux que le groupe reçoit déjà.
+     - Flux solaires et rayonnement froid : mêmes équations que le moteur (baie : éq. 209, 219 à 222 ; paroi :
+       éq. 289 et 297), d'où des sommes égales à Fs1 + Fs3 + φsl et à φsh du groupe.
+     - (Remplacé en 0.9.25 par la conduction du modèle, voir l'hypothèse 103 corrigée.) Déperdition H × (θi − θe),
+       avec θi la température d'air moyenne de l'heure : une grandeur de lecture. Dans
+       le modèle du groupe (fiche 5.21), les parois opaques échangent avec la masse (θmq, par Hg,em) et les baies
+       avec le nœud de surface (θs, par Hg,es), pas avec l'air ; la somme ne redonne donc pas exactement les
+       pertes du groupe. Le plancher sur le sol est compté comme le moteur le fait : face à l'air extérieur
+       (b = 1), sans soleil.
+     - U d'une baie pesé par le ratio de fermeture des flux solaires (rprot). En gestion automatique, le moteur
+       pèse le U par un ratio un peu différent (éq. 211) : écart limité à ce cas.
+     - Ouverture : part ouverte moyenne de toutes les baies du groupe (`rouv_moyen`), la même pour chaque baie
+       (dans la boîte, toutes les baies ont la même exposition au bruit ; leur fermeture peut différer selon
+       l'éclairement reçu, d'où une ouverture un peu différente d'une baie à l'autre dans le moteur).
+     - Ponts thermiques non répartis entre les parois.
+
+## 0.9.24 — bilan en coupe et effet d'une paroi
+
+### Hypothèse
+
+103. **Bilan en coupe, une lecture du calcul du groupe** (`moteur/bilan_paroi.postes_du_groupe`,
+     `interface/coupe.py`). Aucun résultat ne change.
+     - Parois et baies : soleil transmis, rayonnement froid et H × (θi − θe) de l'hypothèse 102.
+     - Air : le flux du modèle, Hg,ei × (θeieq − θi) (fiche 5.21), séparé en ventilation (θsouffle, après
+       l'échangeur), infiltrations et baies ouvertes (θe) ; la séparation est exacte, car θeieq est la moyenne de
+       ces trois températures pesée par leurs conductances. L'air des baies ouvertes n'est pas réparti par façade :
+       la coupe le dessine en une flèche.
+     - Ponts thermiques : H_TH,pt × (θe − θi), sans soleil (éq. 345 sans les ponts, voir Φsh plus haut).
+     - Apports internes : occupants, usages, éclairage et chaleur des brasseurs, tels qu'injectés dans le modèle.
+     - (Faux, corrigé en 0.9.25 : voir plus bas.) Reste : sur la période, la somme des flux entrants n'est pas
+       nulle. Elle est la chaleur gardée par la masse
+       (de la première à la dernière heure) plus l'écart de lecture des parois (hypothèse 102). Logement de 70 m²
+       moyen : 0,7 % des apports sur l'année du Bbio, 2,2 % sur l'été du DH, 10 % sur la semaine la plus chaude
+       (stockage).
+     - Part dans le DH : chaleur entrée par chaque poste aux heures qui comptent des DH, rapportée à toute la
+       chaleur entrée à ces heures (parties positives de chaque poste, heure par heure). Une part, pas une
+       décomposition du DH : le modèle n'est pas linéaire, et une paroi qui refroidit à une heure ne « retire »
+       pas de DH dans cette lecture.
+104. **Effet d'une paroi : le calcul relancé sans elle** (`interface/calcul.effet_paroi`,
+     `saisie.construire_projet(…, sans=…)`). Baies d'une façade : remplacées par le mur de la façade (part vitrée
+     nulle). Mur, toiture ou plancher bas : retiré du groupe, comme une paroi adiabatique (hypothèse 101 : ni
+     échange, ni soleil, ni perméabilité ; l'inertie et les ponts thermiques restent). L'écart de DH et de Bbio est
+     exact au sens du modèle, mais il n'est pas additif : la somme des effets de toutes les parois ne redonne pas
+     le DH.
+
+## 0.9.25 — bilan en coupe exact, heure de pointe
+
+### Écart constaté
+
+Question de l'utilisateur sur le logement de 70 m², enveloppe faible, sans protection, semaine la plus chaude : la
+coupe affichait « 19 kWh gardés par la masse ». Mesuré avec les flux du modèle (`moteur/groupe.py`, sorties
+`stockage`, `flux_parois`, `flux_baies`) : 6 kWh seulement étaient stockés (θmq + 1,2 °C) ; 11 kWh venaient de la
+lecture H × (θi − θe) des parois opaques et des ponts (le modèle les fait échanger avec la masse θmq, 33 à 34 °C,
+plus chaude que l'air θi, 31 °C : la lecture sous-estimait leurs pertes), 1,5 kWh de celle des baies (nœud θs). La
+phrase « 10 % sur la semaine (stockage) » de l'hypothèse 103 était donc fausse.
+
+### Hypothèse 103 corrigée
+
+103. **Bilan en coupe, exact** (`moteur/bilan_paroi.py`). Le modèle vérifie, heure par heure (écart < 10⁻¹⁰ W) :
+     stockage de la masse quotidienne = flux_ventilation + flux_baies + flux_parois + flux_apports
+     + flux_inerties_longues. La coupe en reprend chaque terme :
+     - parois opaques : Hg,em × (θe − θmq) + φsh × Hg,em / H_TH (éq. 344), réparti au prorata de b × U × A ; les
+       ponts thermiques prennent leur part H_TH,pt ; le surplus de soleil et de ciel (Hg,em / H_TH > 1, quelques %)
+       est compté avec la conduction de la paroi ;
+     - baies : Fs1 + Fs3 + φsl + Hg,es × (θe − θs), Hg,es réparti au prorata de A × U de l'heure ; s'y ajoute la
+       part des apports radiatifs que les vitrages renvoient dehors (1 − garde des baies, éq. 361 : 13 à
+       19 kWh par an sur le logement de départ), répartie au prorata de A ;
+     - air, apports internes, chauffage et froid : inchangés (exacts dès la 0.9.24) ;
+     - reste : la chaleur gardée par les masses (stockage quotidien moins flux des inerties longues), exacte.
+       Logement de départ faible sans protection, semaine la plus chaude : 6 kWh ; été : − 24 kWh (rendus).
+     La seule convention est la répartition entre parois (au prorata des conductances) : les sommes sont exactes.
+     La fiche d'une paroi lit la même conduction (« Chaleur perdue par conduction »).
+105. **Heure de pointe** (`interface/calcul.bilan_des_parois`) : dans chaque période, l'heure où le soleil transmis
+     au logement (baies, murs, toiture) est le plus fort ; la coupe en donne chaque poste en Wh sur l'heure (soit
+     sa puissance moyenne en W). Les fichiers météo Th-D comptent des heures sans direct et à fort diffus (27/06 à
+     14 h : 905 W/m² diffus horizontal, direct nul) : à ces heures, toutes les façades reçoivent à peu près autant.

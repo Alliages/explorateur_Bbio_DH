@@ -420,6 +420,106 @@ def test_heure_du_soleil():
 
 
 # ============================================================
+# FICHE D'UNE PAROI ET INFOBULLES (0.9.18)
+# ============================================================
+def test_fiche_de_chaque_paroi():
+    from interface.briques.graphiques import nombre
+    from interface.fiche_paroi import fiche, infobulles, parois
+    logement = boite_de_depart()
+    # Pignons aveugles : pas de baies à examiner ; deux façades vitrées, la toiture et le plancher bas
+    assert list(parois(logement)) == ["principale", "pignon_a", "arriere", "pignon_b", "baies_principale",
+                                      "baies_arriere", "toiture", "plancher_bas"]
+    # Mur de la façade principale : 7 × 2,8 m, 25 % vitré ; U × surface = U × surface de mur
+    mur = dict(fiche(logement, "principale"))
+    assert mur["Surface de la façade"] == "7,0 × 2,8 m = 19,6 m²" and mur["Part vitrée"].startswith("25 %")
+    assert mur["U × surface (mur)"] == nombre(logement.u_mur * 19.6 * 0.75, 1, "W/K")
+    assert mur["Adiabatique"] == "non"
+    baies = dict(fiche(logement, "baies_principale"))
+    assert baies["Uw (baie nue)"] == nombre(logement.uw, 2, "W/m².K") and "Volets" in baies["Protection mobile"]
+    assert baies["Surface de baies"].startswith("4,9 m²") and baies["Masque proche"] == "aucun"
+    # Plancher sur le sol : le moteur le compte face à l'air extérieur (b = 1), d'où un U × surface
+    plancher = dict(fiche(logement, "plancher_bas"))
+    assert plancher["Contact"].startswith("sur le sol") and plancher["U × surface"].endswith("W/K")
+    # Balcon sur la façade principale, pignon et toiture adiabatiques : baies masquées, plus de U × surface
+    variante = replace(logement, debord_m=1.2, parois_adiabatiques=("pignon_a", "toiture"))
+    assert dict(fiche(variante, "baies_principale"))["Masque proche"].startswith("balcon ou casquette de 1,2 m")
+    for cle in ("pignon_a", "toiture"):
+        lignes = dict(fiche(variante, cle))
+        assert lignes["Adiabatique"].startswith("oui") and not any(g.startswith("U") for g in lignes)
+    # Façade adiabatique : ses baies disparaissent de la liste ; une clé absente est refusée
+    sans_arriere = replace(logement, parois_adiabatiques=("arriere",))
+    assert "baies_arriere" not in parois(sans_arriere)
+    with pytest.raises(KeyError):
+        fiche(sans_arriere, "baies_arriere")
+    # Une infobulle par paroi, sur une ligne
+    bulles = infobulles(variante)
+    assert set(bulles) == set(parois(variante)) and all("\n" not in t for t in bulles.values())
+    assert bulles["toiture"] == "Toiture · adiabatique" and "Uw " in bulles["baies_principale"]
+
+
+def test_paroi_surlignee_et_infobulles_dans_le_dessin():
+    from interface.axonometrie import PREFIXE_BAIES, contours_paroi, paroi_visible
+    from interface.charte import COULEUR_SURLIGNAGE
+    from interface.fiche_paroi import infobulles, parois
+    espace = "{http://www.w3.org/2000/svg}"
+    logement = boite_de_depart()
+
+    def surlignages(svg):
+        return [p for p in ET.fromstring(svg).iter(f"{espace}polygon") if p.get("stroke") == COULEUR_SURLIGNAGE]
+
+    # Chaque paroi a son contour ; les baies, un par baie dessinée
+    for cle in parois(logement):
+        contours = contours_paroi(logement, cle)
+        if cle.startswith(PREFIXE_BAIES):
+            facade = next(f for f in logement.facades() if PREFIXE_BAIES + f["cle"] == cle)
+            assert len(contours) == len(decouper_baies(facade["part_vitree"], facade["largeur_m"],
+                                                       logement.nb_niveaux, logement.hauteur_etage_m)) > 0
+        else:
+            assert len(contours) == 1 and len(contours[0]) == 4
+    assert contours_paroi(logement, "inconnue") == []
+    # Vu du sud-ouest : façade principale (sud) visible, arrière cachée, toiture visible, plancher bas caché
+    proj = Projection(VUES["sud-ouest"])
+    assert paroi_visible(logement, "principale", proj) and paroi_visible(logement, "baies_principale", proj)
+    assert not paroi_visible(logement, "arriere", proj) and paroi_visible(logement, "toiture", proj)
+    assert not paroi_visible(logement, "plancher_bas", proj)
+    # Sans paroi examinée, aucun contour ; une paroi visible en trait plein, une paroi cachée en pointillé
+    assert surlignages(dessiner(logement)) == []
+    plein = surlignages(dessiner(logement, surlignee="principale"))
+    assert len(plein) == 1 and plein[0].get("stroke-dasharray") is None and plein[0].get("fill") == "none"
+    cache = surlignages(dessiner(logement, surlignee="plancher_bas"))
+    assert len(cache) == 1 and cache[0].get("stroke-dasharray")
+    assert len(surlignages(dessiner(logement, surlignee="baies_principale"))) == len(
+        contours_paroi(logement, "baies_principale"))
+    # Infobulles : le mur et les baies des deux façades visibles, et la toiture, portent leur <title>
+    bulles = infobulles(logement)
+    titres = [t.text for p in ET.fromstring(dessiner(logement, infobulles=bulles)).iter(f"{espace}polygon")
+              for t in p.findall(f"{espace}title")]
+    assert {bulles["principale"], bulles["baies_principale"], bulles["pignon_a"], bulles["toiture"]} <= set(titres)
+    assert bulles["arriere"] not in titres                      # façade de dos : pas dessinée
+
+
+def test_dessin_cliquable():
+    """Chaque mur, baie, protection et toiture dessinés portent la clé de leur paroi (data-cle), une clé de la liste
+    « Paroi examinée » ; le clic n'est retenu que pour une paroi de cette liste."""
+    from interface.dessin_cliquable import paroi_cliquee
+    from interface.fiche_paroi import parois
+    espace = "{http://www.w3.org/2000/svg}"
+    logement = boite_de_depart()
+    choix = parois(logement)
+    cles = {forme.get("data-cle") for vue in VUES.values()
+            for forme in ET.fromstring(dessiner(logement, vue)).iter(f"{espace}polygon") if forme.get("data-cle")}
+    # Les quatre vues montrent les quatre façades, leurs baies et la toiture ; le plancher bas n'est jamais vu
+    assert set(cles) == set(choix) - {"plancher_bas"}
+    # Les contours de la paroi surlignée ne portent pas de clé : ils laissent passer le clic
+    for forme in ET.fromstring(dessiner(logement, surlignee="principale")).iter(f"{espace}polygon"):
+        assert not (forme.get("pointer-events") == "none" and forme.get("data-cle"))
+    # Clé reçue du composant : retenue si elle est dans la liste
+    assert paroi_cliquee({"clic": "toiture"}, choix) == "toiture"
+    assert paroi_cliquee({"clic": "inconnue"}, choix) is None
+    assert paroi_cliquee({}, choix) is None and paroi_cliquee(None, choix) is None
+
+
+# ============================================================
 # TEXTES : aides, glossaire, accueil (0.9.6)
 # ============================================================
 def test_aides_hors_du_code_et_glossaire_complet():
@@ -428,7 +528,7 @@ def test_aides_hors_du_code_et_glossaire_complet():
     # Plus aucune aide écrite dans le code : toutes viennent de interface/textes/aides.csv
     sources = {nom: open(os.path.join(RACINE, nom), encoding="utf-8").read()
                for nom in ("app.py", "interface/formulaire.py", "interface/briques/semaine_chaude.py",
-                           "interface/briques/dh.py")}
+                           "interface/briques/dh.py", "interface/briques/bilan.py")}
     assert all('help="' not in texte for texte in sources.values())
     # Chaque aide sert : sa clé est celle d'un widget de la page
     tout = "".join(sources.values())
@@ -478,8 +578,9 @@ def test_briques_completes_et_code_lisible():
     from interface.briques import BRIQUES
     from interface.calcul import CALCULS
     assert len({b.cle for b in BRIQUES}) == len(BRIQUES) >= 3
-    # Chaque calcul a au moins une brique, et chaque brique dit de quel calcul elle lit les résultats
-    assert {b.besoin for b in BRIQUES} == set(CALCULS)
+    # Chaque calcul a au moins une brique, et chaque brique dit de quel calcul elle lit les résultats (vide : l'un ou
+    # l'autre, comme le bilan en coupe)
+    assert {b.besoin for b in BRIQUES} - {""} == set(CALCULS)
     for brique in BRIQUES:
         assert brique.titre and brique.phenomene and brique.equation and brique.lecture and brique.reference
         assert brique.icone.startswith(":material/") and callable(brique.afficher)
@@ -518,6 +619,83 @@ def test_calcul_de_la_boite(resultats):
     assert sorted(ecarts.unique()) == [0.0, 1.0, 2.0] and (ecarts != 1.0).sum() == 2
     assert r.ete["date"].iloc[0].hour == 1 and r.ete["date"].iloc[4500].hour == 14
     assert r.dh["avertissement"] == ""
+
+
+def test_bilan_de_chaque_paroi(resultats):
+    from interface.calcul import PERIODES_PAROIS
+    from interface.fiche_paroi import bilan, parois
+    from interface.saisie import noms_composants
+    boite = replace(IMMEUBLE, permeabilite_q4pa=0.0)
+    # Chaque paroi du groupe a son bilan sur chaque période de son calcul
+    cles = set(noms_composants(boite))
+    assert cles <= set(parois(boite))
+    assert set(resultats.parois_dh) == {(c, p) for c in cles for calcul, p, _ in PERIODES_PAROIS if calcul == "dh"}
+    assert set(resultats.parois_bbio) == {(c, "annee") for c in cles}
+    semaine = resultats.parois_dh[("principale", "semaine")]
+    assert semaine["heures"] == 168 and resultats.parois_bbio[("toiture", "annee")]["heures"] == 8760
+    # Fiche : trois périodes (DH et Bbio calculés), les protections et l'ouverture pour des baies seulement
+    periodes, lignes = bilan(resultats, "baies_principale")
+    assert periodes == [libelle for _, _, libelle in PERIODES_PAROIS]
+    assert all(len(valeurs) == 3 for _, valeurs in lignes) and lignes[0][1][0] == "7 jours"
+    assert any(g.startswith("Protections baissées") for g, _ in lignes)
+    assert not any(g.startswith("Protections") for g, _ in bilan(resultats, "toiture")[1])
+    # Paroi hors du groupe, ou calcul absent : rien
+    assert bilan(resultats, "inconnue") == ([], [])
+    assert bilan(replace(resultats, parois_dh=None, parois_bbio=None), "toiture") == ([], [])
+
+
+def test_bilan_en_coupe(resultats):
+    """Bilan en coupe (0.9.24) : postes de chaque période, bilan qui ferme, tableau équilibré, parts du DH, coupe
+    dessinée avec les clés des parois."""
+    from interface.briques.bilan import parts_dh, tableau
+    from interface.calcul import CUMUL, ECHANGE, POINTE, RESTE, SOLEIL
+    from interface.coupe import dessiner_coupe
+    from interface.saisie import noms_composants
+    from moteur.bilan_paroi import POSTES
+    boite = replace(IMMEUBLE, permeabilite_q4pa=0.0)
+    espace = "{http://www.w3.org/2000/svg}"
+    assert set(resultats.coupe_dh) == {"semaine", "confort"} and set(resultats.coupe_bbio) == {"annee"}
+    coupe = resultats.coupe_bbio["annee"]
+    annee, pointe = coupe[CUMUL], coupe[POINTE]
+    attendus = {f"{c}.{s}" for c in noms_composants(boite) for s in (SOLEIL, ECHANGE)} | set(POSTES) | {RESTE}
+    assert set(annee) == attendus == set(pointe)
+    # Le reste est la somme de tout ce qui entre : la masse rend sur l'année presque tout ce qu'elle a pris
+    assert annee[RESTE] == pytest.approx(sum(v for k, v in annee.items() if k != RESTE))
+    entrees = sum(v for k, v in annee.items() if k != RESTE and v > 0)
+    assert abs(annee[RESTE]) < 0.01 * entrees and annee["chauffage"] > 0 > annee["ventilation"]
+    # Heure de pointe : la plus ensoleillée de la période, en Wh ; sa date et ses températures
+    soleil = sum(v for k, v in pointe.items() if k.endswith(f".{SOLEIL}"))
+    assert soleil > 0 and " à " in coupe["heure"] and coupe["te"] < 40
+    semaine = resultats.coupe_dh["semaine"][POINTE]
+    assert sum(v for k, v in semaine.items() if k.endswith(f".{SOLEIL}")) > 1000         # Wh sur une heure
+    # Tableau : entrées et sorties s'équilibrent, la masse comprise
+    lignes = tableau(annee)
+    assert sum(e for _, e, _ in lignes) == pytest.approx(sum(s for _, _, s in lignes))
+    # Parts du DH : du plus grand au plus petit, chacune ≤ 100 %, les apports internes parmi elles
+    parts = parts_dh(resultats.part_dh, boite)
+    assert list(parts["part"]) == sorted(parts["part"], reverse=True) and parts["part"].between(0, 1).all()
+    assert "Apports internes" in set(parts["poste"])
+    # Coupe : chaque paroi de la coupe porte sa clé ; flèches avec infobulle ; toiture adiabatique sans flèche
+    svg = ET.fromstring(dessiner_coupe(boite, annee, "Année moyenne", surlignee="toiture"))
+    cles = {e.get("data-cle") for e in svg.iter() if e.get("data-cle")}
+    assert {"principale", "arriere", "baies_principale", "toiture", "plancher_bas"} <= cles
+    fleches = [p for p in svg.iter(f"{espace}polygon") if p.find(f"{espace}title") is not None]
+    assert len(fleches) >= 10 and any("Chauffage" in p.find(f"{espace}title").text for p in fleches)
+    sans_toit = {k: v for k, v in annee.items() if not k.startswith("toiture.")}
+    toit_adiabatique = replace(boite, parois_adiabatiques=("toiture",))
+    svg = ET.fromstring(dessiner_coupe(toit_adiabatique, sans_toit, "Année moyenne"))
+    assert not any(p.get("data-cle") == "toiture" for p in svg.iter(f"{espace}polygon"))
+
+
+def test_effet_d_une_paroi():
+    """Bouton « Mesurer l'effet de cette paroi » (0.9.24) : sans la toiture, le DH du logement baisse."""
+    from interface.calcul import effet_paroi
+    from interface.saisie import construire_projet
+    from moteur.dh import calculer_dh
+    logement = replace(boite_de_depart(), permeabilite_q4pa=0.0)       # sans infiltrations : plus rapide
+    avec = calculer_dh(construire_projet(logement)).groupes.iloc[0]["dh"]
+    effets = effet_paroi(logement, "toiture", ("dh",))
+    assert set(effets) == {"dh"} and 0 < effets["dh"] < avec
 
 
 def test_semaine_la_plus_chaude(resultats):
@@ -604,7 +782,14 @@ def test_page_entiere(resultats, monkeypatch):
     assert page.metric[2].delta is None or page.metric[2].delta == ""
     assert any(m.value.startswith("DH : :") and "DH max" in m.value for m in page.markdown)
     assert page.segmented_control(key="niveau_enveloppe").value == "Moyen" and page.slider(key="sw").value == 0.4
-    assert page.segmented_control(key="brique").options == [b.titre for b in BRIQUES if b.besoin == "dh"]
+    assert page.segmented_control(key="brique").options == [b.titre for b in BRIQUES if b.besoin in ("dh", "")]
+
+    # Paroi examinée sous le dessin : aucune à l'ouverture, puis la toiture et sa fiche, sans relancer de calcul
+    assert page.selectbox(key="paroi_examinee").value is None
+    page.selectbox(key="paroi_examinee").set_value("toiture").run()
+    assert not page.exception and len(appels) == 1
+    assert any(m.value.startswith("**Toiture**") and "U × surface" in m.value for m in page.markdown)
+    page.selectbox(key="paroi_examinee").set_value(None).run()
 
     # Bbio et DH : seul le Bbio est calculé, le DH vient de la mémoire
     page.segmented_control(key="choix_calculs").set_value("Bbio et DH").run()

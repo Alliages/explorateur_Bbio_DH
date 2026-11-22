@@ -52,7 +52,7 @@ class Brique:
     reference   où la trouver dans les textes (annexe, fiche, équation)
     code        fonctions du moteur montrées dans le volet
     besoin      calcul dont la brique lit les résultats : « bbio » ou « dh » (interface/calcul.py) ; la page
-                ne propose la brique que si ce calcul a été lancé
+                ne propose la brique que si ce calcul a été lancé ; vide : proposée avec l'un ou l'autre
     glossaire   termes du glossaire du confort, pour aller plus loin (noms de interface/textes/glossaire.csv)
     """
     cle: str

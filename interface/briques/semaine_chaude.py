@@ -14,7 +14,6 @@
 """
 
 import altair as alt
-import pandas as pd
 import streamlit as st
 
 from config.reglages import HEURES_PAR_JOUR, JOURS_PAR_SEMAINE
@@ -24,6 +23,7 @@ from interface.briques.base import Brique
 from interface.briques.graphiques import (FORMAT_HEURE, FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs,
                                           legende, nombre, traits)
 from moteur.confort import moyenne_glissante_exterieure, seuil_confort_chaud
+from moteur.dh import debut_semaine_la_plus_chaude as semaine_du_moteur
 from moteur.hypotheses import hyp
 
 DECALAGE_MAX_JOURS = 45         # course du curseur, de part et d'autre de la semaine la plus chaude
@@ -33,10 +33,9 @@ GESTES = {"Protections baissées": charte.COULEUR_PROTECTION, "Fenêtres ouverte
 
 
 def debut_semaine_la_plus_chaude(ete):
-    """Rang de la première heure des sept jours consécutifs qui comptent le plus de degrés-heures."""
-    par_jour = ete["dh_horaire"].to_numpy().reshape(-1, HEURES_PAR_JOUR).sum(axis=1)
-    sur_sept_jours = pd.Series(par_jour).rolling(JOURS_PAR_SEMAINE).sum().shift(-(JOURS_PAR_SEMAINE - 1))
-    return int(sur_sept_jours.fillna(0.0).idxmax()) * HEURES_PAR_JOUR
+    """Rang de la première heure des sept jours consécutifs qui comptent le plus de degrés-heures (moteur/dh.py,
+    partagé avec le bilan par paroi d'interface/calcul.py)."""
+    return semaine_du_moteur(ete["dh_horaire"])
 
 
 def extraire_semaine(ete, decalage_jours=0):

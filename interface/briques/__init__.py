@@ -7,6 +7,6 @@
 ============================================================
 """
 
-from interface.briques import bbio, dh, semaine_chaude
+from interface.briques import bbio, bilan, dh, semaine_chaude
 
-BRIQUES = (bbio.BRIQUE, dh.BRIQUE, semaine_chaude.BRIQUE)
+BRIQUES = (bbio.BRIQUE, dh.BRIQUE, semaine_chaude.BRIQUE, bilan.BRIQUE)

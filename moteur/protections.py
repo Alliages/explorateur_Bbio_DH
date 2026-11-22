@@ -221,7 +221,7 @@ def groupe_protege(groupe):
     return any(baie.protection is not None for baie in groupe.baies)
 
 
-def _u_protege(baie):
+def u_protege(baie):
     """U de la baie protection en place, selon son inclinaison : même interpolation que le U nu (éq. 208)."""
     horizontal = baie.uw_horizontal_protege if baie.uw_horizontal_protege is not None else baie.uw_protege
     copie = type(baie)(baie.nom, baie.surface_m2, baie.orientation_deg, baie.inclinaison_deg, uw=baie.uw_protege,
@@ -259,7 +259,7 @@ class ProtectionsGroupe:
         self.sw3_pro = np.array([b.sw3_protege if p else 0.0 for b, p in zip(baies, protegee)])
         self.sw1_pro = np.array([b.sw_protege - b.sw2_protege - b.sw3_protege if p else 0.0
                                  for b, p in zip(baies, protegee)])
-        self.u_pro = np.array([_u_protege(b) if p else 0.0 for b, p in zip(baies, protegee)])
+        self.u_pro = np.array([u_protege(b) if p else 0.0 for b, p in zip(baies, protegee)])
         # Baies regroupées par classe de gestion : mêmes règles, seul l'éclairement reçu diffère
         self.classes = {}
         for i, baie in enumerate(baies):

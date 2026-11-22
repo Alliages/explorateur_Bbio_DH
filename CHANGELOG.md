@@ -3,6 +3,123 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.25 — correction (22/11/2026), bilan en coupe exact et heure de pointe
+
+- **Correction du bilan en coupe** : la conduction des parois et des baies est désormais celle du modèle du groupe
+  (parois opaques et ponts vers la masse θmq, baies vers les surfaces θs, rayonnement intérieur perdu par les
+  vitrages compris), et non plus la lecture H × (θi − θe). Le bilan ferme exactement : « gardés par la masse » est
+  le stockage du modèle. Sur le logement faible sans protection, semaine la plus chaude : 19 kWh affichés en
+  0.9.24, dont 6 seulement stockés ; 6 kWh désormais. La 0.9.24 disait à tort « 10 % sur la semaine
+  (stockage) » : hypothèse 103 corrigée dans `docs/audit.md`.
+- **Heure de pointe** : choix « Sur la période (kWh) / Heure de pointe (Wh) » au-dessus de la coupe. L'heure de
+  pointe est celle où le soleil transmis est le plus fort ; date, température dehors et dedans, chaque poste en Wh
+  (hypothèse 105). Même cas : baies sud 976 Wh en une heure, apports internes 530 Wh, 4 035 Wh gardés par la masse
+  (39,2 °C dehors, baies fermées).
+- **Fiche d'une paroi** : « Soleil transmis, heure la plus forte » (Wh) ; « Chaleur perdue par conduction » (celle
+  du modèle) remplace U × S × (θi − θe).
+- Moteur : `bilan_paroi` lit les nœuds du modèle (`preparer_modele`, `theta_mq_moy`, `theta_s_moy`, `hg_es`),
+  `masse_gardee`, `rayonnement_perdu_par_les_baies` ; `postes_du_groupe` prend le jeu météo. Résultats inchangés
+  (DH 732 °C.h, Bbio 119,8 ; logement faible sans protection : DH 942).
+- Tests : bilan exact heure par heure (10⁻⁶ W), parois et ponts = flux_parois, baies = flux du modèle ; heure de
+  pointe. Aide `lecture_coupe`.
+
+## 0.9.24 — évolution (22/11/2026), bilan en coupe et effet d'une paroi
+
+Étape 4 du plan « informations au clic sur une paroi ou un vitrage » (`ROADMAP.md`) : le plan est achevé.
+
+- **Brique « Le bilan en coupe »** (`interface/briques/bilan.py`), proposée avec le Bbio comme avec le DH :
+  - coupe schématique de la boîte, hors échelle (`interface/coupe.py`) : façade principale à gauche, arrière à
+    droite, toiture, plancher bas ; une flèche par poste, d'épaisseur proportionnelle à ses kWh, dans le sens où
+    passe la chaleur : soleil transmis (baies, murs, toiture), échange par les parois (H × Δθ et rayonnement vers
+    le ciel), ponts thermiques, ventilation, infiltrations, baies ouvertes, apports internes, chauffage, froid ;
+    les deux pignons en un cercle (⊙ la chaleur sort, ⊗ elle entre) ; la chaleur gardée par la masse ;
+  - périodes des calculs lancés : semaine la plus chaude et été (DH), année moyenne (Bbio) ;
+  - tableau du bilan, entré et sorti par famille, équilibré par la masse ;
+  - avec le DH, « Ce qui chauffe le logement aux heures d'inconfort » : part de chaque paroi et de chaque poste
+    dans la chaleur entrée aux heures qui comptent des DH ;
+  - un clic sur une paroi de la coupe l'ouvre dans la fiche sous l'axonométrie (composant de la 0.9.22) ; la paroi
+    examinée est entourée dans la coupe aussi.
+- **Bouton « Mesurer l'effet de cette paroi »** sous la fiche : le calcul relancé sans elle (baies remplacées par
+  le mur de leur façade ; mur, toiture ou plancher bas retirés comme une paroi adiabatique), DH et Bbio comparés au
+  calcul affiché (`calcul.effet_paroi`, `saisie.construire_projet(…, sans=…)`, mis en cache). Logement de 70 m²
+  moyen : sans les baies sud, DH 732 → 994 °C.h (elles servent aussi à ventiler la nuit) ; sans la toiture,
+  732 → 615 °C.h.
+- **Moteur** : `calculer_besoins` sort l'air poste par poste (`hg_ventilation`, `theta_souffle`, `hg_ouvertures`)
+  et les apports internes injectés (`phi_apports`) ; `bilan_paroi.postes_du_groupe` et `entrant`. Aucun résultat
+  ne change (logement de 70 m² moyen : DH 732 °C.h, Bbio 119,8).
+- **Lecture** (hypothèses 103 et 104 de `docs/audit.md`) : air séparé exactement (θeieq est la moyenne pesée) ;
+  le reste du bilan est la chaleur gardée par la masse plus l'écart de lecture des parois : 0,7 % des apports sur
+  l'année du Bbio, 2,2 % sur l'été, 10 % sur la semaine la plus chaude (et non du stockage seul : corrigé en
+  0.9.25).
+- Tests : fermeture du bilan, séparation de l'air, projet sans une paroi, coupe et tableau, effet de la toiture.
+  Aides `periode_coupe`, `bilan_coupe`, `part_dh`, `effet_paroi`.
+
+## 0.9.22 — évolution (22/11/2026), clic sur le dessin
+
+Étape 5 du plan « informations au clic sur une paroi ou un vitrage » (`ROADMAP.md`).
+
+- **Cliquer sur un mur, des baies (ou leur protection) ou la toiture du dessin** les choisit dans la liste « Paroi
+  examinée » : contour orange, fiche et « Ce qu'elle fait ». La liste reste, pour le clavier et pour les parois
+  cachées dans la vue (façade de dos, plancher bas). Survol : main et forme éclaircie ; infobulles inchangées.
+- **`interface/dessin_cliquable.py`** : petit composant Streamlit (`st.components.v2`, HTML, CSS et JavaScript
+  écrits dans le fichier, sans outil de construction) qui affiche le SVG et renvoie la clé de la paroi cliquée
+  (événement `clic`). Il remplace `st.markdown(unsafe_allow_html=True)` (0.9.18).
+- **`interface/axonometrie.py`** : chaque mur, baie, protection et la toiture portent la clé de leur paroi
+  (attribut `data-cle`, les clés de `fiche_paroi.parois`).
+- Test `test_dessin_cliquable` ; aide `paroi_examinee` et légende du dessin complétées. Résultats inchangés.
+
+## 0.9.20 — évolution (22/11/2026), ce que fait une paroi
+
+Étape 3 du plan « informations au clic sur une paroi ou un vitrage » (`ROADMAP.md`).
+
+- **`moteur/bilan_paroi.py`** (sans dépendre de l'interface) : après le calcul du groupe, bilan heure par heure de
+  chaque baie et de chaque paroi opaque, avec les sorties horaires du calcul : rayonnement reçu (Isr), flux solaire
+  transmis (baie : Sw nu et Sw protégé pesés par la fermeture ; paroi : Sf), rayonnement froid vers le ciel,
+  déperdition H × (θi − θe), fermeture de la protection, ouverture des baies. `resumer` cumule une période.
+  - Contrôle : la somme des baies redonne Fs1 + Fs3 + φsl du groupe, celle des parois opaques φsh (écart
+    10⁻¹³ W ; tests `tests/test_bilan_paroi.py`).
+  - Lecture et limites : hypothèse 102 de `docs/audit.md`.
+- **Moteur** : `calculer_besoins` sort la fermeture de chaque baie (`rprot_baie_0`, `rprot_baie_1`…, si le groupe
+  a des protections) ; `protections.u_protege` devient public ; `dh.debut_semaine_la_plus_chaude` (venue de la
+  brique « Une semaine chaude », qui l'emploie). Aucun résultat ne change : logement de 70 m² moyen DH 732 °C.h,
+  Bbio 119,8 ; étude de Paris : DH − 6,1 et + 6,9 %.
+- **`interface/calcul.py`** : chaque calcul rend le bilan de chaque paroi résumé sur ses périodes (`parois_dh` :
+  semaine la plus chaude et période de confort adaptatif ; `parois_bbio` : année moyenne), gardé dans le cache.
+  Noms des composants du projet : `saisie.noms_composants`, employé aussi par `construire_projet`.
+- **Sous la fiche de la paroi examinée** : tableau « Ce qu'elle fait », une colonne par période des calculs
+  lancés : durée, soleil reçu (kWh/m²), soleil transmis (kWh), rayonnement froid (s'il compte : toiture), chaleur
+  perdue U × S × (θi − θe), et pour des baies, protections baissées aux heures de soleil et baies ouvertes. Rien de
+  recalculé : le bilan est lu dans le cache, et seulement si la saisie n'a pas changé depuis le calcul. Aide
+  `bilan_paroi`.
+- **Correction de la fiche (0.9.18)** : plancher sur le sol, U × surface affiché ; le moteur compte cet échange
+  face à l'air extérieur (b = 1), la fiche disait à tort « calculé à part ».
+- Feuille de route : « Diffusion » passe en 0.9.22.
+- Vu dans Chrome (logement de 70 m², Bbio et DH, baies du sud : semaine la plus chaude 27 kWh/m² reçus, 15 kWh
+  transmis, volets baissés 84 % des heures de soleil). Tests : 382 réussis, 2 sautés.
+
+## 0.9.18 — évolution (22/11/2026), fiche d'une paroi et infobulles du dessin
+
+Étapes 1 et 2 du plan « informations au clic sur une paroi ou un vitrage » (`ROADMAP.md`).
+
+- **Paroi examinée** : liste sous le dessin, dans le même `st.fragment` (changer de paroi ne relance ni le calcul
+  ni les graphiques) : les quatre façades, les baies de chaque façade vitrée, la toiture, le plancher bas. Aucune
+  à l'ouverture ; une paroi disparue de la boîte (baies passées à 0 %, façade adiabatique) est oubliée.
+  - **Dans le dessin** : contour orange épais ; en pointillé si la paroi est cachée dans la vue (façade de dos,
+    plancher bas), ce que la fiche signale.
+  - **Fiche** (`interface/fiche_paroi.py`, sans Streamlit) : surface, U et U × surface (hors ponts thermiques ;
+    sans objet pour un plancher sur le sol), teinte, part vitrée, balcon ; pour des baies : gabarit d'une baie,
+    Uw, Uw × surface, Sw, Tl, protection et sa gestion, Uw et Sw protégés, ouverture, masque proche ; une paroi
+    adiabatique le dit, sans U.
+- **Infobulles** : chaque mur, baie et toiture du dessin porte un `<title>` (nom, surface, U ou Uw, Sw, Tl), que
+  le navigateur montre au survol. Le dessin est écrit dans la page en SVG par `st.markdown(unsafe_allow_html=True)`
+  et non plus par `st.image` (une image ne transmet pas le survol) ni par `st.html`, dont DOMPurify (profil
+  « html ») retire tout SVG.
+- `interface/axonometrie.py` : `dessiner(…, surlignee, infobulles)`, `point_de_facade`, `contours_paroi`,
+  `paroi_visible` ; `charte.COULEUR_SURLIGNAGE` ; aide `paroi_examinee` dans `interface/textes/aides.csv`.
+- Feuille de route : « Diffusion » passe en 0.9.20.
+- Vu dans Chrome (logement de 70 m², vue du sud-ouest : baies de la façade principale entourées, façade arrière
+  en pointillé, fiches ; sept `<title>` dans la page). Tests : 378 réussis, 2 sautés.
+
 ## 0.9.16 — évolution (20/11/2026), soleil, orientation, parois adiabatiques, zoom
 
 - **Dessin** (`interface/axonometrie.py`) :
