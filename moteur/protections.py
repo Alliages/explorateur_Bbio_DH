@@ -88,6 +88,17 @@ OCCUPE, ABSENCE_DE_JOUR, ABSENCE_LONGUE = 1, 0, -1
 COLONNES_AUTO = ("jour_sombre_chaud", "jour_sombre_frais", "jour_clair_chaud", "jour_clair_frais", "nuit_chaud",
                  "nuit_frais")
 
+# Hypothèses lues à chaque heure, lues une fois à l'import plutôt qu'à chaque appel (0.9.37 : environ 150 000
+# appels à hyp() par calcul DH du logement de départ). Expressions inchangées : résultats identiques au bit près.
+GPM_TEMPERATURE_LIMITE_MANUELLE = hyp("gpm_temperature_limite_manuelle")
+GPM_THD_RPROT0_MOTORISE = hyp("gpm_thd_rprot0_motorise")
+GPM_THD_RPROT0_AUTRE = hyp("gpm_thd_rprot0_autre")
+GPM_THD_NUIT_VOLET_MAX = hyp("gpm_thd_nuit_volet_max")
+GPM_THD_NUIT_STORE = hyp("gpm_thd_nuit_store")
+GPM_AUTO_TEMPERATURE_HAUTE = hyp("gpm_auto_temperature_haute")
+GPM_AUTO_TEMPERATURE_BASSE = hyp("gpm_auto_temperature_basse")
+GPM_VENT_LIMITE_STORE = hyp("gpm_vent_limite_store")
+
 
 def _nombre(texte):
     return float(texte.replace(DECIMALE_CSV, ".")) if texte != "" else None
@@ -157,7 +168,7 @@ def ligne_saison(saison_gpm, theta_op_max_veille):
     """Ligne des matrices manuelles : l'été se dédouble selon la température maximale de la veille (26,5 °C)."""
     if saison_gpm != "ete":
         return saison_gpm
-    return "ete_chaud" if theta_op_max_veille >= hyp("gpm_temperature_limite_manuelle") else "ete_frais"
+    return "ete_chaud" if theta_op_max_veille >= GPM_TEMPERATURE_LIMITE_MANUELLE else "ete_frais"
 
 
 def rprot_selon_eclairement(etp, rprot0, ecl1):
@@ -172,11 +183,11 @@ def valeurs_th_d(protection, gestion, de_jour, de_nuit):
     de_jour et de_nuit sont les valeurs Th-BC de la ligne de saison en cours. Le détecteur de présence ne joue pas :
     les deux dérogations manuelles suivent la règle des gestions non motorisées (Type_GPM ≠ 3).
     """
-    plancher = hyp("gpm_thd_rprot0_motorise") if gestion == "manuelle_motorisee" else hyp("gpm_thd_rprot0_autre")
+    plancher = GPM_THD_RPROT0_MOTORISE if gestion == "manuelle_motorisee" else GPM_THD_RPROT0_AUTRE
     if protection == "volet":
-        nuit = min(hyp("gpm_thd_nuit_volet_max"), de_nuit)
+        nuit = min(GPM_THD_NUIT_VOLET_MAX, de_nuit)
     else:
-        nuit = hyp("gpm_thd_nuit_store")
+        nuit = GPM_THD_NUIT_STORE
     return max(plancher, de_jour), nuit
 
 
@@ -291,13 +302,13 @@ class ProtectionsGroupe:
         saison_gpm = SAISON_GPM[saison]
         ligne = ligne_saison(saison_gpm, theta_op_max_veille)
         # Mode Th-D : journée chaude la veille, en période de confort adaptatif (éq. 202 à 204)
-        th_d_chaud = bool(confort_adaptatif) and theta_op_max_veille >= hyp("gpm_temperature_limite_manuelle")
+        th_d_chaud = bool(confort_adaptatif) and theta_op_max_veille >= GPM_TEMPERATURE_LIMITE_MANUELLE
         # Ambiance chaude ou fraîche de la gestion automatique, avec hystérésis (fiche 5.9, figure 31)
-        if theta_op_prec > hyp("gpm_auto_temperature_haute"):
+        if theta_op_prec > GPM_AUTO_TEMPERATURE_HAUTE:
             self.chaud = True
-        elif theta_op_prec < hyp("gpm_auto_temperature_basse"):
+        elif theta_op_prec < GPM_AUTO_TEMPERATURE_BASSE:
             self.chaud = False
-        grand_vent = self.vent[h] >= hyp("gpm_vent_limite_store")
+        grand_vent = self.vent[h] >= GPM_VENT_LIMITE_STORE
 
         for (protection, gestion, detecteur, crepusculaire, exterieure), indices in self.classes.items():
             etp = self.etp[indices, h]

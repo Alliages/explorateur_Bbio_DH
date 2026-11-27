@@ -10,8 +10,8 @@
    chauffage   prune         froid      bleu ciel
    éclairage   jaune         inconfort  orange
    limite      noir
- Températures (0.9.16) : extérieur noir, seuil de confort orange
- (comme les degrés-heures qu'il fait compter), intérieur jaune.
+ Températures (0.9.38) : extérieur orange, intérieur jaune, seuil
+ de confort en trait plein noir fin (une limite, comme le Bbio max).
  Dessin : paroi adiabatique en gris.
 ============================================================
 """
@@ -41,9 +41,9 @@ COULEUR_FROID = BLEU_CIEL
 COULEUR_ECLAIRAGE = JAUNE
 COULEUR_INCONFORT = ORANGE
 COULEUR_LIMITE = NOIR
-COULEUR_EXTERIEUR = NOIR
+COULEUR_EXTERIEUR = ORANGE
 COULEUR_INTERIEUR = JAUNE
-COULEUR_SEUIL = ORANGE
+COULEUR_SEUIL = NOIR
 COULEUR_PROTECTION = PRUNE
 COULEUR_OUVERTURE = BLEU_CIEL
 COULEUR_SURLIGNAGE = ORANGE     # dessin : contour de la paroi examinée (trait plein, la course du soleil est pointillée)

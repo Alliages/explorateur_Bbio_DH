@@ -111,6 +111,26 @@ OUVERTURE_TH_B_COMME_LE_MOTEUR = True
 # l'en-tête du module et docs/audit.md (0.9.15, hypothèse 100).
 OUVERTURE_COMME_LE_MOTEUR = True
 
+# Hypothèses lues à chaque heure, lues une fois à l'import plutôt qu'à chaque appel (0.9.37 : environ 150 000
+# appels à hyp() par calcul DH du logement de départ). Expressions inchangées : résultats identiques au bit près.
+OUV_SEUIL_EXTERIEUR_BAS = hyp("ouv_seuil_exterieur_bas")
+OUV_THB_MARGE_CONSIGNE = hyp("ouv_thb_marge_consigne")
+OUV_SEUIL_EXTERIEUR_HAUT = hyp("ouv_seuil_exterieur_haut")
+OUV_ECART_EXTERIEUR_INTERIEUR_MANUEL = hyp("ouv_ecart_exterieur_interieur_manuel")
+OUV_DECALAGE_CHAUFFAGE = hyp("ouv_decalage_chauffage")
+OUV_DECALAGE_HORS_CHAUFFAGE = hyp("ouv_decalage_hors_chauffage")
+OUV_MOTEUR_ECART_OUV1 = hyp("ouv_moteur_ecart_ouv1")
+OUV_ECART_OUV1 = hyp("ouv_ecart_ouv1")
+OUV_ECART_FER1 = hyp("ouv_ecart_fer1")
+OUV_ECART_FER2 = hyp("ouv_ecart_fer2")
+OUV_CONSTANTE_TIRAGE = hyp("ouv_constante_tirage")
+OUV_CONSTANTE_VENT = hyp("ouv_constante_vent")
+OUV_COEFFICIENT_DECHARGE = hyp("ouv_coefficient_decharge")
+OUV_VENT_MAX = hyp("ouv_vent_max")
+OUV_ECART_PRESSION = hyp("ouv_ecart_pression")
+OUV_TEMPERATURE_REFERENCE = hyp("ouv_temperature_reference")
+CHALEUR_VOLUMIQUE_AIR = hyp("chaleur_volumique_air")
+
 
 # ============================================================
 # 1. RATIO D'OUVERTURE (fiche 5.13, éq. 240 à 245)
@@ -122,10 +142,10 @@ def moderation_exterieure(te, theta_op_prec, consigne_fr=None):
     consigne_fr : en mode Th-B seulement, consigne de refroidissement de l'heure ; ces deux bornes sont alors
     plafonnées à la consigne − 1 °C. Sans consigne (mode Th-D), la règle générale s'applique.
     """
-    bas = hyp("ouv_seuil_exterieur_bas")
-    plafond = consigne_fr - hyp("ouv_thb_marge_consigne") if consigne_fr is not None else float("inf")
-    haut = min(plafond, hyp("ouv_seuil_exterieur_haut"))
-    limite = min(plafond, theta_op_prec - hyp("ouv_ecart_exterieur_interieur_manuel"))
+    bas = OUV_SEUIL_EXTERIEUR_BAS
+    plafond = consigne_fr - OUV_THB_MARGE_CONSIGNE if consigne_fr is not None else float("inf")
+    haut = min(plafond, OUV_SEUIL_EXTERIEUR_HAUT)
+    limite = min(plafond, theta_op_prec - OUV_ECART_EXTERIEUR_INTERIEUR_MANUEL)
     if te < bas or te > limite:
         return 0.0
     if te < haut:
@@ -139,14 +159,14 @@ def seuils_ouverture(saison, consigne_fr_confort, ecart_confort_adaptatif):
     Règle du moteur réglementaire (OUVERTURE_COMME_LE_MOTEUR, hypothèse 100) : Δθconf_adapt ignoré et θouv1 à 1 °C
     sous θouv2 ; θfer1 et θfer2 comme le texte. Règle du texte : θouv2 = consigne + Δθconf_adapt ± 1, θouv1 à 2 °C.
     """
-    decalage = hyp("ouv_decalage_chauffage") if saison == SAISON_CHAUFFAGE else hyp("ouv_decalage_hors_chauffage")
+    decalage = OUV_DECALAGE_CHAUFFAGE if saison == SAISON_CHAUFFAGE else OUV_DECALAGE_HORS_CHAUFFAGE
     if OUVERTURE_COMME_LE_MOTEUR:
         ouv2 = consigne_fr_confort + decalage
-        ouv1 = ouv2 - hyp("ouv_moteur_ecart_ouv1")
+        ouv1 = ouv2 - OUV_MOTEUR_ECART_OUV1
     else:
         ouv2 = consigne_fr_confort + ecart_confort_adaptatif + decalage
-        ouv1 = ouv2 - hyp("ouv_ecart_ouv1")
-    return ouv1, ouv2, ouv2 - hyp("ouv_ecart_fer1"), ouv2 - hyp("ouv_ecart_fer2")
+        ouv1 = ouv2 - OUV_ECART_OUV1
+    return ouv1, ouv2, ouv2 - OUV_ECART_FER1, ouv2 - OUV_ECART_FER2
 
 
 def ratio_selon_temperature(ratio_prec, theta_op_prec, seuils):
@@ -217,12 +237,12 @@ def debit_surventilation(aouv, orientations_deg, inclinaisons_deg, traversant, h
     total = float(aouv.sum())
     if total <= 0:
         return 0.0
-    tirage = hyp("ouv_constante_tirage") * hauteur_tirage_m * abs(te - theta_i_prec)
+    tirage = OUV_CONSTANTE_TIRAGE * hauteur_tirage_m * abs(te - theta_i_prec)
     if not traversant:
-        return SECONDES_PAR_HEURE * total / 2.0 * np.sqrt(max(hyp("ouv_constante_vent") * vent ** 2, tirage))
+        return SECONDES_PAR_HEURE * total / 2.0 * np.sqrt(max(OUV_CONSTANTE_VENT * vent ** 2, tirage))
     sors = surface_traversante(aouv, orientations_deg, inclinaisons_deg, secteurs)
-    par_le_vent = (hyp("ouv_coefficient_decharge") * sors * min(vent, hyp("ouv_vent_max"))
-                   * np.sqrt(hyp("ouv_ecart_pression")))
+    par_le_vent = (OUV_COEFFICIENT_DECHARGE * sors * min(vent, OUV_VENT_MAX)
+                   * np.sqrt(OUV_ECART_PRESSION))
     return SECONDES_PAR_HEURE * max(par_le_vent, total / 2.0 * np.sqrt(tirage))
 
 
@@ -313,9 +333,9 @@ class OuverturesGroupe:
         debit = debit_surventilation(aouv, self.orientations, self.inclinaisons, self.traversant,
                                      self.hauteur_tirage, self.vent[h], te, theta_i_prec, self.secteurs)
         # Masse volumique de l'air entrant (éq. 255), rapportée à celle de référence du coefficient 0,34
-        densite = (KELVIN + hyp("ouv_temperature_reference")) / (KELVIN + te)
+        densite = (KELVIN + OUV_TEMPERATURE_REFERENCE) / (KELVIN + te)
         total_max = float(self.aouv_max.sum())
-        return {"debit_m3h": debit, "hg": hyp("chaleur_volumique_air") * debit * densite,
+        return {"debit_m3h": debit, "hg": CHALEUR_VOLUMIQUE_AIR * debit * densite,
                 "aouv_m2": float(aouv.sum()), "rouv_moyen": float(aouv.sum()) / total_max if total_max else 0.0,
                 # Rouv de l'éq. 240, avant Rouvmax et protections, en moyenne simple sur toutes les baies (nul pour
                 # une baie fixe) : la grandeur O_Rouv des sorties horaires du moteur réglementaire

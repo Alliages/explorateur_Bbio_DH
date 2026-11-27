@@ -2,8 +2,31 @@
 
 Note courte, tenue à jour en fin de tâche, pour reprendre le travail depuis claude.ai ou Claude Code.
 
-## État au 22/11/2026
+## État au 26/11/2026
 
+- **0.9.38** (non commitée, avec les 0.9.36 et 0.9.37 ; tests : 407 réussis, 2 sautés) : boussole dans le dessin
+  (`axonometrie.dessiner_boussole`, clic → session « vue »), curseur de l'heure au-dessus, boîte « Indicateurs »
+  (`st.popover` + formulaire, session « indicateurs ») et cartouche dans une bande à droite du dessin
+  (`BANDE_DROITE`), registre `interface/indicateurs.py`, interrupteur « adiabatique » de la fiche
+  (`formulaire.CLE_FICHE_ADIABATIQUE`), couleurs des températures (seuil en couche à part,
+  `graphiques.lignes_des_series`). Vérifié dans le navigateur : clic sur la boussole, choix des huit indicateurs,
+  toiture adiabatique depuis la fiche, seuil à 1 px dans les deux graphiques.
+- **Prochaine version : 0.9.40** (`ROADMAP.md`) : masques sur les façades, choix des fichiers météo.
+- **Étude « compacité × traversant »** (27/11/2026) : plan révisé dans `docs/plan_etude_compacite_traversant.md`
+  (non suivi par git), lots L0 à L8 (0.9.46 à 0.9.61 proposés, après les 0.9.40 à 0.9.44), chacun découpé en
+  parties lancées une par une. Première étape : L0.1, réponses de Guigui aux questions du § 10.
+- **0.9.37** (non commitée, avec la 0.9.36 ; tests : 405 réussis, 2 sautés) : 27 hypothèses lues à chaque heure
+  devenues constantes de `infiltrations.py`, `protections.py`, `ouvertures.py` (appels à `hyp()` par calcul DH :
+  152 294 → 3 081) ; séries de la boucle de `besoins.py` en listes. Résultats identiques au bit près (banc de 22
+  sorties horaires, hors dépôt). Gain estimé 2 à 3 % seulement, non mesurable sur le poste (même code : 1,4 à
+  3,6 s) ; l'estimation de 10 à 15 % était fausse (`docs/audit.md`, 0.9.37). Pour aller plus vite : numba ou
+  plusieurs variantes à la fois (`ROADMAP.md`, « Vitesse du calcul, suites »).
+- **0.9.36** (non commitée ; tests : 405 réussis, 2 sautés) : caractère traversant déduit des baies (règle des 75 %,
+  `Boite.traversant_impose`, hypothèse 106) ; résultats des bâtiments de départ inchangés. Feuille de route
+  décalée : calcul plus rapide 0.9.37, saisies et dessin 0.9.38, masques 0.9.40, diffusion 0.9.42. Menu « Forme » vérifié
+  dans le navigateur (verdict, interrupteur libre et grisé).
+- Mesure du 23/11/2026 : DH du logement de départ en 3,6 à 4,5 s, dont 90 % dans la boucle horaire. Numba évalué
+  (compatible, × 6 à 10 si toute la boucle est portée), Rust écarté ; chiffres dans `ROADMAP.md`.
 - **0.9.34** (poussée sur `travail` avec les 0.9.30 et 0.9.32 ; tests : 403 réussis, 2 sautés) : note de conception
   validée le 22/11/2026. Variantes A à D (`interface/variantes.py` ; session « variantes », « lettre_reference »,
   « depart_calcule ») à la place de la référence unique : « Garder en A », pastilles dans la barre des résultats,

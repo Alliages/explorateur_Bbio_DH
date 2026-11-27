@@ -49,8 +49,9 @@
 import streamlit as st
 
 from config.reglages import lire_version
-from interface import accueil, axonometrie, calcul, charte, comparaison, fiche_paroi, synthese, variantes
-from interface.dessin_cliquable import dessin_cliquable, paroi_cliquee
+from interface import (accueil, axonometrie, calcul, charte, comparaison, fiche_paroi, indicateurs, synthese,
+                       variantes)
+from interface.dessin_cliquable import dessin_cliquable, paroi_cliquee, vue_choisie
 from interface.aides import aide
 from interface.briques import BRIQUES
 from interface.briques.base import montrer
@@ -265,29 +266,53 @@ def _signe(ecart, decimales):
     return f"{'+' if ecart >= 0 else '−'} {nombre(abs(ecart), decimales)}"
 
 
+def _choisir_indicateurs():
+    """Boîte « Indicateurs » (au-dessus du dessin, elle s'ouvre par-dessus) : une case par indicateur du registre
+    (interface/indicateurs.py) ; « Valider » change le cartouche du dessin. Rend les clés retenues."""
+    retenus = st.session_state.setdefault("indicateurs", list(indicateurs.COCHES_D_OFFICE))
+    with st.popover("Indicateurs", icon=":material/tune:", help=aide("indicateurs")):
+        with st.form("choix_indicateurs", border=False):
+            coches = {indicateur.cle: st.checkbox(indicateur.libelle, value=indicateur.cle in retenus,
+                                                  key=f"case_{indicateur.cle}",
+                                                  help=aide(indicateurs.PREFIXE_AIDE + indicateur.cle))
+                      for indicateur in indicateurs.INDICATEURS}
+            if st.form_submit_button("Valider", type="primary", key="valider_indicateurs"):
+                retenus = [cle for cle, coche in coches.items() if coche]
+                st.session_state["indicateurs"] = retenus
+    return retenus
+
+
 @st.fragment
 def _dessin(boite, boite_calculee, calculs_lances):
-    """Le dessin à gauche (vue au-dessus, heure du soleil au-dessous) ; à droite, la boîte : sa surface, la paroi
-    examinée et sa fiche ; dessous, sur toute la largeur, ce que fait la paroi (la boîte calculée). Un clic sur une
-    paroi du dessin la choisit dans la liste. Fragment : changer de vue, d'heure ou de paroi ne redessine que lui, sans repasser par le calcul ni par
-    les graphiques ; les deux colonnes sont dans le fragment, pour que la fiche suive le clic sur le dessin.
+    """Le dessin à gauche (heure du soleil et indicateurs au-dessus ; boussole des vues et cartouche des indicateurs
+    dans ses coins) ; à droite, la boîte : sa surface, la paroi examinée et sa fiche ; dessous, sur toute la largeur,
+    ce que fait la paroi (la boîte calculée). Un clic sur une paroi du dessin la choisit dans la liste, un clic sur
+    la boussole change de vue. Fragment : changer de vue, d'heure ou de paroi ne redessine que lui, sans repasser
+    par le calcul ni par les graphiques ; les deux colonnes sont dans le fragment, pour que la fiche suive le clic
+    sur le dessin.
     Une saisie changée dans la fiche est recopiée dans le menu (formulaire.saisir_dans_la_fiche) : la page entière
     est alors relancée, pour que la boîte, le dessin et le menu la suivent."""
     if st.session_state.pop("saisie_par_la_fiche", False):
         st.rerun()                                          # portée « app » : tout repasse, menu compris
     colonne_dessin, colonne_boite = st.columns([3, 2], gap="large")
     with colonne_dessin:
-        vue = st.segmented_control("Vue depuis le", list(axonometrie.VUES), default="sud-ouest", required=True,
-                                   key="vue", help=aide("vue"))
-        dessin = st.container()                             # le dessin au-dessus du curseur qui le règle
-        heure = st.select_slider("Heure du soleil, le 21 juin (heure légale)", options=axonometrie.HEURES_SOLEIL,
-                                 value=int(axonometrie.SOLEIL_HEURE), key="heure_soleil",
-                                 format_func=lambda h: f"{h} h", help=aide("heure_soleil"))
+        # Au-dessus du dessin : l'heure du soleil, et la boîte des indicateurs du cartouche. La vue se choisit
+        # dans la boussole du dessin (session « vue », changée au clic)
+        vue = st.session_state.setdefault("vue", "sud-ouest")
+        colonne_heure, colonne_indicateurs = st.columns([4, 1], vertical_alignment="bottom")
+        with colonne_heure:
+            heure = st.select_slider("Heure du soleil, le 21 juin (heure légale)",
+                                     options=axonometrie.HEURES_SOLEIL, value=int(axonometrie.SOLEIL_HEURE),
+                                     key="heure_soleil", format_func=lambda h: f"{h} h", help=aide("heure_soleil"))
+        with colonne_indicateurs:
+            retenus = _choisir_indicateurs()
+        dessin = st.container()
         plancher = " Plancher bas adiabatique, non visible." if "plancher_bas" in boite.parois_adiabatiques else ""
-        # Légende courte ; la course du soleil et l'ombre sont dites dans l'aide de « Vue depuis le »
+        # Légende courte ; la course du soleil et l'ombre sont dites dans l'aide « vue »
         st.caption("Dessin à l'échelle. En prune, la protection mobile ; en gris, les parois adiabatiques ; en "
                    "pointillé, la course du soleil le 21 juin. Survoler une paroi affiche ses valeurs, cliquer "
-                   "dessus ouvre sa fiche." + plancher)
+                   "dessus ouvre sa fiche ; cliquer sur un quart de la boussole change de vue." + plancher,
+                   help=aide("vue"))
 
     # Paroi examinée : surlignée dans le dessin, avec sa fiche ; une paroi disparue de la boîte (baies d'une façade
     # passée à 0 % ou adiabatique) est oubliée avant d'afficher la liste
@@ -322,14 +347,20 @@ def _dessin(boite, boite_calculee, calculs_lances):
     # survol, clé de la paroi renvoyée au clic. Le rappel tourne avant le passage suivant du fragment : la paroi
     # cliquée est mise dans la liste avant qu'elle ne s'affiche
     def _clic():
+        vue_cliquee = vue_choisie(st.session_state.get("dessin_axonometrie"))
+        if vue_cliquee is not None:
+            st.session_state["vue"] = vue_cliquee
+            return
         cle = paroi_cliquee(st.session_state.get("dessin_axonometrie"), choix)
         if cle is not None:
             st.session_state["paroi_examinee"] = cle
 
     svg = axonometrie.dessiner(boite, axonometrie.VUES[vue], heure, surlignee=paroi,
-                               infobulles=fiche_paroi.infobulles(boite))
-    description = (f"Axonométrie de la boîte, façade principale au {point_cardinal(boite.orientation_deg)}, "
-                   f"soleil du 21 juin à {heure} h ; cliquer sur une paroi ouvre sa fiche")
+                               infobulles=fiche_paroi.infobulles(boite),
+                               cartouche=indicateurs.valeurs(boite, retenus))
+    description = (f"Axonométrie de la boîte vue depuis le {vue}, façade principale au "
+                   f"{point_cardinal(boite.orientation_deg)}, soleil du 21 juin à {heure} h ; cliquer sur une paroi "
+                   "ouvre sa fiche, sur un quart de la boussole change de vue")
     with dessin:
         dessin_cliquable(svg, description, key="dessin_axonometrie", on_clic=_clic)
 

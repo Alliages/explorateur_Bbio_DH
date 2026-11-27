@@ -26,6 +26,8 @@ Séparateur `;`, virgule décimale, UTF-8. Quatre colonnes : `champ;valeur;unite
 | Texte | tel quel | `H1a`, `volet` |
 
 - La ligne `nom` est obligatoire.
+- `traversant` est ignoré quand les baies l'imposent : avec un seul logement (traversant si chaque façade porte
+  moins de 75 % de la surface des baies), ou avec une seule façade vitrée (non traversant).
 - Un champ absent prend la valeur par défaut de la boîte (`Boite` dans `interface/saisie.py`, égale au logement
   de 70 m²).
 - L'enveloppe n'est pas décrite ici : Uw, Sw, TL, Uw et Sw protection baissée, part ouvrante, U des murs, de la

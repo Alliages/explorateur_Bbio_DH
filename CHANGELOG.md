@@ -3,6 +3,56 @@
 Règle : `0.8.x` tant que l'outil n'est pas fonctionnel, `0.9.x` quand il fonctionne, `1.0` à la première version
 annoncée et diffusée. Dernier chiffre **pair** = évolution, **impair** = correction.
 
+## 0.9.38 — évolution (26/11/2026), boussole, indicateurs du projet, adiabatique dans la fiche
+
+Résultats du moteur inchangés. Réponses du 26/11/2026 : boussole nord en haut, indicateurs en cartouche sur le
+dessin, saisie adiabatique dans la fiche et dans le menu, liées ; registre d'indicateurs facile à étendre.
+
+- **Boussole dans le dessin** (`axonometrie.dessiner_boussole`), à la manière de `_sources/boussole.png` : nord en
+  haut, un quart par vue avec son nom et son œil, le quart de la vue en cours orangé. Un clic sur un quart change de
+  vue (clé « vue:sud-ouest », `dessin_cliquable.vue_choisie`). Elle remplace le choix « Vue depuis le ».
+- **Curseur de l'heure du soleil au-dessus du dessin**, à côté du bouton « Indicateurs ».
+- **Indicateurs du projet** (`interface/indicateurs.py`) : compacité (surface déperditive / surface habitable),
+  baies / surface habitable, baies / façades, surface habitable, volume habitable, surface déperditive, baies par
+  orientation, U moyen de l'enveloppe (ponts thermiques compris). La boîte « Indicateurs » (s'ouvre par-dessus le
+  dessin) fait cocher puis « Valider » ; la compacité et le taux de vitrage sont cochés à l'ouverture. Ils
+  s'affichent dans un cartouche, dans une bande à droite du dessin avec la boussole : la scène est cadrée à sa
+  gauche, rien ne cache le sol ni la course du soleil. Un indicateur de plus : une fonction, une ligne du registre
+  `INDICATEURS`, son aide « indicateur_<cle> » dans `aides.csv`.
+- **Adiabatique dans la fiche de la paroi** : interrupteur en tête de la fiche d'une façade, de la toiture ou du
+  plancher bas, recopié dans le choix « Parois adiabatiques » du menu, qui reste la seule source.
+- **Couleurs des températures** : extérieur orange, intérieur jaune, seuil de confort en trait plein noir de 1 px
+  (il était orange et pointillé ; l'extérieur était noir). Le seuil est une couche à part : Vega-Lite ignore une
+  épaisseur encodée par série sur des lignes (`graphiques.lignes_des_series`).
+
+## 0.9.37 — correction (26/11/2026), lectures répétées sorties de la boucle horaire
+
+Résultats identiques au bit près (sorties horaires de 22 calculs annuels, comme en 0.9.29 ; types des colonnes
+compris). Gain estimé à 2 à 3 % du temps d'un calcul, et non de 10 à 15 % comme prévu : détail dans
+`docs/audit.md`, 0.9.37.
+
+- **Hypothèses lues une fois** : les 27 valeurs de `donnees/hypotheses.csv` lues à chaque heure par
+  `infiltrations.py`, `protections.py` et `ouvertures.py` deviennent des constantes du module, lues à l'import
+  (`RHO_REFERENCE`, `GPM_AUTO_TEMPERATURE_HAUTE`, `OUV_SEUIL_EXTERIEUR_BAS`…). Appels à `hyp()` pendant un calcul DH
+  du logement de départ : 152 294 → 3 081 (ceux qui restent sont journaliers ou faits une fois par calcul).
+- **Boucle de `calculer_besoins`** (`moteur/besoins.py`) : séries de l'année lues à chaque heure converties une
+  fois en listes Python ; noms des colonnes de fermeture de chaque baie (`rprot_baie_0`…) formés une fois.
+
+## 0.9.36 — évolution (25/11/2026), caractère traversant déduit des baies
+
+Résultats du moteur et des deux bâtiments de départ inchangés. Livrée avant la 0.9.35 prévue, renumérotée 0.9.37.
+
+- **Règle réglementaire** (annexe I, « Local traversant ») : traversant si chaque orientation porte moins de 75 % de
+  la surface des baies, ouvrables ou fixes (`trav_part_max_orientation`, hypothèse 106).
+- **Un logement** : la règle décide, sans interrupteur ; le menu « Forme » montre le verdict et la répartition.
+- **Plusieurs logements** : non traversants, interrupteur grisé, si une seule façade au plus est vitrée ; sinon au
+  choix, l'interrupteur étant remis à la règle quand les baies changent son verdict, avec une note quand une façade
+  porte 75 % des baies ou plus.
+- La boîte (`Boite`) remplace elle-même la valeur saisie ou lue dans un CSV quand les baies l'imposent : une boîte
+  d'un logement saisie « non traversant » avec deux façades vitrées devient traversante.
+- Supprimé : la combinaison « traversant » avec une seule façade vitrée (balayage nul, mais infiltrations d'un
+  logement exposé au vent).
+
 ## 0.9.34 — évolution (22/11/2026), variantes A à D, Bbio et DH ensemble, saisies dans la fiche
 
 Résultats du moteur inchangés. Suite de la 0.9.32, d'après la note de conception validée le 22/11/2026.

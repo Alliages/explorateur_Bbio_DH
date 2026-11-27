@@ -1916,3 +1916,53 @@ le Python du `.venv` vient d'une distribution Anaconda (Python 3.11.16), alors q
   `valider.lister_etudes()` corrigée.
 - `python -m pytest` : 400 réussis, 2 sautés (un test des apports retiré, un de l'air soufflé et sept de
   non-régression ajoutés).
+
+## 0.9.36 — caractère traversant déduit des baies
+
+106. **Caractère traversant de la boîte** (`interface/saisie.Boite.traversant_impose`). Règle de l'annexe I (« Local
+     traversant ») : pour chaque orientation, moins de 75 % de la surface des baies. Choix de l'outil :
+     - la boîte d'**un logement** est le local de la définition : la règle décide. Les quatre façades comptent chacune
+       pour une orientation, quel que soit l'azimut ; aucune baie en toiture ;
+     - **écart au texte** : une maison individuelle est traversante par convention (annexe III, tableaux 22 et 43),
+       même vitrée sur une seule façade ; la boîte, calculée comme du logement collectif, lui applique les 75 % ;
+     - **plusieurs logements** : le plan intérieur est inconnu ; non traversants avec une seule façade vitrée, au
+       choix sinon (des logements dos à dos ne sont pas traversants ; des logements d'un immeuble dont une façade
+       porte 75 % des baies peuvent l'être) ;
+     - **hiver** (fiche 5.6, p. 143) : les portes intérieures sont supposées détalonnées, le caractère traversant
+       d'été vaut pour les infiltrations (`Groupe.traversant_hiver` laissé à None) ;
+     - « Mesurer l'effet de cette paroi » (hypothèse 104) garde le caractère traversant de la boîte, même quand les
+       baies retirées le changeraient : l'écart mesure la paroi seule ;
+     - immeubles mêlant logements traversants ou non : deux groupes seraient nécessaires (`ROADMAP.md`).
+
+## 0.9.37 — lectures répétées sorties de la boucle horaire
+
+Sans changement des résultats. Banc hors dépôt de la 0.9.29 refait : sorties horaires complètes de
+`calculer_besoins` pour 22 calculs annuels (logement de 70 m² et immeuble de 9 logements × trois niveaux
+d'enveloppe ; logement « Moyen » en H3 sans protection, en gestion automatique, en store ; en H2b avec brasseurs ;
+immeuble « Moyen » non traversant ; chacun en Th-B et en Th-D), comparées colonne par colonne, valeurs et types, à
+la 0.9.36 : **identiques au bit près**.
+
+| Changement | Effet mesuré ou estimé |
+|---|---|
+| 27 hypothèses lues à chaque heure (`infiltrations`, `protections`, `ouvertures`) devenues constantes du module | appels à `hyp()` par calcul DH du logement de départ : 152 294 → 3 081 ; 0,2 à 0,4 µs par appel, soit 0,03 à 0,05 s |
+| Séries de la boucle de `besoins.py` en listes Python (environ 25 lectures par heure) | 0,4 à 1 µs gagnée par lecture et opération, soit 0,01 à 0,02 s |
+| Noms `rprot_baie_i` formés une fois, valeurs par `tolist()` | 0,015 à 0,03 s |
+
+Gain total estimé : 0,06 à 0,1 s sur un calcul DH de 2 à 3 s, **2 à 3 %**. La feuille de route attendait 10 à
+15 % : l'estimation partait du profileur (`hyp()` : 0,16 s sur 6,3 s), qui grossit le coût des petits appels.
+Mesure directe impossible sur le poste : le même code y prend de 1,4 à 3,6 s d'un passage à l'autre (seize
+passages alternés ancien/nouveau). Les constantes restent lues dans `donnees/hypotheses.csv`, à l'import : comme
+avant (`lire_hypotheses` est mise en cache), une modification du CSV demande de relancer l'application.
+
+`python -m pytest` : 405 réussis, 2 sautés.
+
+## 0.9.38 — indicateurs du projet
+
+107. **Indicateurs du projet** (`interface/indicateurs.py`) : pédagogiques, sans valeur réglementaire.
+     - **compacité** : surface déperditive / surface habitable (m²/m²). La réglementation n'en donne pas de
+       définition ; une autre usuelle (surface déperditive / volume) n'est pas retenue ;
+     - **surface déperditive** : parois et baies du groupe du moteur (`construire_projet`), sur l'extérieur ou le
+       sol ; une paroi adiabatique n'en fait pas partie ;
+     - **U moyen de l'enveloppe** : (Σ U.A + Σ ψ.l) / surface déperditive, baies sans protection. Proche de l'Ubât
+       (méthode Th-U), sans ses coefficients de réduction b (plancher sur le sol compté avec son U saisi) ;
+     - **baies / surface habitable** : rapport des surfaces, sans repère réglementaire affiché.

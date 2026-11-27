@@ -75,6 +75,8 @@ SAISIES_COMMUNES = {"uw": "toutes les baies", "sw": "toutes les baies", "protect
                     "u_mur": "tous les murs", "teinte": "murs et toiture"}
 CLES_FACADES = tuple(cle for cle, _, _, _ in FACADES)
 PREFIXE_FICHE = "fiche_"        # clé d'une saisie de la fiche : « fiche_uw » (celle du menu : « uw »)
+CLE_FICHE_ADIABATIQUE = PREFIXE_FICHE + "adiabatique"      # interrupteur « adiabatique » de la paroi examinée
+SUIVI_TRAVERSANT = "suivi_traversant"      # session : dernier verdict des baies sur le caractère traversant
 # Volets du menu, dans l'ordre : titre → suffixe de leur clé (« volet_baies »)
 VOLETS = {"Site": "site", "Forme": "forme", "Baies": "baies", "Parois": "parois", "Air": "air",
           "Confort d'été": "confort"}
@@ -125,14 +127,49 @@ def _forme(defaut):
                             default=list(defaut.parois_adiabatiques), format_func=noms.get,
                             key="parois_adiabatiques", help=aide("parois_adiabatiques"))
     logements = st.number_input("Logements", 1, 400, defaut.nb_logements, key="nb_logements", help=aide("nb_logements"))
-    traversant = st.toggle("Logements traversants", defaut.traversant, key="traversant", help=aide("traversant"))
+    place_traversant = st.container()       # rempli par _traversant, une fois les baies saisies
     hsp = st.slider("Hauteur sous plafond (m)", 2.3, 3.5, defaut.hauteur_sous_plafond_m, step=0.05,
                     key="hauteur_sous_plafond_m", help=aide("hauteur_sous_plafond_m"))
     return {"longueur_m": longueur, "profondeur_m": profondeur, "nb_niveaux": niveaux,
             "orientation_deg": orientation_deg, "nb_logements": int(logements),
             "parois_adiabatiques": tuple(cle for cle in noms if cle in adiabatiques),   # dans l'ordre des parois
-            "traversant": traversant, "hauteur_sous_plafond_m": hsp,
-            "hauteur_etage_m": max(defaut.hauteur_etage_m, hsp + 0.3)}
+            "hauteur_sous_plafond_m": hsp,
+            "hauteur_etage_m": max(defaut.hauteur_etage_m, hsp + 0.3)}, place_traversant
+
+
+def _traversant(boite):
+    """Caractère traversant selon les baies saisies (Boite.traversant_impose) ; rend la valeur retenue.
+
+    Un logement : déduit des baies, sans interrupteur. Plusieurs logements : interrupteur grisé si une seule façade
+    au plus est vitrée ; sinon libre, et remis à la règle des 75 % quand les baies changent son verdict (suivi dans
+    la session, SUIVI_TRAVERSANT).
+    boite : la saisie en cours.
+    """
+    impose, regle = boite.traversant_impose, boite.traversant_selon_les_baies
+    repartition = ", ".join(f"{point_cardinal(f['orientation_deg'])} {part * 100:.0f} %"
+                            for f, part in boite.repartition_baies()) or "aucune"
+    avant = st.session_state.get(SUIVI_TRAVERSANT)
+    st.session_state[SUIVI_TRAVERSANT] = (impose, regle)
+    if boite.nb_logements == 1:
+        st.markdown(f"Logement traversant : **{'oui' if impose else 'non'}**", help=aide("traversant"))
+        st.caption(f"Déduit des baies : {repartition}.")
+        return impose
+    if impose is not None:
+        st.session_state["traversant"] = impose
+    elif avant is not None and avant != (impose, regle):
+        st.session_state["traversant"] = regle
+    else:
+        st.session_state.setdefault("traversant", boite.traversant)
+    choisi = st.toggle("Logements traversants", key="traversant", help=aide("traversant"),
+                       disabled=impose is not None)
+    if impose is not None:
+        st.caption(f"Non traversants : une seule façade vitrée au plus (baies : {repartition}).")
+    elif not regle:
+        st.caption(f"Une façade porte 75 % des baies ou plus ({repartition}) : vérifier que les logements sont "
+                   "bien traversants.")
+    else:
+        st.caption(f"Baies : {repartition}.")
+    return choisi
 
 
 def _azimut_du_curseur(orientation_deg):
@@ -257,6 +294,7 @@ def _reprendre_batiment():
     Écrire la valeur, et non effacer la clé : un widget effacé garde à l'écran la valeur saisie.
     """
     st.session_state.update(valeurs_des_widgets(_depart_choisi()))
+    st.session_state.pop(SUIVI_TRAVERSANT, None)        # la valeur du bâtiment est gardée
 
 
 def _reprendre_niveau():
@@ -326,7 +364,8 @@ def saisir(defaut=boite_de_depart()):
     with volet("Site", ":material/location_on:"):
         champs.update(_site(defaut))
     with volet("Forme", ":material/deployed_code:"):
-        champs.update(_forme(defaut))
+        forme, place_traversant = _forme(defaut)
+        champs.update(forme)
     with volet("Baies", ":material/window:", ouvert=True):
         champs.update(_baies(defaut, champs["orientation_deg"], champs["parois_adiabatiques"]))
     with volet("Parois", ":material/layers:"):
@@ -335,6 +374,8 @@ def saisir(defaut=boite_de_depart()):
         champs.update(_air(defaut))
     with volet("Confort d'été", ":material/mode_fan:"):
         champs.update(_confort(defaut))
+    with place_traversant:                  # dans le volet « Forme », mais après la saisie des baies
+        champs["traversant"] = _traversant(replace(defaut, **champs))
     return replace(defaut, **champs)
 
 
@@ -364,8 +405,26 @@ def _recopier_dans_le_menu(champ):
     st.session_state["saisie_par_la_fiche"] = True
 
 
+def _recopier_adiabatique(cle_paroi):
+    """Rappel de l'interrupteur « adiabatique » de la fiche : la paroi entre dans le choix « Parois adiabatiques » du
+    menu, ou en sort (dans l'ordre des parois), et la page entière sera relancée."""
+    choisies = set(st.session_state.get("parois_adiabatiques") or ())
+    if st.session_state[CLE_FICHE_ADIABATIQUE]:
+        choisies.add(cle_paroi)
+    else:
+        choisies.discard(cle_paroi)
+    st.session_state["parois_adiabatiques"] = [cle for cle in PAROIS_ADIABATIQUES if cle in choisies]
+    st.session_state["saisie_par_la_fiche"] = True
+
+
 def saisir_dans_la_fiche(boite, cle_paroi):
-    """Widgets de la fiche pour les saisies de cette paroi, à la valeur du menu ; changer l'un change le menu."""
+    """Widgets de la fiche pour les saisies de cette paroi, à la valeur du menu ; changer l'un change le menu.
+    Une façade, la toiture ou le plancher bas ont en tête leur interrupteur « adiabatique » (0.9.38), lié au choix
+    « Parois adiabatiques » du menu ; les baies d'une façade n'en ont pas."""
+    if cle_paroi in PAROIS_ADIABATIQUES:
+        st.session_state[CLE_FICHE_ADIABATIQUE] = cle_paroi in boite.parois_adiabatiques
+        st.toggle("Adiabatique (sur un local chauffé)", key=CLE_FICHE_ADIABATIQUE, on_change=_recopier_adiabatique,
+                  args=(cle_paroi,), help=aide("parois_adiabatiques"))
     valeurs = valeurs_des_widgets(boite)
     for champ in saisies_de_la_paroi(boite, cle_paroi):
         cle = PREFIXE_FICHE + champ
@@ -397,3 +456,4 @@ def remettre(boite, batiment, niveau):
     et le niveau d'enveloppe d'où elle venait (ils donnent les champs non saisis, comme la part habitable)."""
     st.session_state.update(valeurs_des_widgets(boite))
     st.session_state.update({"batiment_depart": batiment, "niveau_enveloppe": niveau})
+    st.session_state.pop(SUIVI_TRAVERSANT, None)        # la valeur de la boîte remise est gardée

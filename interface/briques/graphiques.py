@@ -21,6 +21,8 @@ HAUTEUR_BANDE = 220             # graphique secondaire, sous le principal
 HAUTEUR_BARRE = 170             # une seule barre horizontale, avec sa légende et son axe
 FORMAT_JOUR = "%d/%m"           # dates : jour/mois (l'année affichée est conventionnelle)
 FORMAT_HEURE = "%d/%m %Hh"
+TRAIT_SERIE = 2                 # px : courbe d'une grandeur mesurée (températures)
+TRAIT_FIN = 1                   # px : seuil ou limite (seuil de confort, en noir)
 MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
 
 
@@ -39,11 +41,15 @@ def legende(titre=None):
     return alt.Legend(title=titre, orient="top", direction="horizontal", symbolStrokeWidth=3)
 
 
-def traits(roles, pointilles=()):
-    """Trait de chaque série : plein, ou pointillé pour les séries nommées (un seuil se distingue ainsi d'une
-    mesure de même couleur). Sans légende propre : celle des couleurs suffit."""
-    return alt.StrokeDash("serie:N", legend=None, scale=alt.Scale(
-        domain=list(roles), range=[[6, 4] if nom in pointilles else [1, 0] for nom in roles]))
+def lignes_des_series(base, fins=(), **options):
+    """(lignes épaisses, lignes fines) d'un graphique dont « base » encode la série dans le champ « serie » : traits
+    fins pour les séries nommées (un seuil se lit comme une limite), plus épais pour les mesures (0.9.38 ; le seuil
+    était pointillé). Deux couches, la légende des couleurs restant commune : Vega-Lite ne tient pas compte d'une
+    épaisseur encodée par série sur des lignes (constaté dans la page : 2 px partout)."""
+    fine = alt.FieldOneOfPredicate(field="serie", oneOf=list(fins))
+    epaisse = alt.LogicalNotPredicate(**{"not": fine})
+    return (base.mark_line(strokeWidth=TRAIT_SERIE, **options).transform_filter(epaisse),
+            base.mark_line(strokeWidth=TRAIT_FIN, **options).transform_filter(fine))
 
 
 def etiquettes_heures():

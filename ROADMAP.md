@@ -43,11 +43,19 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
 | 0.9.30 | Audit du code | Relecture d'ensemble (`docs/audit.md`, 0.9.30, constats 1 à 7) : test de non-régression des six boîtes de départ et de l'exemple du README, `simuler_groupe()` supprimée (une seule boucle annuelle, tests reportés sur `calculer_besoins()`), versions des dépendances épinglées ; nettoyages des constats 5 à 7 ; résultats inchangés | fait |
 | 0.9.32 | Page « Explorer » resserrée | Critique de conception (25/40) : « Calculer » collé en bas du menu, barre des résultats collée en haut (écart à la référence, état périmé), résultats périmés pâlis, la boîte et la fiche à droite du dessin, volets résumés dans leur titre, « Baies » ouvert | fait |
 | 0.9.34 | Variantes et lecture côte à côte | Variantes A à D (pastilles dans la barre des résultats, un clic remet la saisie, référence au choix) à la place de la référence unique ; synthèse « Bbio et DH ensemble » face à la référence ; saisies de la paroi dans sa fiche, liées au menu | fait |
-| 0.9.26 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 ; décalée de 0.9.16 le 20/11/2026, de 0.9.18, 0.9.20, 0.9.22 et 0.9.24 le 22/11/2026 | à faire |
+| 0.9.36 | Traversant selon les baies | Règle des 75 % : elle décide pour un logement ; plusieurs logements : non traversants avec une seule façade vitrée, au choix sinon (`docs/audit.md`, hypothèse 106) ; bâtiments de départ inchangés | fait |
+| 0.9.37 | Calcul plus rapide, Python seul | Hypothèses lues à chaque heure devenues constantes des modules (appels à `hyp()` : 152 294 → 3 081 par calcul DH) ; séries de la boucle de `besoins.py` en listes, noms `rprot_baie_i` formés une fois. Gain estimé 2 à 3 % (et non 10 à 15 % : le profileur grossit le coût des petits appels), non mesurable au-dessus du bruit du poste ; résultats identiques au bit près (22 sorties horaires) | fait |
+| 0.9.38 | Boussole, indicateurs, adiabatique dans la fiche | Adiabatique saisi dans la fiche de la paroi (lié au menu) ; curseur de l'heure au-dessus du dessin ; boussole cliquable dans le dessin à la place de « Vue depuis le » (`_sources/boussole.png`) ; températures : extérieur orange, intérieur jaune, seuil en trait plein noir fin ; indicateurs du projet (compacité, taux de vitrage…) choisis dans la boîte « Indicateurs » et affichés en cartouche sur le dessin, registre extensible (`interface/indicateurs.py`) | fait |
+| 0.9.40 | créer une fonction masque sur les facades, proposer de changer les fichiers météo | à faire |
+| 0.9.42 | faire une aide complète avec par exemple la règle de traversant : https://rt-re-batiment.developpement-durable.gouv.fr/faq-re2020-018-comment-est-defini-un-logement-a623.html | à faire |
+| 0.9.44 | Diffusion | Module pédagogique séparé sur la diffusion de la chaleur (sans lien de calcul) ; 0.9.6 avant le 15/11/2026 ; décalée de 0.9.16 le 20/11/2026, de 0.9.18, 0.9.20, 0.9.22 et 0.9.24 le 22/11/2026 | à faire |
 | 1.0.0 | Diffusion publique | Version annoncée | à faire |
 
 ## En attente
 
+- **Indicateurs du projet, suites** (0.9.38) : d'autres indicateurs à ajouter au registre (`interface/indicateurs.py`),
+  par exemple ceux qui demandent le calcul (besoins par poste, heures d'inconfort) ; garder le choix des indicateurs
+  dans une variante ; extérieur orange et intérieur jaune restent proches à l'œil : à revoir si la lecture gêne.
 - Mise en ligne de la 0.9.0 : accord explicite et lien de déploiement Streamlit (l'outil est prêt, voir
   `README.md`, « Mise en ligne »).
 - Extraction OPEE en parquet (pour la 0.9.8).
@@ -66,7 +74,25 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   (boucle sur les heures, tableaux sur les variantes ; refonte de `besoins.py`, `protections.py`, `ouvertures.py`,
   `infiltrations.py`) ; numba sur la boucle (une dépendance de plus). Protections (`ratios`, `flux` : 20 % du
   temps restant) laissées telles quelles : leurs produits scalaires numpy ne sont pas reproductibles au bit près en
-  Python.
+  Python. Les lectures répétées en Python pur sont épuisées (0.9.37 : 2 à 3 %) ; seul numba ou le calcul de
+  plusieurs variantes à la fois peuvent encore changer l'ordre de grandeur.
+  - Mesure du 23/11/2026 (poste Windows, Python 3.11, 0.9.34) : logement de départ, DH seul, 3,6 à 4,5 s par
+    calcul (`interface.calcul.resultats_dh`). Boucle horaire de `calculer_besoins` : environ 90 % du temps, dont
+    infiltrations (`equilibre`, `bilan`) environ 26 %, protections (`ratios`, `flux`) environ 20 %, modèle RC du
+    groupe environ 12 %, ouverture des baies environ 8 % ; hors boucle (projet, météo, pandas) environ 10 %.
+  - Gains estimés avec numba (ordres de grandeur, non mesurés) : infiltrations seules environ 3 s (× 1,3) ;
+    infiltrations et protections environ 2,2 s (× 1,8) ; toute la boucle 0,4 à 0,6 s (× 6 à 10), la boucle
+    elle-même descendant vers 0,1 à 0,2 s. Un portage partiel rapporte peu. Premier calcul après un démarrage du
+    serveur : compilation de 5 à 15 s environ (le cache sur disque de `cache=True` est perdu à chaque redémarrage
+    de Streamlit Cloud).
+  - Compatibilité vérifiée (installation à blanc) : `numba 0.68.1` et `llvmlite 0.50.0` avec `numpy 2.4.6` sous
+    Python 3.11 (numba demande numpy < 2.6, à monter ensemble) ; paquets compilés pour Windows et Linux, rien à
+    compiler soi-même ; environ 100 Mo de plus à l'installation. Coût : cœur de la boucle à réécrire en tableaux
+    numpy et nombres (ni classes ni dictionnaires) ; résultats plus identiques au bit près (non-régression avec
+    tolérance, vu la sensibilité du DH ci-dessous).
+  - Rust écarté : même gain que numba, mais toute la boucle à porter, deux moteurs à maintenir, chaîne de
+    compilation (Rust et outils de compilation C++ de Visual Studio, GitHub Action pour Linux) et moteur illisible
+    pour les utilisateurs.
 - **Sensibilité numérique du DH** (0.9.29) : ± 0,2 % pour une perturbation de 1e-12 (seuils de l'ouverture et des
   protections). Bien sous les cibles de validation (± 10 %), mais à garder en tête pour comparer deux versions ou
   deux variantes proches.
@@ -147,6 +173,9 @@ Seule liste de suivi du projet. Le plan détaillé (limites, plan de contrôle, 
   - études : 26 fichiers dans `../_RSEE`, dont 14 sans logement collectif (bureaux, maison individuelle) ; il
     reste 5 bâtiments distincts (Paris et Hébert sont deux versions du même, Sète en a trois, Nice A trois) :
     il en faut d'autres, ou l'extraction OPEE, pour « plus de 10 » ;
+  - nouveaux RSEE (reçus le 23/11/2026, non traités) : 10 études dans `../_RSEE/RSEE_C4` (Bagnolet, La Roche-sur-Yon
+    ×2, Dijon, Cherbourg, Bègles, Plume, Annecy, Safran, Helsinki) et une archive `RSEE pour GME.zip` ; à trier
+    (logement collectif ou non, doublons) puis à passer dans `outils/valider.py` ;
   - froid en H3 : 1,2 à 3,8 fois celui des études (médiane 2,1), premier écart du Bbio à Nice et à Sète ;
   - chauffage : 11 % sous les études en médiane (de − 34 à + 7 %) ; infiltrations d'hiver de l'outil à 15 à
     44 % de l'indicateur `H_V_Def_Hiver` (entrées d'air non comptées, hypothèse 67) ;

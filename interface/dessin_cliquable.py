@@ -18,7 +18,8 @@
      de la paroi ; app.py la recopie dans la liste « Paroi
      examinée », qui reste le moyen de choisir au clavier et de
      choisir une paroi cachée dans la vue (façade de dos,
-     plancher bas)
+     plancher bas) ; un quart de la boussole porte la clé
+     « vue:<nom> » : app.py change alors de vue (vue_choisie)
 
  Le dessin ne passe plus par st.markdown(unsafe_allow_html=True)
  (0.9.18) : le composant écrit le SVG lui-même, sans filtre, et
@@ -29,6 +30,8 @@
 """
 
 import streamlit as st
+
+from interface.axonometrie import PREFIXE_VUE, VUES
 
 # ============================================================
 # RÉGLAGES
@@ -93,10 +96,23 @@ def dessin_cliquable(svg, description, *, key, on_clic):
     return _DESSIN(data={"svg": svg, "description": description}, key=key, on_clic_change=on_clic)
 
 
-def paroi_cliquee(etat, choix):
-    """Clé de la paroi cliquée, lue dans l'état du composant (st.session_state[key]), si elle est dans la liste des
-    parois que l'on peut examiner (choix) ; None sinon."""
+def _cle_cliquee(etat):
+    """Clé de la forme cliquée, lue dans l'état du composant (st.session_state[key]) ; None sans clic."""
     cle = getattr(etat, "clic", None) if etat is not None else None
     if cle is None and isinstance(etat, dict):
         cle = etat.get("clic")
+    return cle
+
+
+def paroi_cliquee(etat, choix):
+    """Clé de la paroi cliquée, si elle est dans la liste des parois que l'on peut examiner (choix) ; None sinon."""
+    cle = _cle_cliquee(etat)
     return cle if cle in choix else None
+
+
+def vue_choisie(etat):
+    """Vue choisie d'un clic sur un quart de la boussole (clé « vue:sud-ouest » → « sud-ouest ») ; None sinon."""
+    cle = _cle_cliquee(etat)
+    if isinstance(cle, str) and cle.startswith(PREFIXE_VUE) and cle[len(PREFIXE_VUE):] in VUES:
+        return cle[len(PREFIXE_VUE):]
+    return None

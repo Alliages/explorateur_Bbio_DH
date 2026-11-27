@@ -448,39 +448,48 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
     theta_op_max_jour = 0.0     # maximum de la température opérative du jour légal en cours (fiche 5.9, éq. 175)
     theta_op_max_veille = 0.0   # le même pour la veille : nul le premier jour, comme le prévoit la fiche
     lignes = []
+    # Séries lues à chaque heure, en listes Python (0.9.37) : un élément de liste se lit plus vite qu'un élément
+    # de tableau numpy, et c'est le même nombre (float64 → float, sans arrondi) : résultats identiques au bit près
+    hleg, jour, occupe, indice_gpm = hleg.tolist(), jour.tolist(), occupe.tolist(), indice_gpm.tolist()
+    consigne_ch, consigne_fr = consigne_ch.tolist(), consigne_fr.tolist()
+    phi_conv, phi_rad = phi_conv.tolist(), phi_rad.tolist()
+    te_an, fs1_an, fs3_an, phi_sl_an, phi_sh_an = (s[c].tolist() for c in ("te", "fs1", "fs3", "phi_sl", "phi_sh"))
+    periode_an, theta_rm_an, ecart_an = periode.tolist(), confort.theta_rm_ext.tolist(), confort.ecart.tolist()
+    # Noms des colonnes de fermeture de chaque baie, formés une fois (et non à chaque heure)
+    noms_rprot = [f"{PREFIXE_RPROT_BAIE}{i}" for i in range(protections.nb)] if protections is not None else []
     for h in range(n):
         theta_op_max_jour = max(theta_op_max_jour, etat.theta_op)
         if h > 0 and jour[h] != jour[h - 1]:
             theta_op_max_veille, theta_op_max_jour = theta_op_max_jour, 0.0
         # Moyenne glissante de la température extérieure du jour : nulle le premier jour (fiche 4.5, éq. 57)
-        theta_rm_ext = confort.theta_rm_ext[h]
+        theta_rm_ext = theta_rm_an[h]
         # Chaque jour à 9 h légales, saisons de chauffage et de refroidissement (fiche 4.6)
         if hleg[h] == heure_test:
-            saisons.nouveau_jour(int(jour[h]), bool(periode[h]))
+            saisons.nouveau_jour(int(jour[h]), bool(periode_an[h]))
 
         # Brasseurs d'air (Th-D) : à l'arrêt à la première heure, puis pilotés par les températures de
         # l'heure h−1 ; leur chaleur s'ajoute aux apports convectifs de l'heure
         chaleur_brasseurs = energie_brasseurs = ecart_ba = 0.0
         if types_brasseurs and h > 0:
             regimes, chaleur_brasseurs, energie_brasseurs, ecart_ba = brasseurs_de_l_heure(
-                types_brasseurs, regimes, groupe.volume_m3, etat, int(hleg[h]), bool(occupe[h]), bool(periode[h]),
-                consigne_fr_confort, confort.ecart[h], confort.habitation)
+                types_brasseurs, regimes, groupe.volume_m3, etat, int(hleg[h]), bool(occupe[h]), bool(periode_an[h]),
+                consigne_fr_confort, ecart_an[h], confort.habitation)
 
         # 0. Baies : nues (flux de l'année déjà calculés) ou avec protections mobiles (ratio de l'heure)
         saison = SAISONS[(saisons.aut_ch, saisons.aut_fr)]
         rprot = None
         if protections is None:
-            baies = dict(fs1=s["fs1"][h], fs3=s["fs3"][h], phi_sl=s["phi_sl"][h])
+            baies = dict(fs1=fs1_an[h], fs3=fs3_an[h], phi_sl=phi_sl_an[h])
             rprot_moyen, hg_es = 0.0, modele.hg_es
         else:
             rprot, rprot_u = protections.ratios(h, saison, bool(occupe[h]), int(indice_gpm[h]), etat.theta_op,
-                                                theta_op_max_veille, bool(periode[h]))
+                                                theta_op_max_veille, bool(periode_an[h]))
             b = protections.flux(h, rprot, rprot_u)
             baies = dict(fs1=b["fs1"], fs3=b["fs3"], phi_sl=b["fs2"] + b["ftvc"], hg_es=b["hg_es"])    # éq. 343
             rprot_moyen, hg_es = b["rprot_moyen"], b["hg_es"]
 
         # Air entrant : ventilation (à travers l'échangeur) et, baies ouvertes, air extérieur direct (fiche 5.13)
-        te = s["te"][h]
+        te = te_an[h]
         theta_souffle = te + efficacite_echangeur * (etat.theta_i - te)
         hg_air, theta_air, rouv_moyen, debit_ouvertures, rouv_brut = hg_ei, theta_souffle, 0.0, 0.0, 0.0
         debit_infiltrations = hg_infiltrations = hg_ouvertures = 0.0
@@ -494,7 +503,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
             # Écart de confort adaptatif Δθconf_adapt des seuils d'ouverture (fiche 5.13, éq. 242) : défini par la
             # fiche 13.5 en Th-D seulement (éq. 2542 à 2546 : plafonné à 2 °C, nul la nuit) ; nul en Th-B (0.9.11,
             # relecture de la 0.9.8 : l'outil prenait 0,33 θrm + 18,8 + 2 − θiifr, et ouvrait trop peu en été)
-            ecart_confort = confort.ecart[h] if th_d else 0.0
+            ecart_confort = ecart_an[h] if th_d else 0.0
             o = ouvertures.pas(h, saison, bool(saisons.aut_fr), bool(occupe[h]), int(hleg[h]), consigne_fr[h],
                                consigne_fr_confort, ecart_confort, etat.theta_op, etat.theta_i, rprot,
                                th_b=not th_d)
@@ -506,7 +515,7 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
 
         # 1. Matrice du groupe : sans émission, 10 W/m² convectifs, 10 W/m² radiatifs
         entrees = dict(te=te, hg_ei=hg_air, theta_eieq=theta_air,
-                       phi_sh=s["phi_sh"][h], phi_conv=phi_conv[h] + chaleur_brasseurs, phi_rad=phi_rad[h], **baies)
+                       phi_sh=phi_sh_an[h], phi_conv=phi_conv[h] + chaleur_brasseurs, phi_rad=phi_rad[h], **baies)
         #    Ce qui ne dépend pas de la puissance émise est préparé une fois ; pour les deux cas à 10 W/m², seules
         #    les deux températures lues par la sonde sont calculées
         prepare = preparer_pas(modele, etat, **entrees)
@@ -548,13 +557,13 @@ def calculer_besoins(groupe, meteo, scenarios=None, calendrier=None, refroidisse
                  hg_infiltrations=hg_infiltrations,
                  # Sollicitations de l'heure, pour comparer aux sorties horaires d'un moteur Th-BCE
                  hg_ei=hg_air, theta_eieq=theta_air, fs1=baies["fs1"], fs3=baies["fs3"], phi_sl=baies["phi_sl"],
-                 phi_sh=s["phi_sh"][h], phi_i=libre["phi_i"], phi_s=libre["phi_s"], phi_m=libre["phi_m"],
+                 phi_sh=phi_sh_an[h], phi_i=libre["phi_i"], phi_s=libre["phi_s"], phi_m=libre["phi_m"],
                  # Air entrant poste par poste et apports internes, pour le bilan en coupe (moteur/bilan_paroi.py) :
                  # hg_ei . θeieq = hg_ventilation . θsouffle + (hg_infiltrations + hg_ouvertures) . θe
                  hg_ventilation=hg_ei, theta_souffle=theta_souffle, hg_ouvertures=hg_ouvertures,
                  phi_apports=phi_conv[h] + phi_rad[h] + chaleur_brasseurs)
         if rprot is not None:       # fermeture de chaque baie, pour le bilan par paroi (moteur/bilan_paroi.py)
-            r.update({f"{PREFIXE_RPROT_BAIE}{i}": float(valeur) for i, valeur in enumerate(rprot)})
+            r.update(zip(noms_rprot, rprot.tolist()))
         if th_d:
             r.update(ecart_ba=ecart_ba, energie_brasseurs_wh=energie_brasseurs)
         lignes.append(r)

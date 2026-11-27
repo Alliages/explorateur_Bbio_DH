@@ -21,7 +21,7 @@ from interface import charte
 from interface.aides import aide
 from interface.briques.base import Brique
 from interface.briques.graphiques import (FORMAT_HEURE, FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs,
-                                          legende, nombre, traits)
+                                          legende, lignes_des_series, nombre)
 from moteur.confort import moyenne_glissante_exterieure, seuil_confort_chaud
 from moteur.dh import debut_semaine_la_plus_chaude as semaine_du_moteur
 from moteur.hypotheses import hyp
@@ -53,9 +53,9 @@ def _temperatures(semaine):
         id_vars="date", value_vars=list(TEMPERATURES), var_name="serie", value_name="temperature")
     base = alt.Chart(longue).encode(
         x=axe_x, y=alt.Y("temperature:Q", title="Température (°C)", scale=alt.Scale(zero=False)),
-        color=alt.Color("serie:N", scale=echelle_couleurs(TEMPERATURES), legend=legende()),
-        strokeDash=traits(TEMPERATURES, pointilles=("Seuil de confort",)))
-    lignes = base.mark_line(strokeWidth=2)
+        color=alt.Color("serie:N", scale=echelle_couleurs(TEMPERATURES), legend=legende()))
+    epaisses, fines = lignes_des_series(base, fins=("Seuil de confort",))
+    lignes = epaisses + fines
     survol = base.mark_circle(size=60, opacity=0).encode(
         tooltip=[alt.Tooltip("date:T", title="Heure", format=FORMAT_HEURE), alt.Tooltip("serie:N", title="Série"),
                  alt.Tooltip("temperature:Q", title="°C", format=".1f")])

@@ -49,7 +49,9 @@ CAS_SENS = {
     "base": {},
     "inertie_legere": {"inertie": "legere"},
     "inertie_tres_lourde": {"inertie": "tres_lourde"},
-    "non_traversant": {"traversant": False},
+    # Deux logements : le caractère traversant reste au choix (un seul logement : imposé par les baies)
+    "traversant": {"nb_logements": 2, "traversant": True},
+    "non_traversant": {"nb_logements": 2, "traversant": False},
     "sw_faible": {"sw": 0.35},
     "sw_fort": {"sw": 0.60},
     "teinte_claire": {"teinte": "claire"},
@@ -77,7 +79,7 @@ def test_dh_baisse_avec_l_inertie(dh_selon_saisie):
 
 
 def test_dh_plus_fort_sans_traversant(dh_selon_saisie):
-    assert dh_selon_saisie["non_traversant"] > dh_selon_saisie["base"]
+    assert dh_selon_saisie["non_traversant"] > dh_selon_saisie["traversant"]
 
 
 def test_dh_monte_avec_le_facteur_solaire(dh_selon_saisie):

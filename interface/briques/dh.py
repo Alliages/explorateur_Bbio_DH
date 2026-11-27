@@ -23,7 +23,7 @@ from interface import charte
 from interface.aides import aide
 from interface.briques.base import Brique
 from interface.briques.graphiques import (FORMAT_HEURE, FORMAT_JOUR, HAUTEUR, HAUTEUR_BANDE, echelle_couleurs,
-                                          etiquettes_heures, legende, nombre, traits)
+                                          etiquettes_heures, legende, lignes_des_series, nombre)
 from interface.briques.semaine_chaude import debut_semaine_la_plus_chaude
 from moteur.dh import degres_heures, dh_max
 from moteur.hypotheses import hyp
@@ -100,10 +100,9 @@ def temperatures(ete, bornes=None):
     longue["temperature"] = longue["temperature"].round(1)          # page plus légère, même lecture
     base = alt.Chart(longue).encode(
         x=axe_x, y=alt.Y("temperature:Q", title="Température (°C)", scale=alt.Scale(zero=False)),
-        color=alt.Color("serie:N", scale=echelle_couleurs(SERIES), legend=legende()),
-        strokeDash=traits(SERIES, pointilles=("Seuil de confort",)))
-    lignes = base.mark_line(strokeWidth=2, clip=True).add_params(
-        alt.selection_interval(bind="scales", encodings=["x"]))
+        color=alt.Color("serie:N", scale=echelle_couleurs(SERIES), legend=legende()))
+    epaisses, fines = lignes_des_series(base, fins=("Seuil de confort",), clip=True)
+    lignes = epaisses.add_params(alt.selection_interval(bind="scales", encodings=["x"])) + fines
     survol = base.mark_circle(size=50, opacity=0, clip=True).encode(
         tooltip=[alt.Tooltip("date:T", title="Heure", format=FORMAT_HEURE), alt.Tooltip("serie:N", title="Série"),
                  alt.Tooltip("temperature:Q", title="°C", format=".1f")])
@@ -141,8 +140,8 @@ def afficher(r, boite):
         return
     choix = st.segmented_control("Montrer", FENETRES, default=ETE_ENTIER, required=True, key="dh_fenetre",
                                  help=aide("dh_fenetre"))
-    st.caption("Heure par heure sur la période de confort adaptatif : la température dehors (noir) et dedans "
-               "(jaune), le seuil de confort (orange, en pointillé) et, en orange, les degrés-heures comptés. "
+    st.caption("Heure par heure sur la période de confort adaptatif : la température dehors (orange) et dedans "
+               "(jaune), le seuil de confort (trait noir fin) et, en orange pâle, les degrés-heures comptés. "
                "En dessous, les degrés-heures de chaque jour : y tracer un cadre à la souris montre ces jours-là, "
                "le déplacer fait avancer ; la molette zoome sur le graphique du dessus. Heure légale.")
     bornes = fenetre(r.ete, choix)

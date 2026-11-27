@@ -11,7 +11,7 @@ hauteur_sous_plafond_m;2,5;m;hauteur sous plafond
 orientation_deg;0;°;orientation de la façade principale : 0 sud, 90 ouest, 180 nord, -90 est
 part_habitable;1;-;surface habitable / surface de plancher (entre 0 et 1)
 nb_logements;1;;nombre de logements
-traversant;oui;;logements traversants : oui ou non
+traversant;oui;;logements traversants : oui ou non (ignoré si les baies l'imposent)
 part_vitree_principale;0,25;-;surface de baies / surface de la façade principale (0,25 = 25 %)
 part_vitree_pignon_a;0;-;surface de baies / surface du pignon A (façade principale + 90° : à l'ouest si elle est au sud)
 part_vitree_arriere;0,25;-;surface de baies / surface de la façade arrière

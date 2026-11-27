@@ -82,13 +82,18 @@ PRECISION_PRESSION = 1e-12          # Pa : la recherche de Pib s'arrête quand d
 ESSAIS_PAR_CONTROLE = 3             # tous les 3 essais, l'encadrement doit avoir été divisé par 2 ; sinon dichotomie
 MARGE_PRESSION = 1.0                # Pa ajoutés de part et d'autre de l'encadrement de Pib
 
+# Hypothèses lues à chaque heure, lues une fois à l'import plutôt qu'à chaque appel (0.9.37 : environ 150 000
+# appels à hyp() par calcul DH du logement de départ). Expressions inchangées : résultats identiques au bit près.
+RHO_REFERENCE = hyp("air_masse_volumique_reference")      # kg/m³
+TEMPERATURE_REFERENCE = hyp("ouv_temperature_reference")  # °C
+
 
 # ============================================================
 # 1. GRANDEURS DU GROUPE
 # ============================================================
 def masse_volumique(theta):
     """Masse volumique de l'air sec à la température theta (kg/m³) : éq. 131-132, sans l'humidité."""
-    return hyp("air_masse_volumique_reference") * (KELVIN + hyp("ouv_temperature_reference")) / (KELVIN + theta)
+    return RHO_REFERENCE * (KELVIN + TEMPERATURE_REFERENCE) / (KELVIN + theta)
 
 
 def surfaces_permeables(groupe):
@@ -253,7 +258,7 @@ def equilibre(defauts, vent, te, theta_i, debit_ventilation_m3h=0.0, theta_souff
         else:
             sortant -= rho_int * c * (-dp) ** n / SECONDES_PAR_HEURE
     return {"pib": pib, "debit_entrant_kg_s": entrant, "debit_sortant_kg_s": sortant,
-            "debit_entrant_m3h": entrant * SECONDES_PAR_HEURE / hyp("air_masse_volumique_reference")}
+            "debit_entrant_m3h": entrant * SECONDES_PAR_HEURE / RHO_REFERENCE}
 
 
 # ============================================================

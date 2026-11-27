@@ -120,7 +120,7 @@ class Boite:
     orientation_deg: float = 0.0            # de la façade principale : 0 = sud, 90 = ouest
     part_habitable: float = 1.0             # surface habitable / surface de plancher
     nb_logements: int = 1
-    traversant: bool = True
+    traversant: bool = True                 # imposé par les baies dans certains cas : voir traversant_impose
     # --- Baies ---
     part_vitree_principale: float = 0.25    # surface de baies / surface de la façade
     part_vitree_pignon_a: float = 0.0
@@ -156,6 +156,12 @@ class Boite:
     brasseur_debit_m3h: float = 11000.0     # valeurs du fabricant, par brasseur
     brasseur_puissance_w: float = 40.0
 
+    def __post_init__(self):
+        # Quand les baies imposent le caractère traversant, il remplace la valeur saisie (ou lue dans un CSV)
+        impose = self.traversant_impose
+        if impose is not None:
+            object.__setattr__(self, "traversant", impose)          # la boîte est figée
+
     # ---------- Grandeurs déduites ----------
     @property
     def emprise_m2(self):
@@ -176,6 +182,33 @@ class Boite:
     @property
     def perimetre_m(self):
         return 2.0 * (self.longueur_m + self.profondeur_m)
+
+    # ---------- Caractère traversant (annexe I, « Local traversant » ; hypothèse 106 de docs/audit.md) ----------
+    def repartition_baies(self):
+        """Part de la surface totale des baies portée par chaque façade vitrée : [(façade, part)], dans l'ordre
+        des façades ; liste vide sans baie."""
+        vitrees = [f for f in self.facades() if f["baies_m2"] > 0]
+        total = sum(f["baies_m2"] for f in vitrees)
+        return [(f, f["baies_m2"] / total) for f in vitrees]
+
+    @property
+    def traversant_selon_les_baies(self):
+        """Règle réglementaire, la boîte prise comme un seul local : traversant si chaque orientation porte moins
+        de 75 % de la surface des baies (donc faux sans baie ou avec une seule façade vitrée)."""
+        parts = [part for _, part in self.repartition_baies()]
+        # Arrondi : 75 % pile ne doit pas passer sous le seuil par une erreur de calcul
+        return bool(parts) and round(max(parts), 9) < hyp("trav_part_max_orientation")
+
+    @property
+    def traversant_impose(self):
+        """Valeur que les baies imposent, ou None si le choix reste libre.
+
+        Un logement : la règle décide. Plusieurs logements : le plan intérieur est inconnu (des logements dos à dos
+        ne sont pas traversants), le choix reste libre dès que deux façades sont vitrées ; sinon : non traversants.
+        """
+        if self.nb_logements == 1:
+            return self.traversant_selon_les_baies
+        return False if len(self.repartition_baies()) < 2 else None
 
     def facades(self):
         """Les quatre façades : cle, libelle, orientation_deg, largeur_m, recul_m (distance au centre de la

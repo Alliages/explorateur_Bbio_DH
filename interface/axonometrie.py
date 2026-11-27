@@ -39,7 +39,9 @@
      écran y = − (z × cos(e) + éloignement × sin(e))
 
  Seules les deux façades tournées vers le spectateur sont
- visibles : l'interface propose de changer de point de vue.
+ visibles : la boussole, en bas de la bande de droite, change de
+ point de vue (un quart par vue, nord en haut). Le cartouche, au-
+ dessus, donne les indicateurs du projet (interface/indicateurs.py).
 
  Ce fichier ne dépend pas de Streamlit : dessiner(boite) rend le
  texte d'un SVG.
@@ -86,6 +88,18 @@ OPACITE_OMBRE_PORTEE = 0.22         # ombre de la boîte sur le sol
 # Points cardinaux du sol : (lettre, azimut du moteur) ; le nord porte en plus une flèche
 CARDINAUX = (("S", 0.0), ("O", 90.0), ("N", 180.0), ("E", -90.0))
 FLECHE_NORD = (0.86, 1.14, 0.07)    # flèche du nord : de, à (en rayons du sol), demi-largeur de la pointe
+# Bande de droite (0.9.38) : la boussole en bas, le cartouche des indicateurs au-dessus ; la scène se cadre à sa
+# gauche, pour que rien ne cache le sol, ses points cardinaux ni la course du soleil
+BANDE_DROITE = 136                  # px
+# Boussole : le choix de la vue, nord en haut ; un quart par vue, son œil au bord
+RAYON_BOUSSOLE = 56                 # px
+CENTRE_BOUSSOLE = (LARGEUR - BANDE_DROITE / 2, HAUTEUR - RAYON_BOUSSOLE - 18)      # le soleil déborde en bas
+PREFIXE_VUE = "vue:"                # clé renvoyée au clic sur un quart de la boussole : « vue:sud-ouest »
+# Angle à l'écran (degrés, 0 = vers la droite, 90 = vers le bas) du milieu du quart de chaque vue
+ANGLES_BOUSSOLE = {"nord-est": -45.0, "sud-est": 45.0, "sud-ouest": 135.0, "nord-ouest": 225.0}
+AIGUILLE_NORD = "#D65A31"           # pointe nord de l'aiguille (rouge brique, comme une boussole)
+# Cartouche des indicateurs du projet (interface/indicateurs.py) : en haut de la bande, libellé puis valeur
+CARTOUCHE_LIGNE = 30                # px par indicateur (deux lignes de texte)
 
 
 # ============================================================
@@ -301,6 +315,7 @@ class _Scene:
     def __init__(self):
         self.formes = []        # (genre, points, attributs ou texte)
         self.points = []        # tous les points, pour le cadrage
+        self.dessus = []        # SVG déjà en pixels (boussole, cartouche), posé par-dessus, hors du cadrage
 
     def polygone(self, points, **attributs):
         self.formes.append(("polygone", list(points), attributs))
@@ -319,11 +334,13 @@ class _Scene:
         self.formes.append(("cercle", [point], (rayon_px, attributs)))
         self.points.append(point)
 
-    def svg(self, titre):
+    def svg(self, titre, reserve_droite=0):
+        """Texte du SVG ; la scène est cadrée à gauche d'une bande de reserve_droite px (boussole, cartouche)."""
         xs, ys = [p[0] for p in self.points], [p[1] for p in self.points]
         etendue_x, etendue_y = max(xs) - min(xs), max(ys) - min(ys)
-        echelle = min((LARGEUR - 2 * MARGE) / etendue_x, (HAUTEUR - 2 * MARGE) / etendue_y)
-        dx = (LARGEUR - etendue_x * echelle) / 2.0 - min(xs) * echelle
+        largeur = LARGEUR - reserve_droite - (0 if reserve_droite else MARGE)    # la bande a sa propre marge
+        echelle = min((largeur - MARGE) / etendue_x, (HAUTEUR - 2 * MARGE) / etendue_y)
+        dx = MARGE + (largeur - MARGE - etendue_x * echelle) / 2.0 - min(xs) * echelle
         dy = (HAUTEUR - etendue_y * echelle) / 2.0 - min(ys) * echelle
 
         def px(p):
@@ -363,6 +380,7 @@ class _Scene:
                     rotation = f" transform='rotate({angle:.1f} {x:.1f} {y:.1f})'"
                 lignes.append(f"<text x='{x + decalage[0]:.1f}' y='{y + decalage[1]:.1f}' {POLICE} "
                               f"{attr(attributs)}{rotation}>{escape(contenu)}</text>")
+        lignes.extend(self.dessus)
         lignes.append("</svg>")
         return "\n".join(lignes)
 
@@ -555,12 +573,16 @@ def couleur_facade(boite, facade, soleil):
     return mur if au_soleil else _melanger(mur, charte.BLEU_NUIT, 1.0 - OMBRE)
 
 
-def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG, heure=SOLEIL_HEURE, surlignee=None, infobulles=None):
+def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG, heure=SOLEIL_HEURE, surlignee=None, infobulles=None,
+             boussole=True, cartouche=None):
     """SVG de la boîte, vue depuis l'azimut vue_deg (0 = depuis le sud, 90 = depuis l'ouest), avec le soleil du
     21 juin à l'heure légale donnée (remonté à son lever ou à son coucher s'il est trop bas : heure_dessinee).
 
     surlignee  : clé de la paroi examinée (interface/fiche_paroi.py), entourée d'un contour épais ;
-    infobulles : {clé de paroi: texte} montré par le navigateur au survol du mur, des baies ou de la toiture.
+    infobulles : {clé de paroi: texte} montré par le navigateur au survol du mur, des baies ou de la toiture ;
+    boussole   : la boussole du choix de la vue, en bas de la bande de droite (chaque quart porte la clé
+                 « vue:… ») ;
+    cartouche  : [(libellé, valeur)] des indicateurs du projet, en haut de la bande de droite ; rien si vide.
     """
     infobulles = infobulles or {}
     proj = Projection(vue_deg)
@@ -597,10 +619,90 @@ def dessiner(boite, vue_deg=VUE_PAR_DEFAUT_DEG, heure=SOLEIL_HEURE, surlignee=No
     if surlignee:
         _surligner(scene, proj, boite, surlignee)
     _etiquette_soleil(scene, proj, rayon_ciel, heure, derriere=not soleil_devant)
+    # Dans la bande de droite, en pixels : la boussole et le cartouche des indicateurs
+    if boussole:
+        scene.dessus.append(dessiner_boussole(vue_deg))
+    if cartouche:
+        scene.dessus.append(dessiner_cartouche(cartouche))
 
     titre = (f"Boîte de {boite.longueur_m:.0f} m sur {boite.profondeur_m:.0f} m, {boite.nb_niveaux} niveaux, "
              f"façade principale au {point_cardinal(boite.orientation_deg)}")
     if boite.parois_adiabatiques:
         titre += ", parois adiabatiques : " + ", ".join(PAROIS_ADIABATIQUES[cle].lower()
                                                         for cle in boite.parois_adiabatiques)
-    return scene.svg(titre)
+    return scene.svg(titre, reserve_droite=BANDE_DROITE if boussole or cartouche else 0)
+
+
+# ============================================================
+# BOUSSOLE ET CARTOUCHE (0.9.38), en pixels, par-dessus le dessin
+# ============================================================
+def _point_ecran(centre, rayon, angle_deg):
+    """Point à « rayon » px du centre, dans la direction angle_deg (0 = vers la droite, 90 = vers le bas)."""
+    a = math.radians(angle_deg)
+    return centre[0] + rayon * math.cos(a), centre[1] + rayon * math.sin(a)
+
+
+def _oeil(x, y, angle_deg, couleur):
+    """Œil stylisé (amande et pupille) en (x, y), son grand axe le long du bord de la boussole."""
+    return (f"<g transform='translate({x:.1f} {y:.1f}) rotate({angle_deg + 90:.1f})' pointer-events='none'>"
+            f"<path d='M -9 0 Q 0 -7.5 9 0 Q 0 7.5 -9 0 Z' fill='white' stroke='{couleur}' stroke-width='1.6'/>"
+            f"<circle r='2.8' fill='{couleur}'/></g>")
+
+
+def dessiner_boussole(vue_deg):
+    """Boussole du choix de la vue (dans le style de _sources/boussole.png) : nord en haut, quatre quarts (nord-est,
+    sud-est, sud-ouest, nord-ouest), chacun avec son nom et son œil au bord ; le quart de la vue en cours est
+    orangé. Un clic sur un quart renvoie sa clé « vue:<nom> » (interface/dessin_cliquable.py)."""
+    centre, r = CENTRE_BOUSSOLE, RAYON_BOUSSOLE
+    cx, cy = centre
+    en_cours = next((nom for nom, deg in VUES.items() if abs(deg - vue_deg) < 1e-9), None)
+    morceaux = [f"<g class='boussole' {POLICE}>",
+                f"<circle cx='{cx}' cy='{cy}' r='{r}' fill='#FCFBF8' stroke='{charte.BORDURE}' stroke-width='1.2'/>"]
+    for nom, milieu in ANGLES_BOUSSOLE.items():
+        actif = nom == en_cours
+        (x0, y0), (x1, y1) = _point_ecran(centre, r, milieu - 45), _point_ecran(centre, r, milieu + 45)
+        fond = _melanger(charte.ORANGE, "#FFFFFF", 0.78) if actif else "#FCFBF8"
+        lx, ly = _point_ecran(centre, 0.6 * r, milieu)
+        ox, oy = _point_ecran(centre, r, milieu)
+        libelle = "-".join(mot.capitalize() for mot in nom.split("-"))
+        morceaux.append(
+            f"<g data-cle='{PREFIXE_VUE}{nom}'><title>Vue depuis le {nom}</title>"
+            f"<path d='M {cx} {cy} L {x0:.1f} {y0:.1f} A {r} {r} 0 0 1 {x1:.1f} {y1:.1f} Z' fill='{fond}' "
+            f"stroke='none'/>"
+            f"<text x='{lx:.1f}' y='{ly + 3:.1f}' text-anchor='middle' font-size='8.5' fill='{charte.BLEU_NUIT}' "
+            f"font-weight='{700 if actif else 400}' pointer-events='none'>{libelle}</text>"
+            + _oeil(ox, oy, milieu, charte.ORANGE if actif else charte.BLEU_NUIT) + "</g>")
+    # Croix, aiguille (nord rouge, sud grise) et soleil au sud : décor, sans clic
+    pointe = 0.74 * r
+    morceaux += [
+        "<g pointer-events='none'>",
+        f"<line x1='{cx - r}' y1='{cy}' x2='{cx + r}' y2='{cy}' stroke='{charte.BORDURE}'/>",
+        f"<line x1='{cx}' y1='{cy - r}' x2='{cx}' y2='{cy + r}' stroke='{charte.BORDURE}'/>",
+        f"<polygon points='{cx - 5},{cy} {cx},{cy - pointe:.1f} {cx + 5},{cy}' fill='{AIGUILLE_NORD}'/>",
+        f"<polygon points='{cx - 5},{cy} {cx},{cy + pointe:.1f} {cx + 5},{cy}' fill='{charte.GRIS}'/>",
+        f"<circle cx='{cx}' cy='{cy}' r='3.5' fill='white' stroke='{charte.GRIS}'/>",
+        f"<circle cx='{cx}' cy='{cy + r}' r='5.5' fill='{charte.ORANGE}'/>"]
+    for k in range(8):
+        (x0, y0), (x1, y1) = (_point_ecran((cx, cy + r), d, 45 * k) for d in (8.0, 11.5))
+        morceaux.append(f"<line x1='{x0:.1f}' y1='{y0:.1f}' x2='{x1:.1f}' y2='{y1:.1f}' stroke='{charte.ORANGE}' "
+                        "stroke-width='1.6' stroke-linecap='round'/>")
+    morceaux.append("</g></g>")
+    return "".join(morceaux)
+
+
+def dessiner_cartouche(lignes):
+    """Cartouche des indicateurs du projet, en haut de la bande de droite : pour chaque indicateur, son libellé puis
+    sa valeur, en gras, dessous."""
+    largeur = BANDE_DROITE - 14
+    hauteur = 8 + CARTOUCHE_LIGNE * len(lignes)
+    x0, y0 = LARGEUR - BANDE_DROITE + 4, 14
+    morceaux = [f"<g class='cartouche' {POLICE} pointer-events='none'>",
+                f"<rect x='{x0}' y='{y0}' width='{largeur}' height='{hauteur}' rx='8' fill='white' "
+                f"fill-opacity='0.9' stroke='{charte.BORDURE}'/>"]
+    for i, (libelle, valeur) in enumerate(lignes):
+        y = y0 + CARTOUCHE_LIGNE * i
+        morceaux.append(f"<text x='{x0 + 8}' y='{y + 17}' font-size='9.5' fill='{charte.GRIS}'>{escape(libelle)}"
+                        f"</text><text x='{x0 + 8}' y='{y + 31}' font-size='11.5' font-weight='700' "
+                        f"fill='{charte.BLEU_NUIT}'>{escape(valeur)}</text>")
+    morceaux.append("</g>")
+    return "".join(morceaux)

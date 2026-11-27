@@ -139,6 +139,61 @@ def test_batiment_ecrit_puis_relu(tmp_path):
     assert "traversant;non;" in texte and "\nuw;" not in texte
 
 
+def test_traversant_selon_les_baies():
+    """0.9.36 : la règle des 75 % ; elle décide pour un logement, et pour plusieurs si une seule façade est vitrée."""
+    logement = Boite()                                                  # 25 % devant et derrière : 50 / 50
+    assert logement.traversant_impose is True and replace(logement, traversant=False).traversant
+    # Une seule façade, ou aucune baie : non traversant
+    for devant in (0.25, 0.0):
+        seule = replace(logement, part_vitree_principale=devant, part_vitree_arriere=0.0)
+        assert seule.traversant_impose is False and not seule.traversant and not _groupe(seule).traversant
+    # Seuil : 75 % pile n'est pas traversant, un peu moins l'est
+    assert not replace(logement, part_vitree_principale=0.15, part_vitree_arriere=0.05).traversant
+    assert replace(logement, part_vitree_principale=0.14, part_vitree_arriere=0.05).traversant
+    # La surface compte, pas la part vitrée : façade de 7 m et pignon de 10 m à 25 % chacun, façades perpendiculaires
+    assert replace(logement, part_vitree_arriere=0.0, part_vitree_pignon_a=0.25).traversant
+    # Une façade adiabatique n'a pas de baie
+    assert not replace(logement, parois_adiabatiques=("arriere",)).traversant
+    # Plusieurs logements : libre avec deux façades vitrées (même à 75 % ou plus), imposé avec une seule
+    plusieurs = replace(logement, nb_logements=4, part_vitree_principale=0.60, part_vitree_arriere=0.05)
+    assert plusieurs.traversant_impose is None and not plusieurs.traversant_selon_les_baies
+    assert replace(plusieurs, traversant=True).traversant and not replace(plusieurs, traversant=False).traversant
+    assert replace(plusieurs, part_vitree_arriere=0.0).traversant is False
+
+
+def test_traversant_dans_la_page(resultats, monkeypatch):
+    """0.9.36 : sans interrupteur pour un logement ; grisé avec une seule façade ; sinon libre, remis à la règle
+    quand les baies changent son verdict."""
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    import interface.calcul
+    monkeypatch.setattr(interface.calcul, "resultats_dh", lambda boite: {"dh": resultats.dh, "ete": resultats.ete})
+    page = AppTest.from_file(os.path.join(RACINE, "app.py"), default_timeout=60).run()
+    page.button(key="accueil_explorer").click().run()
+    verdict = lambda: next(m.value for m in page.markdown if m.value.startswith("Logement traversant"))
+    assert "oui" in verdict() and "traversant" not in [t.key for t in page.toggle]
+    page.slider(key="part_vitree_arriere").set_value(0).run()
+    assert not page.exception and "non" in verdict()
+    # Plusieurs logements, une seule façade : grisé
+    page.number_input(key="nb_logements").set_value(4).run()
+    assert not page.exception and page.toggle(key="traversant").disabled and not page.toggle(key="traversant").value
+    # Deux façades : libre, à la valeur de la règle ; le choix à la main tient tant que le verdict ne change pas
+    page.slider(key="part_vitree_arriere").set_value(25).run()
+    assert not page.toggle(key="traversant").disabled and page.toggle(key="traversant").value
+    page.toggle(key="traversant").set_value(False).run()
+    page.slider(key="part_vitree_arriere").set_value(30).run()
+    assert not page.exception and not page.toggle(key="traversant").value
+    page.slider(key="part_vitree_arriere").set_value(5).run()           # 83 % au sud : la règle passe à non
+    page.slider(key="part_vitree_arriere").set_value(25).run()          # puis à oui
+    assert page.toggle(key="traversant").value
+    # Changer de bâtiment reprend sa valeur
+    page.toggle(key="traversant").set_value(False).run()
+    page.selectbox(key="batiment_depart").set_value("Immeuble de 9 logements").run()
+    assert not page.exception and page.toggle(key="traversant").value
+    st.cache_data.clear()                   # ses calculs simulés ne servent pas aux tests suivants
+
+
 def test_niveaux_d_enveloppe(tmp_path):
     """Trois niveaux lus dans donnees/typologies_logements.csv, chacun pour les 13 saisies d'enveloppe."""
     assert list(NIVEAUX_ENVELOPPE) == ["Performant", "Moyen", "Faible"]
@@ -330,6 +385,56 @@ def test_svg_valide_dans_toutes_les_vues(vue):
     # Deux façades étiquetées, quatre points cardinaux
     textes = [t.text for t in racine.findall(f"{espace}text")]
     assert sum("%" in t for t in textes) == 2 and {"N", "S", "E", "O"} <= set(textes)
+
+
+def test_boussole_et_cartouche():
+    """Boussole (0.9.38) : un quart cliquable par vue, celui de la vue en cours orangé ; cartouche des indicateurs
+    dans la bande de droite, seulement s'il y a des indicateurs à montrer."""
+    from interface.axonometrie import PREFIXE_VUE
+    from interface.dessin_cliquable import vue_choisie
+    from interface.indicateurs import valeurs as valeurs_indicateurs
+    espace = "{http://www.w3.org/2000/svg}"
+    for nom, deg in VUES.items():
+        racine = ET.fromstring(dessiner(IMMEUBLE, deg))
+        quarts = {g.get("data-cle"): g for g in racine.iter(f"{espace}g")
+                  if (g.get("data-cle") or "").startswith(PREFIXE_VUE)}
+        assert set(quarts) == {PREFIXE_VUE + vue for vue in VUES}
+        orange = [cle for cle, g in quarts.items() if g.find(f"{espace}path").get("fill") != "#FCFBF8"]
+        assert orange == [PREFIXE_VUE + nom]
+    assert all(g.get("class") != "boussole" for g in ET.fromstring(dessiner(IMMEUBLE, boussole=False)).iter())
+    # Clic : « vue:nord-est » change de vue ; une paroi ou une vue inconnue, non
+    assert vue_choisie({"clic": "vue:nord-est"}) == "nord-est"
+    assert vue_choisie({"clic": "toiture"}) is None and vue_choisie({"clic": "vue:ouest"}) is None
+    assert vue_choisie(None) is None
+    # Cartouche : un texte par libellé et par valeur ; absent sans indicateur
+    racine = ET.fromstring(dessiner(IMMEUBLE, cartouche=[("Compacité", "1,77 m²/m²"), ("Baies", "sud 42 m²")]))
+    textes = [t.text for g in racine.iter(f"{espace}g") if g.get("class") == "cartouche"
+              for t in g.iter(f"{espace}text")]
+    assert textes == ["Compacité", "1,77 m²/m²", "Baies", "sud 42 m²"]
+    assert "cartouche" not in dessiner(IMMEUBLE, cartouche=[])
+    assert dict(valeurs_indicateurs(IMMEUBLE, ["baies_orientation"]))["Baies"] == "S 42 · N 42 m²"
+
+
+def test_indicateurs_du_projet():
+    """Indicateurs (0.9.38) : calculés sur la boîte ; une paroi adiabatique n'est pas déperditive ; l'ordre est celui
+    du registre ; une clé inconnue est ignorée."""
+    from interface.indicateurs import (COCHES_D_OFFICE, INDICATEURS, surface_baies_m2, surface_deperditive_m2,
+                                       u_moyen, valeurs)
+    logement = boite_de_depart("Logement de 70 m²")
+    # 7 × 10 m sur 2,8 m : façades 95,2 m², toiture et plancher 70 m² chacun
+    assert surface_deperditive_m2(logement) == pytest.approx(2 * (7 + 10) * 2.8 + 2 * 70)
+    mitoyen = replace(logement, parois_adiabatiques=("pignon_a", "toiture"))
+    assert surface_deperditive_m2(mitoyen) == pytest.approx(surface_deperditive_m2(logement) - 10 * 2.8 - 70)
+    assert surface_baies_m2(logement) == pytest.approx(0.25 * 7 * 2.8 * 2)
+    # U moyen : entre le plus petit et le plus grand U de l'enveloppe, ponts thermiques en plus
+    assert min(logement.u_toiture, logement.u_mur) < u_moyen(logement) < logement.uw + 0.5
+    assert COCHES_D_OFFICE == ("compacite", "taux_vitrage")
+    lignes = valeurs(logement, ["taux_vitrage", "inconnu", "compacite"])
+    assert [libelle for libelle, _ in lignes] == ["Compacité", "Baies / surface habitable"]
+    assert lignes[0][1] == "3,36 m²/m²" and lignes[1][1] == "14 %"
+    assert len(valeurs(logement, [i.cle for i in INDICATEURS])) == len(INDICATEURS)
+    assert dict(valeurs(replace(logement, part_vitree_principale=0.0, part_vitree_arriere=0.0),
+                        ["baies_orientation"]))["Baies"] == "aucune baie"
 
 
 def test_balcons_dessines_et_etiquettes_couchees():
@@ -530,9 +635,12 @@ def test_aides_hors_du_code_et_glossaire_complet():
                for nom in ("app.py", "interface/formulaire.py", "interface/briques/semaine_chaude.py",
                            "interface/briques/dh.py", "interface/briques/bilan.py")}
     assert all('help="' not in texte for texte in sources.values())
-    # Chaque aide sert : sa clé est celle d'un widget de la page
-    tout = "".join(sources.values())
+    # Chaque aide sert : sa clé est celle d'un widget de la page, ou d'un indicateur du registre (0.9.38), dont la
+    # case porte l'aide « indicateur_<cle> » ; et chaque indicateur a la sienne
+    from interface.indicateurs import INDICATEURS, PREFIXE_AIDE
+    tout = "".join(sources.values()) + "".join(f'"{PREFIXE_AIDE}{i.cle}"' for i in INDICATEURS)
     assert aides.aides() and all(f'"{cle}"' in tout for cle in aides.aides())
+    assert all(PREFIXE_AIDE + i.cle in aides.aides() for i in INDICATEURS)
     # Glossaire : une page Notion par terme ; chaque terme cité ([[…]] et Brique.glossaire) existe
     pages = aides.glossaire()
     assert len(pages) > 50 and all(len(url.rsplit("/", 1)[1]) == 32 for url in pages.values())
@@ -845,6 +953,15 @@ def test_page_entiere(resultats, monkeypatch):
     titres = [e.label for e in page.expander]
     assert "Baies · 25/0/25/0 % · volets" in titres and "Forme · 7 × 10 m · 1 niveau · sud" in titres
 
+    # Au-dessus du dessin (0.9.38) : la vue vient de la boussole (sud-ouest à l'ouverture) ; la boîte des
+    # indicateurs coche la compacité et le taux de vitrage, « Valider » change le cartouche
+    assert page.session_state["vue"] == "sud-ouest"
+    assert page.session_state["indicateurs"] == ["compacite", "taux_vitrage"]
+    page.checkbox(key="case_volume").check()
+    page.checkbox(key="case_compacite").uncheck()
+    page.button(key="valider_indicateurs").click().run()
+    assert not page.exception and page.session_state["indicateurs"] == ["taux_vitrage", "volume"]
+    assert len(appels) == 1
     # Paroi examinée sous le dessin : aucune à l'ouverture, puis la toiture et sa fiche, sans relancer de calcul
     assert page.selectbox(key="paroi_examinee").value is None
     page.selectbox(key="paroi_examinee").set_value("toiture").run()
@@ -858,6 +975,13 @@ def test_page_entiere(resultats, monkeypatch):
     assert any("calcul précédent" in w.value for w in page.warning)
     page.slider(key="u_toiture").set_value(boite_de_depart().u_toiture).run()
     assert page.slider(key="fiche_u_toiture").value == boite_de_depart().u_toiture and not page.warning
+    # Interrupteur « adiabatique » de la fiche (0.9.38), lié au choix du menu : la toiture y entre, puis en sort
+    assert page.toggle(key="fiche_adiabatique").value is False
+    page.toggle(key="fiche_adiabatique").set_value(True).run()
+    assert not page.exception and list(page.session_state["parois_adiabatiques"]) == ["toiture"]
+    assert page.slider(key="fiche_u_toiture").disabled and len(appels) == 1
+    page.toggle(key="fiche_adiabatique").set_value(False).run()
+    assert not page.exception and list(page.session_state["parois_adiabatiques"]) == [] and not page.warning
     page.selectbox(key="paroi_examinee").set_value(None).run()
 
     # Bbio et DH : seul le Bbio est calculé, le DH vient de la mémoire
